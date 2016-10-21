@@ -2,13 +2,23 @@
 
 
 ## installation
-Clone the repository somewhere. You need to add the folder `bin` to your `$PATH`, and
-the respository root to your `$PYTHONPATH`, if you want to use it from Python.
+- Clone the repository somewhere. 
+- Add the folder `bin` to your `$PATH`
+- Add the respository root to your `$PYTHONPATH`, if you want to use it from Python.
+- Also, you need to clone my [python_utils](https://gitlab.cern.ch/pagessin/python_utils)
+    - add it to your `$PYTHONPATH`
 
-Also, you need to clone my [python_utils](https://gitlab.cern.ch/pagessin/python_utils), and add it to your `$PYTHONPATH`
 
+## usage from python
+The module exposes a function called submit which looks like so:
 
-## usage
+```python
+def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
+    # ...
+```
+The only required argument lists needs to be a list of tuples with the format `(NAME, LISTFILE)`.
+
+## usage from command line
 
 - [peek](#peek)
 - [submit](#submit)
