@@ -13,10 +13,10 @@
 The module exposes a function called submit which looks like so:
 
 ```python
-def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
+def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=False):
     # ...
 ```
-The only required argument lists needs to be a list of tuples with the format `(NAME, LISTFILE)`.
+The only required argument `lists` needs to be a list of tuples with the format `(NAME, LISTFILE)`.
 
 ## usage from command line
 

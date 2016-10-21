@@ -63,6 +63,7 @@ def bjobs_raw(cachefile, delimiter):
     return out
 
 zipped_jobs_cache = None
+zipped_jobs_cache_timestamp = time.mktime(datetime.datetime.now().timetuple())
 
 def get_job_info(cachefile, jobs_query=[]):
     delimiter = "\7"
@@ -73,6 +74,14 @@ def get_job_info(cachefile, jobs_query=[]):
     jobs = lines[1:-1]
   
     global zipped_jobs_cache
+    global zipped_jobs_cache_timestamp
+    now = time.mktime(datetime.datetime.now().timetuple())
+
+    # print(now-zipped_jobs_cache_timestamp)
+    if now-zipped_jobs_cache_timestamp > BJOBS_CACHE_LIFETIME:
+        zipped_jobs_cache = None
+        zipped_jobs_cache_timestamp = time.mktime(datetime.datetime.now().timetuple())
+
     if zipped_jobs_cache == None:
         zipped_jobs_cache = {}
         for raw in jobs:

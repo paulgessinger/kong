@@ -42,7 +42,10 @@ output={outdir}
 # input_tarball=/home/pgessing/workspace_xAOD/input_tarballs//input.tar
 # binary=./Analysis
 # algo=AlgoWPR
-
+# base_release=Base,2.4.18
+# application_profile=Reserve10G
+# resource=rusage[atlasio=10]
+# default_queue=atlasshort
 """
 
 
@@ -63,7 +66,9 @@ def get_config():
     home = os.path.expanduser("~")
     config_file = os.path.join(home, ".kongrc")
 
+    first_time = False
     if not os.path.exists(config_file):
+        first_time = True
         logger.info(".kongrc file not found, creating...")
         print("Where do you want the kong base directory to be? [~/kongdir]")
         kongdir = raw_input()
@@ -76,11 +81,13 @@ def get_config():
         print("Where do you want the job std output to be? [{}/output]".format(kongdir))
         stdoutdir = raw_input()
         if len(stdoutdir) == 0: stdoutdir = os.path.expanduser("%(kongdir)s/output")
-        
+
         with open(config_file, "w+") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             f.write(CONFIG_TEMPLATE.format(kongdir=kongdir, regdir=regdir, outdir=stdoutdir))
             fcntl.flock(f, fcntl.LOCK_UN)
+        
+
     
     cp = SafeConfigParser()
     cp.read(config_file)
@@ -94,11 +101,16 @@ def get_config():
 
     if not os.path.exists(outdir):
         mkdir(outdir)
-    
+
+    if first_time:
+        logger.info("Setup completed, you should probably have a look at {} before continuing".format(config_file))    
+        sys.exit(0)
+
+
     return cp
 
 def truncate_middle(str, length):
-    if len(str) < length:
+    if len(str) <= length:
         return str.ljust(length)
     
     part1 = str[:length/2-3]
@@ -234,7 +246,7 @@ def make_status_string(jobs):
     nother = 0
     ntotal = len(jobs)
 
-
+    # print(jobs)
     for j in jobs:
         # print(j)
         if j["stat"] == "DONE": ndone +=1
@@ -257,7 +269,13 @@ def make_status_string(jobs):
     elif ndone == ntotal:
         color = "green"
 
-    return (status_string, color)
+    return (status_string, color, (
+        npend,
+        ndone,
+        nrun,
+        nexit,
+        nother
+    ))
 
 def get_job_id(dir, dry=False):
 
@@ -281,7 +299,7 @@ def get_job_id(dir, dry=False):
         fcntl.flock(f, fcntl.LOCK_UN)
     return i
 
-def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
+def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=False):
     """
     Input format for lists is a list of tuples with (NAME, LISTFILE).
     """
@@ -298,6 +316,9 @@ def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
 
     if not config:
         config = get_config()
+
+    if queue == None:
+        queue = config.get("analysis", "default_queue")
 
     width = get_tty_width()
 
@@ -357,7 +378,6 @@ def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
         
 
         for split in splits:
-            subjobid +=1
             stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=jobid, subjobid=subjobid))
             stderrfile = os.path.join(outdir, JOBSTDERR_FORMAT.format(jobid=jobid, subjobid=subjobid))
            
@@ -373,7 +393,7 @@ def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
                 '--jobid', str(jobid), 
                 '--subjobid', str(subjobid), 
                 '--jobname', jobName,
-                '--analysisRelease', 'Base,2.4.18', 
+                '--analysisRelease', config.get("analysis", "base_release"), 
                 '--isFrameworkJob', '1', 
                 '--jobSplittingMode', 'Size', 
                 '--usePackedTarball'
@@ -388,11 +408,12 @@ def submit(lists, config=None, dir=None, verbosity=None, dry_run=False):
                 stderr=stderrfile,
                 exe=" ".join(cmd), 
                 W=300, 
-                app="Reserve5G", 
-                R="rusage[atlasio=10]"+blacklist_string, 
-                queue="atlasshort",
+                app=config.get("analysis", "application_profile"), 
+                R=config.get("analysis", "resource")+blacklist_string, 
+                queue=queue,
                 dry=dry_run
             ))
+            subjobid +=1
 
     spinner = Spinner("Submitting tasks to the batch system")
     def tick(n):
@@ -480,6 +501,15 @@ def main():
     kong submits jobs to LSF and keeps track of them, with a directory hierarchy of .job files
     """
     
+    # this is to catch first time users only calling the command itself
+    logger.setLevel(logging.INFO)
+    config = get_config()
+    # home = os.path.expanduser("~")
+    # config_file = os.path.join(home, ".kongrc")
+    # if not os.path.exists(config_file):
+        # get_config()
+
+    
     JOB_RANGE_HELP = "Specify a job range. Can be '1 2 3', '1-3', '3+4' (this means 3, 4, 5, 6, 7), or job files or directories"
 
     parser = argparse.ArgumentParser(description=main.__doc__)
@@ -505,6 +535,11 @@ def main():
     lsp.add_argument("dir", nargs="?", default=os.getcwd(), help="The directory or files to list. You can glob")
     lsp.add_argument("--all", "-a", action="store_true", help="If given, list all jobs found in the registry")
     lsp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
+
+    monitorp = subparsers.add_parser("monitor", parents=[parentp], help=monitor.__doc__)
+    monitorp.set_defaults(func=monitor)
+    monitorp.add_argument("dir", nargs="?", default=os.getcwd(), help="The directory or files to list. You can glob")
+    monitorp.add_argument("--all", "-a", action="store_true", help="If given, list all jobs found in the registry")
 
     rmp = subparsers.add_parser("rm", parents=[parentp], help=rm.__doc__)
     rmp.set_defaults(func=rm)
@@ -533,15 +568,12 @@ def main():
 
     args = parser.parse_args()
 
-    log_level = logging.INFO
     if args.verbose > 0:
-        log_level = logging.DEBUG
+        logger.setLevel(logging.DEBUG)
     # elif args.verbose > 1:
         # log_level = logging.DEBUG
 
-    logger.setLevel(log_level)
 
-    config = get_config()
 
     args.func(args, config)
 
@@ -779,8 +811,233 @@ def rm(args, config):
 
         remove_joboutput(jobid, outdir, regdir, analysis_output)
 
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>kong</title>
+    <style>
+        body {
+            font-family:sans-serif;
+            padding:10px;
+        }
 
-def ls(args, config):
+        #chart {
+         height:50vh;
+        }
+    </style>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script>
+      google.charts.load('current', {'packages':['corechart']});
+      google.charts.setOnLoadCallback(drawChart);
+
+      storage = JSON.parse(localStorage.getItem("data") || "[]");
+
+      
+
+      for(var i in storage) {
+        storage[i][0] = new Date(storage[i][0]);
+      }
+
+      function drawChart() {
+/*        # var data = google.visualization.arrayToDataTable([
+          # ['Year', 'Sales', 'Expenses'],
+          # ['2004',  1000,      400],
+          # ['2005',  1170,      460],
+          # ['2006',  660,       1120],
+          # ['2007',  1030,      540]
+        # ]);*/
+
+        var options = {
+          title: 'Company Performance',
+          //curveType: 'function',
+          colors: ['#cc9900', 'blue', 'green', 'red', 'grey'],
+          legend: { position: 'bottom' }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart'));
+          
+        var data = new google.visualization.DataTable();
+        data.addColumn('datetime', 'time');
+        data.addColumn('number', "pend");
+        data.addColumn('number', "run");
+        data.addColumn('number', "done");
+        data.addColumn('number', "exit");
+        data.addColumn('number', "other");
+
+        data.addRows(storage);
+
+        function update() {
+          var res = $.ajax({
+              url: "/data",
+              async: false
+          }).responseText;
+           var lines = res.split("\\n");
+            
+          var p = 0;
+          var r = 0;
+          var d = 0;
+          var e = 0;
+          var o = 0;
+
+          for(var i in lines) {
+              var col = lines[i].split(";");
+              var info = col[2].substring(1, col[2].length-1).split(", ");
+             
+              info = info.map(function(n) {return parseInt(n);})
+              
+              p += info[0];
+              r += info[1];
+              d += info[2];
+              e += info[3];
+              o += info[4];
+              
+              //info.unshift(new Date());
+
+              //data.addRow(info);
+          }
+        
+          var row = [new Date(), p, r, d, e, o];
+          data.addRow(row);
+          storage.push(row);
+          localStorage.setItem("data", JSON.stringify(storage));
+    
+          console.log("updating");
+
+          chart.draw(data, options);
+
+        }
+
+
+        update();
+        setInterval(update, 30*1000);
+
+          $(document).ready(function() {
+            $("#clear_history").on("click", function() {
+                console.log("clear history");
+                storage = [];
+                localStorage.setItem("data", "[]");
+                data.removeRows(0, data.getNumberOfRows());
+                update();
+            });
+          });
+      }
+    </script>
+</head>
+<body>
+<h1>kong</h1>
+<div id="chart"></div>
+<button type="button" id="clear_history">Clear history</button>
+</body>
+</html>
+"""
+def monitor(args, config):
+    import curses
+    import BaseHTTPServer
+    
+    args.force = True
+
+    interval = 30
+    
+    
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.start_color()
+    curses.use_default_colors()
+    curses.cbreak()
+
+    curses.init_pair(1, curses.COLOR_WHITE, -1)
+    curses.init_pair(2, curses.COLOR_RED, -1)
+    curses.init_pair(3, curses.COLOR_GREEN, -1)
+    curses.init_pair(4, curses.COLOR_BLUE, -1)
+    curses.init_pair(5, curses.COLOR_YELLOW, -1)
+
+    color_map = {
+        # "white": 7,
+        # "red": 1,
+        # "green": 2,
+        # "blue": 4,
+        # "yellow": 3
+        "white": 1,
+        "red": 2,
+        "green": 3,
+        "blue": 4,
+        "yellow": 5
+    }
+
+    lines = None
+    
+    class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+        def do_GET(s):
+            s.send_response(200)
+            s.end_headers()
+
+            if s.path.endswith("/data"):
+                
+                out = [";".join(map(str, l)) for l in lines]
+                # print(out)
+
+                s.wfile.write("\n".join(out))
+            else:
+                s.wfile.write(HTML_TEMPLATE)
+        def log_request(s, *a):
+            pass
+
+        def log_error(s, *a):
+            pass
+        
+
+    httpd = BaseHTTPServer.HTTPServer(("localhost", 8790), HttpHandler)
+    
+    # shutdown = Fals
+    def server():
+        httpd.serve_forever()
+
+    t = th.Thread(target=server)
+    t.start()
+    
+
+    try:
+        round = 1
+        refresh_time = datetime.datetime.now()
+        while True:
+            # print("go")
+            now = datetime.datetime.now()
+            stdscr.addstr(0, 0, "kong")
+            stdscr.addstr(1, 0, "Monitoring: {}".format(args.dir))
+            stdscr.addstr(2, 0, "Time: {} - Last refresh: {}".format(now.strftime("%H:%M:%S %d.%m.%Y"), refresh_time.strftime("%H:%M:%S %d.%m.%Y")))
+            width = get_tty_width()
+            stdscr.addstr(3, 0, "-"*width)
+           
+            next = "Next refresh in {:>2d}s".format(interval - round)
+            stdscr.addstr(0, width-len(next), next)
+            
+            if round >= interval or lines == None:
+                round = 0
+                lines = ls(args, config, noprint=True)
+                refresh_time = datetime.datetime.now()
+            
+            for i, l in enumerate(lines):
+                string, color, info = l
+                stdscr.addstr(4+i, 0, string, curses.color_pair(color_map[color]))
+
+            stdscr.addstr(4+len(lines), 0, "-"*width)
+            stdscr.refresh()
+            time.sleep(1)
+            round += 1
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("waiting for thread to finish")
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
+        httpd.shutdown()
+        t.join()
+        # print("end")
+
+def ls(args, config, noprint=False):
     """
     Show information over job files or directory hierarchies with job files
     """
@@ -816,6 +1073,8 @@ def ls(args, config):
         print(block("no jobfiles found in this directory", char="-"))
         os.system("pwd && ls -l")
         return
+        
+    outlines = []
 
     width = get_tty_width()
 
@@ -824,7 +1083,7 @@ def ls(args, config):
         if len(lsfids) == 0:
             continue
         subjobinfo = get_job_info(jobcachefile, lsfids)
-        status_string, color = make_status_string(subjobinfo)
+        status_string, color, info = make_status_string(subjobinfo)
         outstr = " "*6 + "| {name} | {status}".format(
             name="{name}",
             status=status_string
@@ -832,7 +1091,12 @@ def ls(args, config):
        
         name = os.path.relpath(subdir, dir)
         outstr = outstr.format(name=truncate_middle(name, width - len(outstr) + len("{name}")))
-        print(colored(outstr, color))
+        # print(colored(outstr, color))
+        if not noprint:
+            print(colored(outstr, color))
+        else:
+            outlines.append((outstr, color, info))
+
 
 
 
@@ -855,7 +1119,7 @@ def ls(args, config):
             name = bd + "/" + name
 
         subjobinfo = get_job_info(jobcachefile, subjobids)
-        status_string, color = make_status_string(subjobinfo)
+        status_string, color, info = make_status_string(subjobinfo)
 
         date = mtime.strftime("%H:%M:%S %d.%m.%Y")
         outstr = "{jobid: 5d} | {name} | {date} | {status}".format(
@@ -870,9 +1134,13 @@ def ls(args, config):
 
         # print(outstr)
         # print(ndone, npend, nexit, nrun, nother, ngone)
-        print(colored(outstr, color))
-
-
+        if not noprint:
+            print(colored(outstr, color))
+        else:
+            outlines.append((outstr, color, info))
+    
+    if noprint:
+        return outlines
 
 def peek(args, config):
     """
