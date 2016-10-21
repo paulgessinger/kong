@@ -10,6 +10,15 @@ Also, you need to clone my [python_utils](https://gitlab.cern.ch/pagessin/python
 
 ## usage
 
+- [peek](#peek)
+- [submit](#submit)
+- [ls](#ls)
+- [rm](#rm)
+- [kill](#kill)
+- [recover](#recover)
+- [resubmit](#resubmit)
+- [view](#view)
+
 ```
 usage: kong [-h] {peek,submit,resubmit,kill,ls,rm,recover,view} ...
 
@@ -37,8 +46,9 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-```  
+``` 
 
+### peek
 ```
 usage: kong peek [-h] [--verbose] {out,err} jobid subjobid
 
@@ -52,6 +62,7 @@ optional arguments:
   --verbose, -v  Increase verbosity
 ```
 
+### submit
 ```
 usage: kong submit [-h] [--verbose] [--name NAME] [--dry-run]
                    lists [lists ...]
@@ -67,6 +78,7 @@ optional arguments:
   --dry-run      Don't really do anything
 ```
 
+### ls
 ```
 usage: kong ls [-h] [--verbose] [--all] [--force] [dir]
 
@@ -78,6 +90,10 @@ optional arguments:
   --verbose, -v  Increase verbosity
   --all, -a      If given, list all jobs found in the registry
   --force, -f    Kill the bjobs cache
+```
+
+### rm
+```
 usage: kong rm [-h] [--verbose] tgt [tgt ...]
 
 positional arguments:
@@ -89,6 +105,7 @@ optional arguments:
   --verbose, -v  Increase verbosity
 ```
 
+### kill
 ```
 usage: kong kill [-h] [--verbose] tgt [tgt ...]
 
@@ -101,6 +118,7 @@ optional arguments:
   --verbose, -v  Increase verbosity
 ```
 
+### recover
 ```
 usage: kong recover [-h] [--verbose] job
 
@@ -112,6 +130,7 @@ optional arguments:
   --verbose, -v  Increase verbosity
 ```
 
+### resubmit
 ```
 usage: kong resubmit [-h] [--verbose] [--status {done,pend,exit,run}]
                      [--force]
@@ -131,6 +150,7 @@ optional arguments:
   --force, -f           Kill the the bjobs cache file before doing anything
 ```
 
+### view
 ```
 usage: kong view [-h] [--verbose] [--force] [--status {done,pend,exit,run}]
                  tgt [tgt ...]
