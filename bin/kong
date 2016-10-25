@@ -215,17 +215,27 @@ def sum_up_directory(dir):
     contents = os.listdir(dir)
     lsfids = []
 
+    minj = 100000
+    maxj = 0
+
     for f in contents:
         fullf = os.path.join(dir, f)
-        
+
+
         if os.path.isdir(fullf):
-            sub = sum_up_directory(fullf)
+            sub, submin, submax = sum_up_directory(fullf)
+            minj = min(minj, submin)
+            maxj = max(maxj, submax)
             lsfids += sub
             continue
         
         if not os.path.isfile(fullf) or not f.endswith(".job"):
             continue
         
+        jobid, _ = f.split("_", 1)
+        
+        minj = min(minj, int(jobid))
+        maxj = max(maxj, int(jobid))
 
         with openlock(fullf, "r") as jobf:
             subjobs = jobf.read()
@@ -236,7 +246,7 @@ def sum_up_directory(dir):
             lsfids.append(lsfid)
 
     # print(lsfids)
-    return lsfids
+    return lsfids, minj, maxj
 
 def make_status_string(jobs):
     npend = 0
@@ -504,6 +514,10 @@ def main():
     # this is to catch first time users only calling the command itself
     logger.setLevel(logging.INFO)
     config = get_config()
+    
+    kongdir, regdir, outdir = get_directories(config)
+    # setting environment variables
+
     # home = os.path.expanduser("~")
     # config_file = os.path.join(home, ".kongrc")
     # if not os.path.exists(config_file):
@@ -540,6 +554,9 @@ def main():
     monitorp.set_defaults(func=monitor)
     monitorp.add_argument("dir", nargs="?", default=os.getcwd(), help="The directory or files to list. You can glob")
     monitorp.add_argument("--all", "-a", action="store_true", help="If given, list all jobs found in the registry")
+    excl = monitorp.add_mutually_exclusive_group()
+    excl.add_argument("--serve", action="store_true")
+    excl.add_argument("--push", action="store_true")
 
     rmp = subparsers.add_parser("rm", parents=[parentp], help=rm.__doc__)
     rmp.set_defaults(func=rm)
@@ -556,14 +573,14 @@ def main():
     resubmitp = subparsers.add_parser("resubmit", parents=[parentp], help=resubmit.__doc__)
     resubmitp.set_defaults(func=resubmit)
     resubmitp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
-    resubmitp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run"], default="exit", help="Specify the status with which jobs qualify to be resubmitted")
+    resubmitp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], default="exit", help="Specify the status with which jobs qualify to be resubmitted")
     resubmitp.add_argument("--force", "-f", action="store_true", help="Kill the the bjobs cache file before doing anything")
 
     viewp = subparsers.add_parser("view", parents=[parentp], help=view.__doc__)
     viewp.set_defaults(func=view)
     viewp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
     viewp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
-    viewp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run"], help="Only show subjobs with this status")
+    viewp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], help="Only show subjobs with this status")
     
 
     args = parser.parse_args()
@@ -648,7 +665,10 @@ def resubmit(args, config):
         return
     # print(selected) 
     for s in selected:
-        mode = args.status[0].lower()
+        if args.status == "unkwn":
+            mode = ""
+        else:
+            mode = args.status[0].lower()
         # print(mode, s)
         brequeue(s, mode)
 
@@ -811,130 +831,11 @@ def rm(args, config):
 
         remove_joboutput(jobid, outdir, regdir, analysis_output)
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>kong</title>
-    <style>
-        body {
-            font-family:sans-serif;
-            padding:10px;
-        }
-
-        #chart {
-         height:50vh;
-        }
-    </style>
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
-    <script>
-      google.charts.load('current', {'packages':['corechart']});
-      google.charts.setOnLoadCallback(drawChart);
-
-      storage = JSON.parse(localStorage.getItem("data") || "[]");
-
-      
-
-      for(var i in storage) {
-        storage[i][0] = new Date(storage[i][0]);
-      }
-
-      function drawChart() {
-/*        # var data = google.visualization.arrayToDataTable([
-          # ['Year', 'Sales', 'Expenses'],
-          # ['2004',  1000,      400],
-          # ['2005',  1170,      460],
-          # ['2006',  660,       1120],
-          # ['2007',  1030,      540]
-        # ]);*/
-
-        var options = {
-          title: 'Company Performance',
-          //curveType: 'function',
-          colors: ['#cc9900', 'blue', 'green', 'red', 'grey'],
-          legend: { position: 'bottom' }
-        };
-
-        var chart = new google.visualization.LineChart(document.getElementById('chart'));
-          
-        var data = new google.visualization.DataTable();
-        data.addColumn('datetime', 'time');
-        data.addColumn('number', "pend");
-        data.addColumn('number', "run");
-        data.addColumn('number', "done");
-        data.addColumn('number', "exit");
-        data.addColumn('number', "other");
-
-        data.addRows(storage);
-
-        function update() {
-          var res = $.ajax({
-              url: "/data",
-              async: false
-          }).responseText;
-           var lines = res.split("\\n");
-            
-          var p = 0;
-          var r = 0;
-          var d = 0;
-          var e = 0;
-          var o = 0;
-
-          for(var i in lines) {
-              var col = lines[i].split(";");
-              var info = col[2].substring(1, col[2].length-1).split(", ");
-             
-              info = info.map(function(n) {return parseInt(n);})
-              
-              p += info[0];
-              r += info[1];
-              d += info[2];
-              e += info[3];
-              o += info[4];
-              
-              //info.unshift(new Date());
-
-              //data.addRow(info);
-          }
-        
-          var row = [new Date(), p, r, d, e, o];
-          data.addRow(row);
-          storage.push(row);
-          localStorage.setItem("data", JSON.stringify(storage));
-    
-          console.log("updating");
-
-          chart.draw(data, options);
-
-        }
-
-
-        update();
-        setInterval(update, 30*1000);
-
-          $(document).ready(function() {
-            $("#clear_history").on("click", function() {
-                console.log("clear history");
-                storage = [];
-                localStorage.setItem("data", "[]");
-                data.removeRows(0, data.getNumberOfRows());
-                update();
-            });
-          });
-      }
-    </script>
-</head>
-<body>
-<h1>kong</h1>
-<div id="chart"></div>
-<button type="button" id="clear_history">Clear history</button>
-</body>
-</html>
-"""
 def monitor(args, config):
     import curses
     import BaseHTTPServer
+    import requests
+    import json
     
     args.force = True
 
@@ -968,6 +869,10 @@ def monitor(args, config):
 
     lines = None
     
+    HTML_TEMPLATE = ""
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "standalone.html"), "r") as f:
+        HTML_TEMPLATE = f.read()
+
     class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         def do_GET(s):
             s.send_response(200)
@@ -986,7 +891,7 @@ def monitor(args, config):
 
         def log_error(s, *a):
             pass
-        
+    
 
     httpd = BaseHTTPServer.HTTPServer(("localhost", 8790), HttpHandler)
     
@@ -995,8 +900,9 @@ def monitor(args, config):
         httpd.serve_forever()
 
     t = th.Thread(target=server)
-    t.start()
-    
+
+    if args.serve:
+        t.start()   
 
     try:
         round = 1
@@ -1017,7 +923,13 @@ def monitor(args, config):
                 round = 0
                 lines = ls(args, config, noprint=True)
                 refresh_time = datetime.datetime.now()
-            
+                if args.push:
+                    requests.post(
+                            "http://kong.paulgessinger.com/push?secret=1e277a82-d1dd-491b-98da-4f5c6ee109ac", 
+                            data={"data":json.dumps(lines)}
+                    ) 
+
+
             for i, l in enumerate(lines):
                 string, color, info = l
                 stdscr.addstr(4+i, 0, string, curses.color_pair(color_map[color]))
@@ -1033,8 +945,10 @@ def monitor(args, config):
         curses.echo()
         curses.nocbreak()
         curses.endwin()
-        httpd.shutdown()
-        t.join()
+
+        if args.serve:
+            httpd.shutdown()
+            t.join()
         # print("end")
 
 def ls(args, config, noprint=False):
@@ -1079,14 +993,16 @@ def ls(args, config, noprint=False):
     width = get_tty_width()
 
     for subdir in dirs:
-        lsfids = sum_up_directory(subdir)
+        lsfids, minj, maxj = sum_up_directory(subdir)
         if len(lsfids) == 0:
             continue
         subjobinfo = get_job_info(jobcachefile, lsfids)
         status_string, color, info = make_status_string(subjobinfo)
-        outstr = " "*6 + "| {name} | {status}".format(
+        outstr = " "*6 + "| {name} ({min}-{max}) | {status}".format(
             name="{name}",
-            status=status_string
+            status=status_string,
+            min=minj,
+            max=maxj
         )
        
         name = os.path.relpath(subdir, dir)

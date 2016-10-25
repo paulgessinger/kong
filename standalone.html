@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>kong</title>
+    <style>
+        body {
+            font-family:sans-serif;
+            padding:10px;
+        }
+
+        #chart {
+         height:80vh;
+        }
+    </style>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script>
+      google.charts.load('current', {'packages':['corechart']});
+      google.charts.setOnLoadCallback(drawChart);
+
+      storage = JSON.parse(localStorage.getItem("data") || "[]");
+
+      
+
+      for(var i in storage) {
+        storage[i][0] = new Date(storage[i][0]);
+      }
+
+      function drawChart() {
+/*        # var data = google.visualization.arrayToDataTable([
+          # ['Year', 'Sales', 'Expenses'],
+          # ['2004',  1000,      400],
+          # ['2005',  1170,      460],
+          # ['2006',  660,       1120],
+          # ['2007',  1030,      540]
+        # ]);*/
+
+        var options = {
+          title: 'Company Performance',
+          //curveType: 'function',
+          colors: ['#cc9900', 'blue', 'green', 'red', 'grey'],
+          legend: { position: 'bottom' },
+          animation:{
+            duration: 1000,
+            easing: 'out',
+          },
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart'));
+          
+        var data = new google.visualization.DataTable();
+        data.addColumn('datetime', 'time');
+        data.addColumn('number', "pend");
+        data.addColumn('number', "run");
+        data.addColumn('number', "done");
+        data.addColumn('number', "exit");
+        data.addColumn('number', "other");
+
+        data.addRows(storage);
+
+        function update() {
+          var res = $.ajax({
+              url: "/data",
+              async: false
+          }).responseText;
+           var lines = res.split("\\n");
+            
+          var p = 0;
+          var r = 0;
+          var d = 0;
+          var e = 0;
+          var o = 0;
+
+          for(var i in lines) {
+              var col = lines[i].split(";");
+              var info = col[2].substring(1, col[2].length-1).split(", ");
+             
+              info = info.map(function(n) {return parseInt(n);})
+              
+              p += info[0];
+              r += info[2];
+              d += info[1];
+              e += info[3];
+              o += info[4];
+              
+              //info.unshift(new Date());
+
+              //data.addRow(info);
+          }
+        
+          var row = [new Date(), p, r, d, e, o];
+          data.addRow(row);
+          storage.push(row);
+          localStorage.setItem("data", JSON.stringify(storage));
+    
+          console.log("updating");
+
+          chart.draw(data, options);
+
+        }
+
+
+        update();
+        setInterval(update, 30*1000);
+
+          $(document).ready(function() {
+            $("#clear_history").on("click", function() {
+                console.log("clear history");
+                storage = [];
+                localStorage.setItem("data", "[]");
+                data.removeRows(0, data.getNumberOfRows());
+                update();
+            });
+
+            $("#update").on("click", update);
+          });
+      }
+    </script>
+</head>
+<body>
+<h1>kong</h1>
+<div id="chart"></div>
+<button type="button" id="clear_history">Clear history</button>
+<button type="button" id="update">Update</button>
+</body>
+</html>
+

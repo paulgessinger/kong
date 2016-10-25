@@ -100,7 +100,13 @@ def get_job_info(cachefile, jobs_query=[]):
 
 
 def brequeue(lsfid, mode):
-    cmd = ["brequeue", "-"+mode, lsfid]
+    cmd = ["brequeue"] 
+    
+    if len(mode) > 0:
+        cmd.append("-"+mode)
+
+    cmd.append(lsfid)
+    
     out = subprocess.check_output(cmd)
 
 
