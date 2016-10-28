@@ -559,6 +559,9 @@ def main():
     excl.add_argument("--serve", action="store_true")
     excl.add_argument("--push", action="store_true")
 
+    pushp = subparsers.add_parser("push", parents=[parentp])
+    pushp.set_defaults(func=push)
+
     rmp = subparsers.add_parser("rm", parents=[parentp], help=rm.__doc__)
     rmp.set_defaults(func=rm)
     rmp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
@@ -838,7 +841,7 @@ def monitor(args, config):
     import requests
     import json
     
-    args.force = True
+    args.force = False
 
     interval = 30
     
@@ -952,6 +955,60 @@ def monitor(args, config):
             t.join()
         # print("end")
 
+def push(args, config):
+    import requests
+    import json
+    
+    kongdir, regdir, outdir = get_directories(config)
+
+    while True:
+        jobfiles = get_all_jobs(regdir)
+        jobfiles = [os.path.join(d, f) for d, f in jobfiles]
+
+        p = r = d = e = o = 0
+
+        lsfids = []
+
+        for fullf in jobfiles:
+            with open(fullf, "r") as f:
+                lines = f.read().split("\n")[:-1]
+                for l in lines:
+                    _, i = l.split(":")
+                    lsfids.append(i)
+
+        jobcachefile = os.path.join(kongdir, "bjobs_cache")
+        subjobinfo = get_job_info(jobcachefile, lsfids)
+            
+        for inf in subjobinfo:
+            s = inf["stat"]
+            
+            if s == "DONE":
+                d += 1
+            elif s == "PEND":
+                p += 1
+            elif s == "RUN":
+                r += 1
+            elif s == "EXIT":
+                e += 1
+            else:
+                o += 1
+        
+        monitor_push_url = config.get("kong", "monitor_push_url")
+        # print(p, d, r, e, o)
+
+        requests.post(
+            monitor_push_url,
+            data={"data":json.dumps({"p": p, "r": r, "d": d, "e": e, "o": o})}
+        ) 
+        time.sleep(30)
+
+
+
+        # f = os.path.basename(fullf)
+
+
+
+
 def ls(args, config, noprint=False):
     """
     Show information over job files or directory hierarchies with job files
@@ -1025,6 +1082,10 @@ def ls(args, config, noprint=False):
 
         with open(fullf, "r") as jobf:
             subjobs = jobf.read().split("\n")[:-1]
+
+        if len(subjobs) == 0:
+            print(" "*6+"| "+fullf)
+            continue
 
         subjobids = []
         for sji in subjobs:
