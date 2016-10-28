@@ -237,7 +237,7 @@ def sum_up_directory(dir):
         minj = min(minj, int(jobid))
         maxj = max(maxj, int(jobid))
 
-        with openlock(fullf, "r") as jobf:
+        with open(fullf, "r") as jobf:
             subjobs = jobf.read()
 
         subjobs = subjobs.split("\n")[:-1]
@@ -653,7 +653,7 @@ def resubmit(args, config):
 
         path = all_jobfiles[jobid]
         
-        with openlock(path, "r") as f:
+        with open(path, "r") as f:
             for l in f.read().split("\n")[:-1]:
                 subjobid, subjoblsfid = l.split(":")
                 lsfjob = job_info[subjoblsfid]
@@ -707,7 +707,7 @@ def view(args, config):
         path = all_jobfiles[jobid]
         
         print("JOB", jobid)
-        with openlock(path, "r") as f:
+        with open(path, "r") as f:
             for l in f.read().split("\n")[:-1]:
                 subjobid, subjoblsfid = l.split(":")
                 lsfjob = job_info[subjoblsfid]
@@ -768,7 +768,7 @@ def kill(args, config):
         logger.info("killing job {}".format(jobid))
         path = all_jobfiles[jobid]
         
-        with openlock(path, "r") as f:
+        with open(path, "r") as f:
             # subjobs = [ l.split(":") for l in f.read().split("\n")[:-1]]
             for l in f.read().split("\n")[:-1]:
                 subjobid, subjoblsfid = l.split(":")
