@@ -543,6 +543,7 @@ def main():
     submitp.add_argument("lists", nargs="+", help="The lists to submit. You can glob in the shell")
     submitp.add_argument("--name", help="Name to assign to the job. Only works when a single list is given")
     submitp.add_argument("--dry-run", action="store_true", help="Don't really do anything")
+    submitp.add_argument("--queue", "-q", help="Submit to this queue")
 
     lsp = subparsers.add_parser("ls", parents=[parentp], help=ls.__doc__)
     lsp.set_defaults(func=ls)
@@ -1096,6 +1097,7 @@ def cli_submit(args, config):
     submit(
         lists=lists,
         config=config,
+        queue=args.queue,
         dir=os.getcwd(),
         dry_run=args.dry_run
     )
