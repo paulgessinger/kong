@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
 
 from __future__ import print_function
 import os
@@ -8,12 +9,22 @@ from ConfigParser import SafeConfigParser
 import fcntl
 from contextlib import contextmanager
 import datetime
-from termcolor import colored
 import shutil
 import logging
 import collections
 import multiprocessing as mp
 import threading as th
+import argcomplete
+
+import imp
+from termcolor import colored
+
+try:
+    from humanize import naturaltime
+    humanize_available = True
+except ImportError:
+    humanize_available = False
+
 
 from FileSplitterUtils import splitFileListBySizeOfSubjob
 from lsf import *
@@ -471,7 +482,7 @@ def submit_thread(t):
 
     return (t.jobid, t.subjobid, subjoblsfid)
 
-def thread_map(func, values, threadcount=4, tick=lambda x:x, tick_throttle=0.1):
+def thread_map(func, values, threadcount=mp.cpu_count(), tick=lambda x:x, tick_throttle=0.1):
     q = collections.deque(values)
     res_q = collections.deque()
 
@@ -550,6 +561,8 @@ def main():
     lsp.add_argument("dir", nargs="?", default=os.getcwd(), help="The directory or files to list. You can glob")
     lsp.add_argument("--all", "-a", action="store_true", help="If given, list all jobs found in the registry")
     lsp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
+    if humanize_available:
+        lsp.add_argument("--human", "-H", action="store_true", help="Human readable output of times")
 
     monitorp = subparsers.add_parser("monitor", parents=[parentp], help=monitor.__doc__)
     monitorp.set_defaults(func=monitor)
@@ -562,7 +575,12 @@ def main():
     pushp = subparsers.add_parser("push", parents=[parentp])
     pushp.set_defaults(func=push)
 
-    rmp = subparsers.add_parser("rm", parents=[parentp], help=rm.__doc__)
+    renamep = subparsers.add_parser("rename", aliases=["rn"], parents=[parentp], help=rename.__doc__)
+    renamep.set_defaults(func=rename)
+    renamep.add_argument("orig", help="Original file, or job id")
+    renamep.add_argument("dest", help="Destination job name. Job id will be preserved.")
+
+    rmp = subparsers.add_parser("remove", aliases=["rm"], parents=[parentp], help=rm.__doc__)
     rmp.set_defaults(func=rm)
     rmp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
 
@@ -579,6 +597,8 @@ def main():
     resubmitp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
     resubmitp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], default="exit", help="Specify the status with which jobs qualify to be resubmitted")
     resubmitp.add_argument("--force", "-f", action="store_true", help="Kill the the bjobs cache file before doing anything")
+    resubmitp.add_argument("--yes", "-y", action="store_true", help="Yep! If anyone asks")
+    resubmitp.add_argument("--interval", "-i", type=int)
 
     viewp = subparsers.add_parser("view", parents=[parentp], help=view.__doc__)
     viewp.set_defaults(func=view)
@@ -586,8 +606,11 @@ def main():
     viewp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
     viewp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], help="Only show subjobs with this status")
     
-
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
+    
+    if not humanize_available:
+        args.human = False
 
     if args.verbose > 0:
         logger.setLevel(logging.DEBUG)
@@ -646,38 +669,56 @@ def resubmit(args, config):
     job_range = parse_job_range_list(tgt)
     all_jobfiles = find_job_files(regdir)
 
-    job_info = get_job_info(jobcachefile)
 
-    selected = []
 
-    for jobid in job_range:
-        if not jobid in all_jobfiles:
-            logger.warning("job with id {} is not found in registry".format(jobid))
-            continue
+    print("Looking for lsf jobs with status {} in job(s) {}".format(bold(args.status.upper()), ", ".join(str(j) for j in job_range)))
 
-        path = all_jobfiles[jobid]
+    def do_resubmit():
+        selected = []
+        job_info = get_job_info(jobcachefile)
         
-        with open(path, "r") as f:
-            for l in f.read().split("\n")[:-1]:
-                subjobid, subjoblsfid = l.split(":")
-                lsfjob = job_info[subjoblsfid]
-                stat = lsfjob["stat"]
-                if stat == args.status.upper():
-                    selected.append(subjoblsfid)
+        for jobid in job_range:
+            if not jobid in all_jobfiles:
+                logger.warning("job with id {} is not found in registry".format(jobid))
+                continue
 
-    if not confirm("Resubmitting the following {} LSF jobs: {}".format(len(selected), ", ".join(selected))):
-        return
-    # print(selected) 
-    for s in selected:
-        if args.status == "unkwn":
-            mode = ""
-        else:
-            mode = args.status[0].lower()
-        # print(mode, s)
-        brequeue(s, mode)
+            path = all_jobfiles[jobid]
+            
+            with open(path, "r") as f:
+                for l in f.read().split("\n")[:-1]:
+                    subjobid, subjoblsfid = l.split(":")
+                    lsfjob = job_info[subjoblsfid]
+                    stat = lsfjob["stat"]
+                    if stat == args.status.upper():
+                        selected.append(subjoblsfid)
 
-    if os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
+        if not args.yes:
+            if not confirm("Resubmitting the following {} LSF jobs: {}".format(len(selected), ", ".join(selected))):
+                return
+        
+        for s in selected:
+            if args.status == "unkwn":
+                mode = ""
+            else:
+                mode = args.status[0].lower()
+            print(s)
+            try:
+                brequeue(s, mode)
+            except:
+                print(colored("Error requeueing {}".format(s), "white", "on_red"))
+        
+
+    if args.interval:
+        interval = max(30, args.interval)
+        while True:
+            do_resubmit()
+            print("Waiting {}s".format(interval))
+            time.sleep(interval)
+    else:
+        do_resubmit()
+        if os.path.exists(jobcachefile):
+            os.remove(jobcachefile)
+    
     
 
 
@@ -842,6 +883,7 @@ def monitor(args, config):
     import json
     
     args.force = False
+    args.human = False
 
     interval = 30
     
@@ -954,6 +996,32 @@ def monitor(args, config):
             httpd.shutdown()
             t.join()
         # print("end")
+
+def rename(args, config):
+    """
+    Rename a job without affecting the jobid
+    """
+    kongdir, regdir, outdir = get_directories(config)
+
+    if os.path.exists(args.orig) and args.orig.endswith(".job"):
+        jobfile = args.orig
+        jobid, _ = os.path.basename(jobfile).split("_", 1)
+    elif args.orig.isdigit():
+        jobid = int(args.orig)
+        jobfiles = get_all_jobs(regdir)
+        for d, f in jobfiles:
+            if f.startswith("{:05d}".format(jobid)):
+                jobfile = os.path.join(d, f)
+                break
+
+    _, jobname = jobfile[:-4].split("_", 1)
+    # print(jobname, jobid, jobfile)
+    print("Renaming Job {} to {}".format(jobname, args.dest))
+
+    cmd = "mv {} {:05d}_{}.job".format(jobfile, jobid, args.dest)
+    os.system(cmd)
+
+
 
 def push(args, config):
     import requests
@@ -1099,7 +1167,11 @@ def ls(args, config, noprint=False):
         subjobinfo = get_job_info(jobcachefile, subjobids)
         status_string, color, info = make_status_string(subjobinfo)
 
-        date = mtime.strftime("%H:%M:%S %d.%m.%Y")
+        if args.human:
+            date = naturaltime(datetime.datetime.now() - mtime).ljust(14)
+        else:
+            date = mtime.strftime("%H:%M:%S %d.%m.%Y")
+
         outstr = "{jobid: 5d} | {name} | {date} | {status}".format(
             jobid=int(jobid), 
             name="{name}",
