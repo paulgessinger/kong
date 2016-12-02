@@ -15,6 +15,7 @@ import collections
 import multiprocessing as mp
 import threading as th
 import argcomplete
+from glob import glob
 
 import imp
 from termcolor import colored
@@ -26,7 +27,6 @@ except ImportError:
     humanize_available = False
 
 
-from FileSplitterUtils import splitFileListBySizeOfSubjob
 from lsf import *
 from python_utils.printing import *
 from log import logger
@@ -34,7 +34,7 @@ from log import logger
 sys.path.append('/project/atlas/software/python_include/')
 from SUSYHelpers import *
 
-__all__ = ["submit"]
+__all__ = ["submit", "list_submit"]
 
 
 JOBOUTDIR_FORMAT = "{jobid:05d}_{jobname}"
@@ -50,7 +50,8 @@ output={outdir}
 [analysis]
 # output=/etapfs02/atlashpc/pgessing/output/
 # framework_job_script=/gpfs/fs1/home/pgessing/workspace_xAOD/AnalysisJob/runGenericJobMogon.py
-# input_tarball=/home/pgessing/workspace_xAOD/input_tarballs//input.tar
+# buildfile=/home/pgessing/workspace_xAOD/Configs/buildno
+# tarball_dir=/home/pgessing/workspace_xAOD/input_tarballs
 # binary=./Analysis
 # algo=AlgoWPR
 # base_release=Base,2.4.18
@@ -58,6 +59,7 @@ output={outdir}
 # resource=rusage[atlasio=10]
 # default_queue=atlasshort
 """
+# input_tarball=/home/pgessing/workspace_xAOD/input_tarballs//input.tar
 
 
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
@@ -137,6 +139,8 @@ def get_directories(config):
     return (kongdir, regdir, outdir)
 
 def get_tty_width():
+    if not sys.stdin.isatty():
+        return 90
     rows, columns = subprocess.check_output(['stty', 'size']).split()
     return int(columns)
 
@@ -259,6 +263,27 @@ def sum_up_directory(dir):
     # print(lsfids)
     return lsfids, minj, maxj
 
+def count_statuses(jobs):
+    npend = 0
+    ndone = 0
+    nrun = 0
+    nexit = 0
+    nother = 0
+    ntotal = len(jobs)
+
+    # print(jobs)
+    for j in jobs:
+        # print(j)
+        if j["stat"] == "DONE": ndone +=1
+        elif j["stat"] == "PEND": npend +=1
+        elif j["stat"] == "EXIT": nexit +=1
+        elif j["stat"] == "RUN": nrun +=1
+        else: nother += 1
+
+    ngone = ntotal - (ndone + npend + nexit + nrun + nother)
+   
+    return npend, ndone, nrun, nexit, nother, ngone, ntotal
+
 def make_status_string(jobs):
     npend = 0
     ndone = 0
@@ -287,7 +312,7 @@ def make_status_string(jobs):
         color = "yellow"
     elif nrun > 0:
         color = "blue"
-    elif ndone == ntotal:
+    elif ndone == ntotal or ntotal == 0:
         color = "green"
 
     return (status_string, color, (
@@ -320,10 +345,146 @@ def get_job_id(dir, dry=False):
         fcntl.flock(f, fcntl.LOCK_UN)
     return i
 
-def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=False):
+def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, dir=None, verbosity=None, dry_run=False):
+    "Submit an array of lsf jobs"
+     
+    if verbosity != None:
+        if verbosity > 1:
+            logger.setLevel(logging.DEBUG)
+        elif verbosity > 0:
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.WARNING)
+
+    if len(cmds) == 0:
+        logger.error("Lists input was empty")
+        raise ValueError()
+
+    if not config:
+        config = get_config()
+
+    if queue == None:
+        queue = config.get("analysis", "default_queue")
+
+    width = get_tty_width()
+
+    logger.info("Submitting {} LSF jobs".format(len(cmds)))
+   
+
+    print()
+    print("job name:", name)
+    if verbosity > 0:
+        print(width*"-")
+        for cmd in cmds:
+            print(cmd)
+        print(width*"-")
+
+
+    kongdir, regdir, outdir = get_directories(config)
+
+    submit_dir = dir if dir else regdir
+    if not os.path.isabs(submit_dir):
+        submit_dir = os.path.join(regdir, dir)
+    
+    logger.info("Submitting to {}".format(submit_dir))
+    logger.info("Submitting to queue {}".format(queue))
+    
+    blacklist_string = str(GetFullBlacklist(3)).strip()
+    if len(blacklist_string) > 0: " && "+blacklist_string
+
+    submit_tasks = []
+        
+    jobid = get_job_id(kongdir, dry=dry_run)
+    subjobid = 0
+        
+    if not dry_run:
+        jobfile = open(os.path.join(submit_dir, make_jobfile_name(jobid, name)), "w")
+
+    for subjobid, cmd in enumerate(cmds):
+        stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=jobid, subjobid=subjobid))
+        stderrfile = os.path.join(outdir, JOBSTDERR_FORMAT.format(jobid=jobid, subjobid=subjobid))
+           
+        submit_tasks.append(submit_task(
+            jobid=jobid,
+            subjobid=subjobid,
+            jobname=name,
+            # cmd=cmd,
+            stdout=stdoutfile,
+            stderr=stderrfile,
+            exe=cmd,
+            W=W, 
+            app=app, 
+            R=R, 
+            queue=queue,
+            dry=dry_run
+        ))
+    
+    spinner = Spinner("Submitting tasks to the batch system")
+    def tick(n):
+        perc = n/float(len(submit_tasks))*100
+        spinner.next("{}/{} {:.2f}%".format(n, len(submit_tasks), perc))
+
+    submit_results = thread_map(submit_thread, submit_tasks, tick=tick)
+    spinner.finish()
+   
+    
+
+    for jobid, subjobid, subjoblsfid in submit_results:
+        if not dry_run:
+            logger.debug("{}:{}\n".format(subjobid, subjoblsfid))
+            jobfile.write("{}:{}\n".format(subjobid, subjoblsfid))
+
+    if not dry_run:
+        logger.debug("closing jobfile handle")
+        jobfile.close()
+
+    jobcachefile = os.path.join(kongdir, "bjobs_cache")
+    logger.debug("killing bjobs cache file {}".format(jobcachefile))
+    if not dry_run and os.path.exists(jobcachefile):
+        os.remove(jobcachefile)
+
+
+def make_jobfile_name(jobid, jobName):
+    return "{:05d}_{}.job".format(jobid, jobName)
+
+def cli_submit(args, config):
+    """
+    Submit job cmd file, one lsf job per line
+    """
+
+    cmds = []
+    if not args.submit_file:
+        logger.debug("No submit file given, try reading from stdin")
+        cmds = sys.stdin.read().split("\n")[:-1]
+        
+        if not args.name:
+            raise ValueError("Cannot omit --name when using stdin")
+        
+        name = args.name
+    else:
+        logger.debug("Reading input job submit file")
+        cmds = args.submit_file.read().split("\n")[:-1]
+
+    
+    submit(
+        cmds=cmds,
+        name=name,
+        config=config,
+        app=args.app,
+        R=args.R,
+        W=args.W,
+        queue=args.queue,
+        dir=os.getcwd(),
+        dry_run=args.dry_run
+    )
+
+
+def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=None, buildno=None, dry_run=False):
     """
     Input format for lists is a list of tuples with (NAME, LISTFILE).
     """
+
+    from FileSplitterUtils import splitFileListBySizeOfSubjob
 
     if verbosity != None:
         if verbosity > 0:
@@ -374,9 +535,41 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
     name_list_splits = [(n, l, splitFileListBySizeOfSubjob(l, 5.5)) for n, l in lists]
 
     analysis_outdir = config.get("analysis", "output")
-    input_tarball = config.get("analysis", "input_tarball")
+    # input_tarball = config.get("analysis", "input_tarball")
     binary = config.get("analysis", "binary")
     algo = config.get("analysis", "algo")
+    base_release = config.get("analysis", "base_release")
+
+    if buildno == None:
+        buildfile = config.get("analysis", "buildfile")
+        if not os.path.exists(buildfile):
+            raise runtime_error("Buildfile {} does not exist".format(buildfile))
+        with open(buildfile, "r") as f:
+            buildno = int(f.read())
+
+    # find input tarball for build no
+    candidates = glob(os.path.join(config.get("analysis", "tarball_dir"), "*build{:03d}*.tar".format(buildno)))
+    if len(candidates) == 0:
+        errorblock("Build tarball for {} not found".format(buildno))
+        sys.exit(1)
+    elif len(candidates) > 1:
+        errorblock("Build tarball for {} ambiguous".format(buildno))
+        sys.exit(1)
+    
+    input_tarball = candidates[0]
+
+    print()
+    print(block([
+        "Framework job with following options:",
+        "Output:        "+analysis_outdir,
+        "Base release:  "+base_release,
+        "Binary:        "+binary,
+        "Algo:          "+algo,
+        "Systematics:"  "yes" if sys else "no",
+        "Build:         "+str(buildno),
+        "Input tarball: "+input_tarball
+    ], char="-"))
+    print()
 
     blacklist_string = str(GetFullBlacklist(3)).strip()
     if len(blacklist_string) > 0: " && "+blacklist_string
@@ -388,12 +581,11 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
         jobid = get_job_id(kongdir, dry=dry_run)
         subjobid = 0
        
-
         joboutdir = os.path.join(analysis_outdir, JOBOUTDIR_FORMAT.format(jobid=jobid, jobname=jobName))
 
         if not dry_run:
             mkdir(joboutdir)
-            jobfile = open(os.path.join(submit_dir, "{:05d}_{}.job".format(jobid, jobName)), "w")
+            jobfile = open(os.path.join(submit_dir, make_jobfile_name(jobid, jobName)), "w")
             jobfiles[jobid] = jobfile
 
         
@@ -402,10 +594,15 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
             stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=jobid, subjobid=subjobid))
             stderrfile = os.path.join(outdir, JOBSTDERR_FORMAT.format(jobid=jobid, subjobid=subjobid))
            
+            composedOptions = '\'{algo} -p 0. -n 0{sys} --wn --wnDir . \''.format(
+                    algo=algo,
+                    sys="--sys" if sys else ""
+                )
+
             cmd = [
                 config.get("analysis", "framework_job_script"), 
                 '--binary', binary, 
-                '--composedOptions', '\'{algo} -p 0. -n 0 --wn --wnDir . \''.format(algo=algo),
+                '--composedOptions', composedOptions,
                 '--filelist', list, 
                 '--outputMask', 'Plots\\*.root', 
                 '--outputDir', joboutdir,
@@ -414,7 +611,7 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
                 '--jobid', str(jobid), 
                 '--subjobid', str(subjobid), 
                 '--jobname', jobName,
-                '--analysisRelease', config.get("analysis", "base_release"), 
+                '--analysisRelease', base_release, 
                 '--isFrameworkJob', '1', 
                 '--jobSplittingMode', 'Size', 
                 '--usePackedTarball'
@@ -435,7 +632,7 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
                 dry=dry_run
             ))
             subjobid +=1
-
+    
     spinner = Spinner("Submitting tasks to the batch system")
     def tick(n):
         perc = n/float(len(submit_tasks))*100
@@ -460,6 +657,7 @@ def submit(lists, config=None, queue=None, dir=None, verbosity=None, dry_run=Fal
     logger.debug("killing bjobs cache file {}".format(jobcachefile))
     if not dry_run and os.path.exists(jobcachefile):
         os.remove(jobcachefile)
+
 
 def submit_thread(t):
    
@@ -513,6 +711,24 @@ def thread_map(func, values, threadcount=mp.cpu_count(), tick=lambda x:x, tick_t
     return list(res_q)
 
 
+def get_subjob_ids(fullf):
+    f = os.path.basename(fullf)
+
+    jobid, name = f[:-4].split("_", 1)
+    with open(fullf, "r") as jobf:
+        subjobs = jobf.read().split("\n")[:-1]
+
+    if len(subjobs) == 0:
+        return []
+
+    subjobids = []
+    for sji in subjobs:
+        i, lsfid = sji.split(":")
+        subjobids.append(lsfid)
+    
+    return subjobids
+
+
 #################
 # CLI FUNCTIONS #
 #################
@@ -549,12 +765,32 @@ def main():
     peekp.add_argument("jobid", type=int, help="The job id to peek into")
     peekp.add_argument("subjobid", type=int, help="The subjobid to peek into")
 
+    lsubmitp = subparsers.add_parser("list-submit", aliases=["lsubmit"], parents=[parentp], help=cli_list_submit.__doc__)
+    lsubmitp.set_defaults(func=cli_list_submit)
+    lsubmitp.add_argument("lists", nargs="+", help="The lists to submit. You can glob in the shell")
+    lsubmitp.add_argument("--name", help="Name to assign to the job. Only works when a single list is given")
+    lsubmitp.add_argument("--dry-run", action="store_true", help="Don't really do anything")
+    lsubmitp.add_argument("--queue", "-q", help="Submit to this queue")
+    lsubmitp.add_argument("--build", "-b", type=int, help="Which build number tarball should be used. Defaults to the latest one")
+    lsubmitp.add_argument("--sys", action="store_true", help="Include systematics")
+
     submitp = subparsers.add_parser("submit", parents=[parentp], help=cli_submit.__doc__)
     submitp.set_defaults(func=cli_submit)
-    submitp.add_argument("lists", nargs="+", help="The lists to submit. You can glob in the shell")
-    submitp.add_argument("--name", help="Name to assign to the job. Only works when a single list is given")
+    submitp.add_argument("submit_file", nargs="?", type=file, help="a file with one job command per line")
+    submitp.add_argument("--name", help="Name to assign to the job. If not specified, submit file name is used")
     submitp.add_argument("--dry-run", action="store_true", help="Don't really do anything")
     submitp.add_argument("--queue", "-q", help="Submit to this queue")
+    submitp.add_argument("-R")
+    submitp.add_argument("--app")
+    submitp.add_argument("-n")
+    submitp.add_argument("-W")
+    
+    # jobdirp = subparsers.add_parser("jobdir", aliases=['jd'] parents=[parentp], help=cli_jobdir.__doc__)
+    # jobdirp.set_defaults(func=cli_jobdir)
+    
+    cdp = subparsers.add_parser("cd", parents=[parentp], help=cd.__doc__)
+    cdp.set_defaults(func=cd)
+
 
     lsp = subparsers.add_parser("ls", parents=[parentp], help=ls.__doc__)
     lsp.set_defaults(func=ls)
@@ -584,6 +820,10 @@ def main():
     rmp.set_defaults(func=rm)
     rmp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
 
+    predictp = subparsers.add_parser("predict", parents=[parentp], help=predict.__doc__)
+    predictp.set_defaults(func=predict)
+    predictp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
+
     killp = subparsers.add_parser("kill", parents=[parentp], help=kill.__doc__)
     killp.set_defaults(func=kill)
     killp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
@@ -612,14 +852,21 @@ def main():
     if not humanize_available:
         args.human = False
 
-    if args.verbose > 0:
-        logger.setLevel(logging.DEBUG)
-    # elif args.verbose > 1:
-        # log_level = logging.DEBUG
+    print()
 
+    if args.verbose > 1:
+        logger.setLevel(logging.DEBUG)
+    elif args.verbose > 0:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
 
 
     args.func(args, config)
+
+def cd(args, config):
+    kongdir, regdir, outdir = get_directories(config)
+    print(regdir)
 
 def recover(args, config):
     """
@@ -636,6 +883,7 @@ def recover(args, config):
         spl = l.split(" ")
         lsf = spl[0]
         name = spl[-4]
+        print(spl, name)
         jobid, subjobid, label = name.split("_", 2)
         info.append((int(subjobid),lsf))
         jobname = jobid+"_"+label+".job"
@@ -652,7 +900,61 @@ def recover(args, config):
     # print(info)
     # print(out
 
+def predict(args, config):
+    tgt = parse_job_range_list(args.tgt)
+    kongdir, regdir, outdir = get_directories(config)
 
+    all_jobfiles = find_job_files(regdir)
+    jobcachefile = os.path.join(kongdir, "bjobs_cache")
+
+    for jobid in tgt:
+        jobfile = all_jobfiles[jobid]
+        
+        _, jobname = os.path.basename(jobfile).split("_", 1)
+        jobname = jobname[:-4]
+
+        mtime = datetime.datetime.fromtimestamp(os.path.getmtime(jobfile))
+        now = datetime.datetime.now()
+        lsfids = get_subjob_ids(jobfile)
+        subjobinfo = get_job_info(jobcachefile, lsfids)
+        
+        npend, ndone, nrun, nexit, nother, ngone, ntotal = count_statuses(subjobinfo)
+        # print(npend, ndone, nrun, nexit, nother, ngone, ntotal)
+
+
+        deltat = (now-mtime).total_seconds()
+        width = get_tty_width()
+
+        if ndone == 0:
+            line = " {} | {{}} | no jobs done yet".format(jobid)
+            print(line.format(truncate_middle(jobname, width - len(line) - 1 )))
+            continue
+
+        if npend == 0 and nrun == 0:
+            line = " {} | {{}} | has finished    ".format(jobid)
+            print(line.format(truncate_middle(jobname, width - len(line) - 1 )))
+            continue
+        rem = npend+nrun+nother
+        
+        time_per_job = deltat / ndone
+
+        # time_remaining = rem*time_per_job
+        
+        time_remaining = datetime.timedelta(seconds=rem*time_per_job)
+        time_remaining_h = naturaltime(-time_remaining)
+
+        finished = now + time_remaining
+
+        # print(finished)
+
+        line = " {} | {{}} will be done {} | {}".format(
+            jobid, 
+            time_remaining_h, 
+            finished.strftime("%H:%M:%S %d.%m.%Y")
+        )
+        
+        print(line.format(truncate_middle(jobname, width-len(line)+2)))
+        
 def resubmit(args, config):
     """
     Requeue subjobs with a specified status back to the batch system
@@ -1076,7 +1378,6 @@ def push(args, config):
 
 
 
-
 def ls(args, config, noprint=False):
     """
     Show information over job files or directory hierarchies with job files
@@ -1205,7 +1506,7 @@ def peek(args, config):
 
 
 
-def cli_submit(args, config):
+def cli_list_submit(args, config):
     """
     Submits jobs to the batch system. Input is one or multiple lists. Job files are created in the
     current working directory.
@@ -1227,11 +1528,13 @@ def cli_submit(args, config):
                 bn = bn[0:-5]
             lists.append((bn, list)) 
 
-    submit(
+    list_submit(
         lists=lists,
         config=config,
         queue=args.queue,
         dir=os.getcwd(),
+        sys=args.sys,
+        buildno=args.build,
         dry_run=args.dry_run
     )
 

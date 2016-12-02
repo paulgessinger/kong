@@ -17,7 +17,13 @@ def bsub(exe, queue, W, app, R, name, stdout, stderr, dry=False):
         "-W", str(W),
         "-app", app,
         "-q", queue,
-        "-R", R,
+        "-n", "1"
+    ]
+    
+    if R != None:
+        cmd += ["-R", R]
+    
+    cmd += [
         "-J", name,
         "-eo", stderr,
         "-oo", stdout,

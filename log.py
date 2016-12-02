@@ -6,7 +6,7 @@ from termcolor import colored
 
 class ColoredFormatter(logging.Formatter):
     def format(self, record):
-        color = "white"
+        color = "blue"
     
         level = record.levelno
 
@@ -16,8 +16,13 @@ class ColoredFormatter(logging.Formatter):
             color = "yellow"
         elif level >= 40:
             color = "red"
+    
+        if color != "":
+            pf = lambda s: colored(s, color)
+        else:
+            pf = lambda s:s
 
-        str = "[ {} : {} ] {}".format(record.name, colored(record.levelname, color), colored(record.msg % record.args, color))
+        str = "[ {} : {} ] {}".format(record.name, pf(record.levelname), pf(record.msg % record.args))
 
         # if level <= 30:
             # sys.stdout.write(str)
