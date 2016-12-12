@@ -30,6 +30,10 @@ except ImportError:
 from lsf import *
 from python_utils.printing import *
 from log import logger
+from JobDB import JobDB
+
+""":type : JobDB"""
+jobdb = None
 
 sys.path.append('/project/atlas/software/python_include/')
 from SUSYHelpers import *
@@ -228,7 +232,7 @@ def remove_joboutput(jobid, outdir, regdir, analysis_output):
 
 def sum_up_directory(dir):
     contents = os.listdir(dir)
-    lsfids = []
+    jobs = []
 
     minj = 100000
     maxj = 0
@@ -238,30 +242,18 @@ def sum_up_directory(dir):
 
 
         if os.path.isdir(fullf):
-            sub, submin, submax = sum_up_directory(fullf)
-            minj = min(minj, submin)
-            maxj = max(maxj, submax)
-            lsfids += sub
+            sub = sum_up_directory(fullf)
+            jobs += sub
             continue
         
         if not os.path.isfile(fullf) or not f.endswith(".job"):
             continue
         
         jobid, _ = f.split("_", 1)
-        
-        minj = min(minj, int(jobid))
-        maxj = max(maxj, int(jobid))
-
-        with open(fullf, "r") as jobf:
-            subjobs = jobf.read()
-
-        subjobs = subjobs.split("\n")[:-1]
-        for subjob in subjobs:
-            _, lsfid = subjob.split(":")
-            lsfids.append(lsfid)
+        jobs.append(int(jobid))
 
     # print(lsfids)
-    return lsfids, minj, maxj
+    return jobs
 
 def count_statuses(jobs):
     npend = 0
@@ -284,25 +276,25 @@ def count_statuses(jobs):
    
     return npend, ndone, nrun, nexit, nother, ngone, ntotal
 
-def make_status_string(jobs):
-    npend = 0
-    ndone = 0
-    nrun = 0
-    nexit = 0
-    nother = 0
-    ntotal = len(jobs)
+def make_status_string(ntotal, npend, ndone, nrun, nexit, nother):
+    # npend = 0
+    # ndone = 0
+    # nrun = 0
+    # nexit = 0
+    # nother = 0
+    # ntotal = 0
+    #
+    # # print(jobs)
+    # for j in jobs:
+    #     # print(j)
+    #     if j["stat"] == "DONE": ndone +=1
+    #     elif j["stat"] == "PEND": npend +=1
+    #     elif j["stat"] == "EXIT": nexit +=1
+    #     elif j["stat"] == "RUN": nrun +=1
+    #     else: nother += 1
+    #
+    #     ntotal += 1
 
-    # print(jobs)
-    for j in jobs:
-        # print(j)
-        if j["stat"] == "DONE": ndone +=1
-        elif j["stat"] == "PEND": npend +=1
-        elif j["stat"] == "EXIT": nexit +=1
-        elif j["stat"] == "RUN": nrun +=1
-        else: nother += 1
-
-    ngone = ntotal - (ndone + npend + nexit + nrun + nother)
-   
     status_string = "{p:>4d} P | {r:>4d} R | {d:>4d} D | {e:>4d} E | {o:>4d} O".format(p=npend, d=ndone, r=nrun, e=nexit, o=nother)
     
     color = "white"
@@ -347,14 +339,20 @@ def get_job_id(dir, dry=False):
 
 def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, dir=None, verbosity=None, dry_run=False):
     "Submit an array of lsf jobs"
-     
-    if verbosity != None:
-        if verbosity > 1:
-            logger.setLevel(logging.DEBUG)
-        elif verbosity > 0:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.WARNING)
+    if verbosity > 1:
+        logger.setLevel(logging.DEBUG)
+    elif verbosity > 0:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
+
+    # if verbosity != None:
+        # if verbosity > 1:
+            # logger.setLevel(logging.DEBUG)
+        # elif verbosity > 0:
+            # logger.setLevel(logging.INFO)
+        # else:
+            # logger.setLevel(logging.WARNING)
 
     if len(cmds) == 0:
         logger.error("Lists input was empty")
@@ -388,6 +386,7 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
     
     logger.info("Submitting to {}".format(submit_dir))
     logger.info("Submitting to queue {}".format(queue))
+    logger.info("Walltime is {}".format(W))
     
     blacklist_string = str(GetFullBlacklist(3)).strip()
     if len(blacklist_string) > 0: " && "+blacklist_string
@@ -433,15 +432,14 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
         if not dry_run:
             logger.debug("{}:{}\n".format(subjobid, subjoblsfid))
             jobfile.write("{}:{}\n".format(subjobid, subjoblsfid))
+            jobdb.register_subjob(jobid, subjobid, subjoblsfid)
 
     if not dry_run:
         logger.debug("closing jobfile handle")
         jobfile.close()
 
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-    logger.debug("killing bjobs cache file {}".format(jobcachefile))
-    if not dry_run and os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
+    logger.debug("invalidating dbfile file {}".format(jobdb.dbfile))
+    jobdb.invalidate()
 
 
 def make_jobfile_name(jobid, jobName):
@@ -485,12 +483,18 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
     """
 
     from FileSplitterUtils import splitFileListBySizeOfSubjob
+    if verbosity > 1:
+        logger.setLevel(logging.DEBUG)
+    elif verbosity > 0:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
 
-    if verbosity != None:
-        if verbosity > 0:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
+    # if verbosity != None:
+        # if verbosity > 1:
+            # logger.setLevel(logging.DEBUG)
+        # else:
+            # logger.setLevel(logging.INFO)
 
     if len(lists) == 0:
         logger.error("Lists input was empty")
@@ -565,7 +569,7 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
         "Base release:  "+base_release,
         "Binary:        "+binary,
         "Algo:          "+algo,
-        "Systematics:"  "yes" if sys else "no",
+        "Systematics:   "+("yes" if sys else "no"),
         "Build:         "+str(buildno),
         "Input tarball: "+input_tarball
     ], char="-"))
@@ -596,8 +600,10 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
            
             composedOptions = '\'{algo} -p 0. -n 0{sys} --wn --wnDir . \''.format(
                     algo=algo,
-                    sys="--sys" if sys else ""
+                    sys=" --sys" if sys else ""
                 )
+            
+            logger.debug(composedOptions)
 
             cmd = [
                 config.get("analysis", "framework_job_script"), 
@@ -640,23 +646,20 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
 
     submit_results = thread_map(submit_thread, submit_tasks, tick=tick)
     spinner.finish()
-   
-    
 
     for jobid, subjobid, subjoblsfid in submit_results:
         # print(subjobid, subjoblsfid)
         if not dry_run:
             jobfiles[jobid].write("{}:{}\n".format(subjobid, subjoblsfid))
+            jobdb.register_subjob(jobid, subjobid, subjoblsfid)
 
     if not dry_run:
         logger.debug("closing jobfile handles")
         for key, f in jobfiles.iteritems():
             f.close()
 
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-    logger.debug("killing bjobs cache file {}".format(jobcachefile))
-    if not dry_run and os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
+    logger.debug("invalidating dbfile file {}".format(jobdb.dbfile))
+    jobdb.invalidate()
 
 
 def submit_thread(t):
@@ -743,6 +746,12 @@ def main():
     config = get_config()
     
     kongdir, regdir, outdir = get_directories(config)
+
+    # set up the global jobdb
+
+    global jobdb
+    jobdb = JobDB(dbfile=os.path.join(kongdir, "kong.sqlite"))
+
     # setting environment variables
 
     # home = os.path.expanduser("~")
@@ -820,10 +829,6 @@ def main():
     rmp.set_defaults(func=rm)
     rmp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
 
-    predictp = subparsers.add_parser("predict", parents=[parentp], help=predict.__doc__)
-    predictp.set_defaults(func=predict)
-    predictp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
-
     killp = subparsers.add_parser("kill", parents=[parentp], help=kill.__doc__)
     killp.set_defaults(func=kill)
     killp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
@@ -900,61 +905,6 @@ def recover(args, config):
     # print(info)
     # print(out
 
-def predict(args, config):
-    tgt = parse_job_range_list(args.tgt)
-    kongdir, regdir, outdir = get_directories(config)
-
-    all_jobfiles = find_job_files(regdir)
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-
-    for jobid in tgt:
-        jobfile = all_jobfiles[jobid]
-        
-        _, jobname = os.path.basename(jobfile).split("_", 1)
-        jobname = jobname[:-4]
-
-        mtime = datetime.datetime.fromtimestamp(os.path.getmtime(jobfile))
-        now = datetime.datetime.now()
-        lsfids = get_subjob_ids(jobfile)
-        subjobinfo = get_job_info(jobcachefile, lsfids)
-        
-        npend, ndone, nrun, nexit, nother, ngone, ntotal = count_statuses(subjobinfo)
-        # print(npend, ndone, nrun, nexit, nother, ngone, ntotal)
-
-
-        deltat = (now-mtime).total_seconds()
-        width = get_tty_width()
-
-        if ndone == 0:
-            line = " {} | {{}} | no jobs done yet".format(jobid)
-            print(line.format(truncate_middle(jobname, width - len(line) - 1 )))
-            continue
-
-        if npend == 0 and nrun == 0:
-            line = " {} | {{}} | has finished    ".format(jobid)
-            print(line.format(truncate_middle(jobname, width - len(line) - 1 )))
-            continue
-        rem = npend+nrun+nother
-        
-        time_per_job = deltat / ndone
-
-        # time_remaining = rem*time_per_job
-        
-        time_remaining = datetime.timedelta(seconds=rem*time_per_job)
-        time_remaining_h = naturaltime(-time_remaining)
-
-        finished = now + time_remaining
-
-        # print(finished)
-
-        line = " {} | {{}} will be done {} | {}".format(
-            jobid, 
-            time_remaining_h, 
-            finished.strftime("%H:%M:%S %d.%m.%Y")
-        )
-        
-        print(line.format(truncate_middle(jobname, width-len(line)+2)))
-        
 def resubmit(args, config):
     """
     Requeue subjobs with a specified status back to the batch system
@@ -964,9 +914,10 @@ def resubmit(args, config):
     kongdir, regdir, outdir = get_directories(config)
     analysis_output = config.get("analysis", "output")
     
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-    if args.force and os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
+    # jobcachefile = os.path.join(kongdir, "bjobs_cache")
+    # if args.force:
+    jobdb.update(force=args.force)
+        # os.remove(jobcachefile)
     
     job_range = parse_job_range_list(tgt)
     all_jobfiles = find_job_files(regdir)
@@ -977,7 +928,7 @@ def resubmit(args, config):
 
     def do_resubmit():
         selected = []
-        job_info = get_job_info(jobcachefile)
+        # job_info = get_job_info(jobcachefile)
         
         for jobid in job_range:
             if not jobid in all_jobfiles:
@@ -985,12 +936,10 @@ def resubmit(args, config):
                 continue
 
             path = all_jobfiles[jobid]
-            
-            with open(path, "r") as f:
-                for l in f.read().split("\n")[:-1]:
-                    subjobid, subjoblsfid = l.split(":")
-                    lsfjob = job_info[subjoblsfid]
-                    stat = lsfjob["stat"]
+
+            for subjob in jobdb.getBatchJobsForJob(jobid):
+                    subjobid, subjoblsfid = subjob["subjobid"], subjob["batchjobid"]
+                    stat = subjob["stat"]
                     if stat == args.status.upper():
                         selected.append(subjoblsfid)
 
@@ -1013,15 +962,15 @@ def resubmit(args, config):
     if args.interval:
         interval = max(30, args.interval)
         while True:
+            jobdb.update(force=True)
             do_resubmit()
             print("Waiting {}s".format(interval))
             time.sleep(interval)
     else:
         do_resubmit()
-        if os.path.exists(jobcachefile):
-            os.remove(jobcachefile)
-    
-    
+
+        jobdb.update(force=True)
+
 
 
 def view(args, config):
@@ -1040,10 +989,6 @@ def view(args, config):
     job_range = parse_job_range_list(tgt)
     all_jobfiles = find_job_files(regdir)
 
-    job_info = get_job_info(jobcachefile)
-    # lsfids = []
-    # subjobs = []
-
     width = get_tty_width()
 
     for jobid in job_range:
@@ -1054,39 +999,52 @@ def view(args, config):
         path = all_jobfiles[jobid]
         
         print("JOB", jobid)
-        with open(path, "r") as f:
-            for l in f.read().split("\n")[:-1]:
-                subjobid, subjoblsfid = l.split(":")
-                lsfjob = job_info[subjoblsfid]
-                # print(subjobid, subjoblsfid, lsfjob["stat"])
+        # with open(path, "r") as f:
+        #     for l in f.read().split("\n")[:-1]:
+        #         subjobid, subjoblsfid = l.split(":")
+        #         lsfjob = jobdb.get(subjoblsfid)
+        #
+        #         stat = lsfjob["stat"]
+        #
+        #         if args.status and stat != args.status.upper():
+        #             continue
+        #
+        #         outstr = "{:>5} | {:>8} | {}".format(subjobid, subjoblsfid, stat.ljust(4))
+        #
+        #
+        #         color = "white"
+        #         if stat == "PEND":
+        #             color = "yellow"
+        #         elif stat == "RUN":
+        #             color = "blue"
+        #         elif stat == "DONE":
+        #             color = "green"
+        #         elif stat == "EXIT":
+        #             color = "red"
+        #
+        #         print(colored(outstr, color))
 
-                stat = lsfjob["stat"]
+        for subjob in jobdb.getBatchJobsForJob(jobid):
+            stat = subjob["stat"]
+            if args.status and stat != args.status.upper():
+                continue
 
-                if args.status and stat != args.status.upper():
-                    continue
-
-                outstr = "{:>5} | {:>8} | {}".format(subjobid, subjoblsfid, stat.ljust(4))
+            outstr = "{:>5} | {:>8} | {}".format(subjob["subjobid"], subjob["batchjobid"], stat.ljust(4))
 
 
-                color = "white"
-                if stat == "PEND":
-                    color = "yellow"
-                elif stat == "RUN":
-                    color = "blue"
-                elif stat == "DONE":
-                    color = "green"
-                elif stat == "EXIT":
-                    color = "red"
+            color = "white"
+            if stat == "PEND":
+                color = "yellow"
+            elif stat == "RUN":
+                color = "blue"
+            elif stat == "DONE":
+                color = "green"
+            elif stat == "EXIT":
+                color = "red"
 
-                print(colored(outstr, color))
-                # subjobs.append((jobid, subjobid, subjoblsfid))
-                # lsfids.append(subjoblsfid)
-                
-        
+            print(colored(outstr, color))
 
-    # subjobinfo = get_job_info(jobcachefile, lsfids)
 
-        
 
 def kill(args, config):
     """
@@ -1137,8 +1095,8 @@ def kill(args, config):
     
     jobcachefile = os.path.join(kongdir, "bjobs_cache")
     logger.debug("killing bjobs cache file {}".format(jobcachefile))
-    if os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
+
+    jobdb.invalidate()
 
         # for subjobid, subjoblsfid in subjobs:
             # bkill(subjoblsfid)
@@ -1376,7 +1334,13 @@ def push(args, config):
 
         # f = os.path.basename(fullf)
 
+def sum_columns(x, y):
+    res = []
+    print(x, y)
+    for i in range(0, len(x)):
+        res = x[i] + y[i]
 
+    return res
 
 def ls(args, config, noprint=False):
     """
@@ -1384,14 +1348,12 @@ def ls(args, config, noprint=False):
     """
 
     kongdir, regdir, outdir = get_directories(config)
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-
+    # jobcachefile = os.path.join(kongdir, "bjobs_cache")
+    #
     if args.dir == "*":
         return
     
-    if args.force:
-        if os.path.exists(jobcachefile):
-            os.remove(jobcachefile)
+    jobdb.update(force=args.force)
 
     dirs = []
     dir = "."
@@ -1420,18 +1382,21 @@ def ls(args, config, noprint=False):
     width = get_tty_width()
 
     for subdir in dirs:
-        lsfids, minj, maxj = sum_up_directory(subdir)
-        if len(lsfids) == 0:
+        jobs_in_dir = sum_up_directory(subdir)
+        if len(jobs_in_dir) == 0:
             continue
-        subjobinfo = get_job_info(jobcachefile, lsfids)
-        status_string, color, info = make_status_string(subjobinfo)
+
+        jobinfo = [sum(i) for i in zip(*map(jobdb.getJobInfo, jobs_in_dir))]
+
+        # print(jobinfo)
+        status_string, color, info = make_status_string(*jobinfo)
         outstr = " "*6 + "| {name} ({min}-{max}) | {status}".format(
             name="{name}",
             status=status_string,
-            min=minj,
-            max=maxj
+            min=min(jobs_in_dir),
+            max=max(jobs_in_dir)
         )
-       
+
         name = os.path.relpath(subdir, dir)
         outstr = outstr.format(name=truncate_middle(name, width - len(outstr) + len("{name}")))
         # print(colored(outstr, color))
@@ -1449,24 +1414,24 @@ def ls(args, config, noprint=False):
         jobid, name = f[:-4].split("_", 1)
         mtime = datetime.datetime.fromtimestamp(os.path.getmtime(fullf))
 
-        with open(fullf, "r") as jobf:
-            subjobs = jobf.read().split("\n")[:-1]
+        # with open(fullf, "r") as jobf:
+        #     subjobs = jobf.read().split("\n")[:-1]
 
-        if len(subjobs) == 0:
-            print(" "*6+"| "+fullf)
-            continue
+        # if len(subjobs) == 0:
+            # print(" "*6+"| "+fullf)
+            # continue
 
-        subjobids = []
-        for sji in subjobs:
-            i, lsfid = sji.split(":")
-            subjobids.append(lsfid)
+        # subjobids = []
+        # for sji in subjobs:
+        #     i, lsfid = sji.split(":")
+        #     subjobids.append(lsfid)
         
-        if args.all:
-            bd = os.path.relpath(os.path.dirname(fullf), regdir)
-            name = bd + "/" + name
+        # if args.all:
+        #     bd = os.path.relpath(os.path.dirname(fullf), regdir)
+        #     name = bd + "/" + name
 
-        subjobinfo = get_job_info(jobcachefile, subjobids)
-        status_string, color, info = make_status_string(subjobinfo)
+        jobinfo = jobdb.getJobInfo(int(jobid))
+        status_string, color, info = make_status_string(*jobinfo)
 
         if args.human:
             date = naturaltime(datetime.datetime.now() - mtime).ljust(14)
