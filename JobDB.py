@@ -8,12 +8,11 @@ from log import logger
 import datetime
 import time
 
-BJOBS_CACHE_LIFETIME = 30
 
 
 class JobDB:
 
-    def __init__(self, dbfile):
+    def __init__(self, dbfile, timeout):
         self.dbfile = dbfile
         self.validfile = os.path.join(os.path.dirname(self.dbfile), "kong_db_valid")
         if not os.path.exists(self.dbfile):
@@ -23,6 +22,7 @@ class JobDB:
             self.fileconn = sqlite3.connect(self.dbfile)
 
 
+        self.cache_timeout = timeout
         self.fileconn.row_factory = sqlite3.Row
 
         self.memconn = sqlite3.connect(":memory:")
@@ -31,7 +31,8 @@ class JobDB:
         self.load()
 
     def invalidate(self):
-        os.remove(self.validfile)
+        if os.path.exists(self.validfile):
+            os.remove(self.validfile)
 
     def load(self):
         # print("BEGIN LOAD")
@@ -53,7 +54,8 @@ class JobDB:
             job_name VARCHAR,
             queue VARCHAR,
             submit_time VARCHAR,
-            exec_host VARCHAR
+            exec_host VARCHAR,
+            cmd TEXT
         )''')
         c.execute('''CREATE INDEX jobs_jobid ON jobs (jobid);''')
         c.execute('''CREATE INDEX jobs_batchjobid ON jobs (batchjobid);''')
@@ -99,8 +101,8 @@ class JobDB:
             mtime = os.path.getmtime(self.validfile)
             now = time.mktime(datetime.datetime.now().timetuple())
             # print(now-mtime)
-            if now-mtime < BJOBS_CACHE_LIFETIME and not force:
-                logger.debug("Skip updating jobs db. age: {}".format(now-mtime))
+            if now-mtime < self.cache_timeout and not force:
+                logger.debug("Skip updating jobs db. age: {} < {}".format(now-mtime, self.cache_timeout))
                 return
 
         jobs = lsf.bjobs()
@@ -109,6 +111,7 @@ class JobDB:
         memc = self.memconn.cursor()
 
         logger.debug("Syncing to database")
+
 
         for job in jobs:
             # print("syncing", job)
@@ -124,7 +127,8 @@ class JobDB:
                 job["queue"],
                 job["submit_time"],
                 job["exec_host"],
-                job["jobid"]
+                job["command"],
+                job["jobid"],
             )
             # print(values)
             stmt = '''UPDATE jobs SET
@@ -133,7 +137,8 @@ class JobDB:
                 job_name = ?,
                 queue = ?,
                 submit_time = ?,
-                exec_host = ?
+                exec_host = ?,
+                cmd = ?
             WHERE batchjobid = ?;'''
             # print(stmt)
             filec.execute(stmt, values)
@@ -148,8 +153,9 @@ class JobDB:
                     job["queue"],
                     job["submit_time"],
                     job["exec_host"],
+                    job["command"],
                 )
-                stmt = '''INSERT INTO jobs (jobid, batchjobid, stat, job_name, queue, submit_time, exec_host) VALUES (?, ?, ?, ?, ?, ?)'''
+                stmt = '''INSERT INTO jobs (jobid, batchjobid, stat, job_name, queue, submit_time, exec_host, cmd) VALUES (?, ?, ?, ?, ?, ?, ?)'''
                 filec.execute(stmt, values)
                 # memc.execute(stmt, values)
                 # logger.debug("Inserting {}".format(job["jobid"]))
@@ -163,6 +169,9 @@ class JobDB:
     def register_subjob(self, jobid, subjobid, lsfid):
         c = self.fileconn.cursor()
         c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid) VALUES (?, ?, ?)', (jobid, subjobid, lsfid))
+        # self.fileconn.commit()
+
+    def commit(self):
         self.fileconn.commit()
 
     def get_jobinfo_batch(self, lsfids):

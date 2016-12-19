@@ -60,7 +60,7 @@ def bjobs_raw(delimiter="\7"):
     #         return data
    
     logger.debug("bjobs info read from actual output")
-    keys = ("jobid", "stat", "queue", "exec_host", "job_name", "submit_time")
+    keys = ("jobid", "stat", "queue", "exec_host", "job_name", "submit_time", "cmd")
     out = subprocess.check_output(["bjobs", "-a", "-o", " ".join(keys)+" delimiter='"+delimiter+"'"])
    
     # with open(cachefile, "w+") as f:

@@ -50,6 +50,7 @@ CONFIG_TEMPLATE = """
 kongdir={kongdir}
 registry={regdir}
 output={outdir}
+batch_cache_timeout = 60
 
 [analysis]
 # output=/etapfs02/atlashpc/pgessing/output/
@@ -137,9 +138,9 @@ def truncate_middle(str, length):
     return outstr
 
 def get_directories(config):
-    kongdir = config.get("kong", "kongdir")
-    regdir = config.get("kong", "registry")
-    outdir = config.get("kong", "output")
+    kongdir = os.path.realpath(config.get("kong", "kongdir"))
+    regdir = os.path.realpath(config.get("kong", "registry"))
+    outdir = os.path.realpath(config.get("kong", "output"))
     return (kongdir, regdir, outdir)
 
 def get_tty_width():
@@ -379,6 +380,9 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
 
 
     kongdir, regdir, outdir = get_directories(config)
+    global jobdb
+    if jobdb == None:
+        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
 
     submit_dir = dir if dir else regdir
     if not os.path.isabs(submit_dir):
@@ -529,6 +533,9 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
 
     
     kongdir, regdir, outdir = get_directories(config)
+    global jobdb
+    if jobdb == None:
+        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
 
     submit_dir = dir if dir else regdir
     if not os.path.isabs(submit_dir):
@@ -652,6 +659,7 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
         if not dry_run:
             jobfiles[jobid].write("{}:{}\n".format(subjobid, subjoblsfid))
             jobdb.register_subjob(jobid, subjobid, subjoblsfid)
+        jobdb.commit()
 
     if not dry_run:
         logger.debug("closing jobfile handles")
@@ -736,6 +744,9 @@ def get_subjob_ids(fullf):
 # CLI FUNCTIONS #
 #################
 
+def get_default_jobdb(kongdir, timeout):
+    return JobDB(dbfile=os.path.join(kongdir, "kong.sqlite"), timeout=timeout)
+
 def main():
     """
     kong submits jobs to LSF and keeps track of them, with a directory hierarchy of .job files
@@ -750,7 +761,7 @@ def main():
     # set up the global jobdb
 
     global jobdb
-    jobdb = JobDB(dbfile=os.path.join(kongdir, "kong.sqlite"))
+    jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
 
     # setting environment variables
 
@@ -850,6 +861,7 @@ def main():
     viewp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
     viewp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
     viewp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], help="Only show subjobs with this status")
+    viewp.add_argument("--cmd", "-c", action="store_true", help="Show the command of the job")
     
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
@@ -961,11 +973,24 @@ def resubmit(args, config):
 
     if args.interval:
         interval = max(30, args.interval)
+        i = interval
+    
         while True:
-            jobdb.update(force=True)
-            do_resubmit()
-            print("Waiting {}s".format(interval))
-            time.sleep(interval)
+            if i >= interval:
+                sys.stdout.write("\r")
+                print("Updating job database")
+                jobdb.update(force=True)
+                print("Checking / Resubmitting")
+                do_resubmit()
+                i = 0
+
+            n = i % 4
+            spin = "."*(n) + "," + "."*(3-n)
+            sys.stdout.write(("\rWaiting for {:"+str(len(str(interval)))+"d}s {: <5}").format(interval-i, spin))
+            sys.stdout.flush()
+            i += 1
+            time.sleep(1)
+
     else:
         do_resubmit()
 
@@ -982,10 +1007,12 @@ def view(args, config):
     kongdir, regdir, outdir = get_directories(config)
     analysis_output = config.get("analysis", "output")
     
-    jobcachefile = os.path.join(kongdir, "bjobs_cache")
-    if args.force and os.path.exists(jobcachefile):
-        os.remove(jobcachefile)
-    
+    # jobcachefile = os.path.join(kongdir, "bjobs_cache")
+    # if args.force and os.path.exists(jobcachefile):
+    #     os.remove(jobcachefile)
+
+    jobdb.update(force=args.force)
+
     job_range = parse_job_range_list(tgt)
     all_jobfiles = find_job_files(regdir)
 
@@ -998,7 +1025,7 @@ def view(args, config):
 
         path = all_jobfiles[jobid]
         
-        print("JOB", jobid)
+        # print("JOB", jobid)
         # with open(path, "r") as f:
         #     for l in f.read().split("\n")[:-1]:
         #         subjobid, subjoblsfid = l.split(":")
@@ -1029,9 +1056,6 @@ def view(args, config):
             if args.status and stat != args.status.upper():
                 continue
 
-            outstr = "{:>5} | {:>8} | {}".format(subjob["subjobid"], subjob["batchjobid"], stat.ljust(4))
-
-
             color = "white"
             if stat == "PEND":
                 color = "yellow"
@@ -1042,7 +1066,23 @@ def view(args, config):
             elif stat == "EXIT":
                 color = "red"
 
-            print(colored(outstr, color))
+            outstr = colored("{:>5} : {:<5} | {:>8} | {} | {q} | {h}".format(
+                jobid,
+                subjob["subjobid"],
+                subjob["batchjobid"],
+                stat.ljust(4),
+                q = subjob["queue"],
+                h = subjob["exec_host"]
+            ), color)
+
+            if args.cmd:
+                outstr += "\n"+subjob["cmd"]+"\n"
+
+            print(outstr)
+
+
+
+
 
 
 
@@ -1352,7 +1392,11 @@ def ls(args, config, noprint=False):
     #
     if args.dir == "*":
         return
-    
+
+    # check if dir is in another one
+    if not os.path.realpath(args.dir).startswith(regdir):
+        raise ValueError("Dir {} is not inside registry dir {}".format(args.dir, regdir))
+
     jobdb.update(force=args.force)
 
     dirs = []
