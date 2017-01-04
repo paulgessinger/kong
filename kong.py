@@ -63,6 +63,7 @@ batch_cache_timeout = 60
 # application_profile=Reserve10G
 # resource=rusage[atlasio=10]
 # default_queue=atlasshort
+# splitsize=5.5
 """
 # input_tarball=/home/pgessing/workspace_xAOD/input_tarballs//input.tar
 
@@ -543,7 +544,7 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
     
     logger.info("Submitting to {}".format(submit_dir))
     
-    name_list_splits = [(n, l, splitFileListBySizeOfSubjob(l, 5.5)) for n, l in lists]
+    name_list_splits = [(n, l, splitFileListBySizeOfSubjob(l, config.getfloat("analysis", "splitsize"))) for n, l in lists]
 
     analysis_outdir = config.get("analysis", "output")
     # input_tarball = config.get("analysis", "input_tarball")
