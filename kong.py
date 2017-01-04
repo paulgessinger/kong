@@ -1434,7 +1434,7 @@ def ls(args, config, noprint=False):
 
         # print(jobinfo)
         status_string, color, info = make_status_string(*jobinfo)
-        outstr = " "*6 + "| {name} ({min}-{max}) | {status}".format(
+        outstr = " "*7 + "| {name} ({min}-{max}) | {status}".format(
             name="{name}",
             status=status_string,
             min=min(jobs_in_dir),
@@ -1482,7 +1482,7 @@ def ls(args, config, noprint=False):
         else:
             date = mtime.strftime("%H:%M:%S %d.%m.%Y")
 
-        outstr = "{jobid: 5d} | {name} | {date} | {status}".format(
+        outstr = "{jobid: 6d} | {name} | {date} | {status}".format(
             jobid=int(jobid), 
             name="{name}",
             date=date, 
