@@ -166,6 +166,10 @@ class JobDB:
         os.system("touch {}".format(self.validfile))
         # print(jobs)
 
+    def remove(self, jobid):
+        c = self.fileconn.cursor()
+        c.execute("DELETE FROM jobs WHERE jobid = ?", (jobid,))
+
     def register_subjob(self, jobid, subjobid, lsfid):
         c = self.fileconn.cursor()
         c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid) VALUES (?, ?, ?)', (jobid, subjobid, lsfid))

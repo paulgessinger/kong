@@ -1167,7 +1167,7 @@ def rm(args, config):
         if not jobid in all_jobfiles:
             logger.warning("job with id {} is not found in registry".format(jobid))
             continue
-        logger.info("removing job {}".format(jobid))
+        print("Removing job {}".format(jobid))
         path = all_jobfiles[jobid]
         logger.debug("remove {}".format(path))
         
@@ -1176,6 +1176,14 @@ def rm(args, config):
         except: pass
 
         remove_joboutput(jobid, outdir, regdir, analysis_output)
+        jobdb.remove(jobid)
+
+    jobdb.commit()
+
+    if len(tgt) == 1 and os.path.isdir(tgt[0]):
+        cmd = "rm -r {}".format(tgt[0])
+        # print(cmd)
+        os.system(cmd)
 
 def monitor(args, config):
     import curses
