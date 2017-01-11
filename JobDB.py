@@ -155,7 +155,7 @@ class JobDB:
                     job["exec_host"],
                     job["command"],
                 )
-                stmt = '''INSERT INTO jobs (jobid, batchjobid, stat, job_name, queue, submit_time, exec_host, cmd) VALUES (?, ?, ?, ?, ?, ?, ?)'''
+                stmt = '''INSERT INTO jobs (jobid, batchjobid, stat, job_name, queue, submit_time, exec_host, cmd) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
                 filec.execute(stmt, values)
                 # memc.execute(stmt, values)
                 # logger.debug("Inserting {}".format(job["jobid"]))

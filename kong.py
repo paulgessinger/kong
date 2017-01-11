@@ -1180,7 +1180,7 @@ def rm(args, config):
 
     jobdb.commit()
 
-    if len(tgt) == 1 and os.path.isdir(tgt[0]):
+    if len(tgt) == 1 and os.path.isdir(tgt[0]) and tgt[0] != ".":
         cmd = "rm -r {}".format(tgt[0])
         # print(cmd)
         os.system(cmd)
