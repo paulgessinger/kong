@@ -37,7 +37,7 @@ def bsub(exe, queue, W, app, R, name, stdout, stderr, dry=False):
         lsf_id = bsub_regex.findall(output)[0]
         return lsf_id
     else:
-        # time.sleep(0.5)
+        # time.sleep(0.05)
         return 42
 
 def bkill(jobid):
@@ -131,6 +131,16 @@ def brequeue(lsfid, mode):
     
     out = subprocess.check_output(cmd)
 
+def bmod(lsfid, queue=None, W=None):
+    cmd = ["bmod", lsfid]
+    if queue != None:
+        cmd.append("-q")
+        cmd.append(queue)
+    if W != None:
+        cmd.append("-W")
+        cmd.append(W)
+
+    out = subprocess.check_output(cmd)
 
 
 

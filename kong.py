@@ -13,9 +13,11 @@ import shutil
 import logging
 import collections
 import multiprocessing as mp
+from multiprocessing.dummy import Pool as ThreadPool
 import threading as th
 import argcomplete
 from glob import glob
+from tqdm import tqdm
 
 import imp
 from termcolor import colored
@@ -297,7 +299,7 @@ def make_status_string(ntotal, npend, ndone, nrun, nexit, nother):
     #
     #     ntotal += 1
 
-    status_string = "{p:>4d} P | {r:>4d} R | {d:>4d} D | {e:>4d} E | {o:>4d} O".format(p=npend, d=ndone, r=nrun, e=nexit, o=nother)
+    status_string = "{p:>5d} P | {r:>5d} R | {d:>5d} D | {e:>5d} E | {o:>5d} O".format(p=npend, d=ndone, r=nrun, e=nexit, o=nother)
     
     color = "white"
     if nexit > 0:
@@ -423,12 +425,13 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
             dry=dry_run
         ))
     
-    spinner = Spinner("Submitting tasks to the batch system")
-    def tick(n):
-        perc = n/float(len(submit_tasks))*100
-        spinner.next("{}/{} {:.2f}%".format(n, len(submit_tasks), perc))
+    print("Submitting tasks to the batch system")
 
-    submit_results = thread_map(submit_thread, submit_tasks, tick=tick)
+    throttle = 0
+    if dry_run:
+        throttle = 5.0 / len(submit_tasks)
+
+    submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
     spinner.finish()
    
     
@@ -482,7 +485,7 @@ def cli_submit(args, config):
     )
 
 
-def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=None, buildno=None, dry_run=False):
+def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=None, buildno=None, dry_run=False):
     """
     Input format for lists is a list of tuples with (NAME, LISTFILE).
     """
@@ -577,7 +580,7 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
         "Base release:  "+base_release,
         "Binary:        "+binary,
         "Algo:          "+algo,
-        "Systematics:   "+("yes" if sys else "no"),
+        "Systematics:   "+("yes" if syst else "no"),
         "Build:         "+str(buildno),
         "Input tarball: "+input_tarball
     ], char="-"))
@@ -608,7 +611,7 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
            
             composedOptions = '\'{algo} -p 0. -n 0{sys} --wn --wnDir . \''.format(
                     algo=algo,
-                    sys=" --sys" if sys else ""
+                    sys=" --sys" if syst else ""
                 )
             
             logger.debug(composedOptions)
@@ -647,22 +650,22 @@ def list_submit(lists, config=None, queue=None, dir=None, sys=False, verbosity=N
             ))
             subjobid +=1
     
-    spinner = Spinner("Submitting tasks to the batch system")
-    def tick(n):
-        perc = n/float(len(submit_tasks))*100
-        spinner.next("{}/{} {:.2f}%".format(n, len(submit_tasks), perc))
+    print("Submitting tasks to the batch system")
 
-    submit_results = thread_map(submit_thread, submit_tasks, tick=tick)
-    spinner.finish()
+    throttle = 0
+    if dry_run:
+        throttle = 10.0 / len(submit_tasks)
+        print(throttle)
+    submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
 
     for jobid, subjobid, subjoblsfid in submit_results:
         # print(subjobid, subjoblsfid)
         if not dry_run:
             jobfiles[jobid].write("{}:{}\n".format(subjobid, subjoblsfid))
             jobdb.register_subjob(jobid, subjobid, subjoblsfid)
-        jobdb.commit()
 
     if not dry_run:
+        jobdb.commit()
         logger.debug("closing jobfile handles")
         for key, f in jobfiles.iteritems():
             f.close()
@@ -692,35 +695,58 @@ def submit_thread(t):
 
     return (t.jobid, t.subjobid, subjoblsfid)
 
-def thread_map(func, values, threadcount=mp.cpu_count(), tick=lambda x:x, tick_throttle=0.1):
-    q = collections.deque(values)
-    res_q = collections.deque()
+def thread_map(func, values, n=mp.cpu_count(), tick=lambda x:x, pool=None, desc="", throttle=0):
+    if pool == None:
+        pool = ThreadPool(n)
+    
+    prog = tqdm(total=len(values), leave=False, desc=desc)
 
-    def worker():
-        while True:
-            try:
-                result = func(q.pop())
-                res_q.appendleft(result)
-            except IndexError:
-                break
+    def work(item):
+        # print("WORK!") 
+        if throttle > 0:
+            time.sleep(throttle)
+        prog.update()
+        return func(item)
 
-    threads = []
+    try:
+        submit_results = pool.map_async(work, values).get(99999)
+        prog.close()
+        return submit_results
+    except KeyboardInterrupt:
+        print("Interrupt")
+        pool.terminate()
+        pool.join()
+        raise
 
-    for i in range(threadcount):
-        t = th.Thread(target=worker)
-        t.daemon = True
-        t.start()
-        threads.append(t)
+# def thread_map(func, values, threadcount=mp.cpu_count(), tick=lambda x:x, tick_throttle=0.1):
+    # q = collections.deque(values)
+    # res_q = collections.deque()
 
-    while len(q) > 0:
-        time.sleep(tick_throttle)
-        tick(len(res_q))
+    # def worker():
+        # while True:
+            # try:
+                # result = func(q.pop())
+                # res_q.appendleft(result)
+            # except IndexError:
+                # break
 
-    for t in threads:
-        t.join()
-        tick(len(res_q))
+    # threads = []
 
-    return list(res_q)
+    # for i in range(threadcount):
+        # t = th.Thread(target=worker)
+        # t.daemon = True
+        # t.start()
+        # threads.append(t)
+
+    # while len(q) > 0:
+        # time.sleep(tick_throttle)
+        # tick(len(res_q))
+
+    # for t in threads:
+        # t.join()
+        # tick(len(res_q))
+
+    # return list(res_q)
 
 
 def get_subjob_ids(fullf):
@@ -856,6 +882,8 @@ def main():
     resubmitp.add_argument("--force", "-f", action="store_true", help="Kill the the bjobs cache file before doing anything")
     resubmitp.add_argument("--yes", "-y", action="store_true", help="Yep! If anyone asks")
     resubmitp.add_argument("--interval", "-i", type=int)
+    resubmitp.add_argument("--queue", "-q")
+    resubmitp.add_argument("-W")
 
     viewp = subparsers.add_parser("view", parents=[parentp], help=view.__doc__)
     viewp.set_defaults(func=view)
@@ -968,8 +996,19 @@ def resubmit(args, config):
             print(s)
             try:
                 brequeue(s, mode)
-            except:
+                if args.queue:
+                    time.sleep(2)
+                    bmod(s, queue=args.queue)
+                    # print("new queue", args.queue)
+                if args.W:
+                    time.sleep(2)
+                    # print("new W", args.W)
+                    bmod(s, W=args.W)
+
+
+            except Exception as e:
                 print(colored("Error requeueing {}".format(s), "white", "on_red"))
+                print(e)
         
 
     if args.interval:
@@ -1179,6 +1218,7 @@ def rm(args, config):
         jobdb.remove(jobid)
 
     jobdb.commit()
+    # jobdb.vacuum()
 
     if len(tgt) == 1 and os.path.isdir(tgt[0]) and tgt[0] != ".":
         cmd = "rm -r {}".format(tgt[0])
@@ -1435,6 +1475,7 @@ def ls(args, config, noprint=False):
     width = get_tty_width()
 
     for subdir in dirs:
+        logger.debug("Summing up directory {}".format(subdir))
         jobs_in_dir = sum_up_directory(subdir)
         if len(jobs_in_dir) == 0:
             continue
