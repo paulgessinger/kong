@@ -119,76 +119,80 @@ class JobDB:
 
 
         for job in tqdm(jobs, leave=False, desc="Updating", bar_format="{l_bar}{bar}|{n_fmt}/{total_fmt}"):
-            # print("syncing", job)
+            try:
+                # print("syncing", job)
 
-            # figure out kong job id
-            jobid, _ = job["job_name"].split("_", 1)
-            jobid = int(jobid)
-            
-            # parse jobid and subjobid from name
-            parsed_jobid, parsed_subjobid, _ = job["job_name"].split("_", 2)
-            parsed_jobid, parsed_subjobid = int(parsed_jobid), int(parsed_subjobid)
-            # print(parsed_jobid, parsed_subjobid)
-            
-            assert jobid == parsed_jobid, "Jobid != Jobid in job name {}, {}".format(jobid, parsed_jobid)
+                # figure out kong job id
+                # print(job["job_name"])
+                jobid, _ = job["job_name"].split("_", 1)
+                jobid = int(jobid)
+                
+                # parse jobid and subjobid from name
+                parsed_jobid, parsed_subjobid, _ = job["job_name"].split("_", 2)
+                parsed_jobid, parsed_subjobid = int(parsed_jobid), int(parsed_subjobid)
+                # print(parsed_jobid, parsed_subjobid)
+                
+                assert jobid == parsed_jobid, "Jobid != Jobid in job name {}, {}".format(jobid, parsed_jobid)
 
-            values = (
-                jobid,
-                parsed_subjobid,
-                job["stat"],
-                job["job_name"],
-                job["queue"],
-                job["submit_time"],
-                job["exec_host"],
-                job["command"],
-                job["jobid"],
-            )
-
-
-            stmt = '''UPDATE jobs SET
-                jobid = ?,
-                subjobid = ?,
-                stat = ?,
-                job_name = ?,
-                queue = ?,
-                submit_time = ?,
-                exec_host = ?,
-                cmd = ?
-            WHERE batchjobid = ?;'''
-            logger.debug("Updating job {}".format(job["jobid"]))
-            # print(stmt)
-            filec.execute(stmt, values)
-            # memc.execute(stmt, values)
-            if filec.rowcount == 0:
-                logger.debug("Not found, inserting")
-                # this did not affect anything, insert!
                 values = (
                     jobid,
                     parsed_subjobid,
-                    job["jobid"],
                     job["stat"],
                     job["job_name"],
                     job["queue"],
                     job["submit_time"],
                     job["exec_host"],
                     job["command"],
+                    job["jobid"],
                 )
-                stmt = '''INSERT INTO jobs (
-                        jobid, 
-                        subjobid, 
-                        batchjobid, 
-                        stat, 
-                        job_name, 
-                        queue, 
-                        submit_time, 
-                        exec_host, 
-                        cmd
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+
+
+                stmt = '''UPDATE jobs SET
+                    jobid = ?,
+                    subjobid = ?,
+                    stat = ?,
+                    job_name = ?,
+                    queue = ?,
+                    submit_time = ?,
+                    exec_host = ?,
+                    cmd = ?
+                WHERE batchjobid = ?;'''
+                logger.debug("Updating job {}".format(job["jobid"]))
+                # print(stmt)
                 filec.execute(stmt, values)
                 # memc.execute(stmt, values)
-                # logger.debug("Inserting {}".format(job["jobid"]))
+                if filec.rowcount == 0:
+                    logger.debug("Not found, inserting")
+                    # this did not affect anything, insert!
+                    values = (
+                        jobid,
+                        parsed_subjobid,
+                        job["jobid"],
+                        job["stat"],
+                        job["job_name"],
+                        job["queue"],
+                        job["submit_time"],
+                        job["exec_host"],
+                        job["command"],
+                    )
+                    stmt = '''INSERT INTO jobs (
+                            jobid, 
+                            subjobid, 
+                            batchjobid, 
+                            stat, 
+                            job_name, 
+                            queue, 
+                            submit_time, 
+                            exec_host, 
+                            cmd
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+                    filec.execute(stmt, values)
+                    # memc.execute(stmt, values)
+                    # logger.debug("Inserting {}".format(job["jobid"]))
 
-            logger.debug("Job updated / inserted")
+                logger.debug("Job updated / inserted")
+            except:
+                logger.warning("Unable to update job {} ({}). Probably submitted from outside".format(job["jobid"], job["job_name"]))
         self.fileconn.commit()
 
         logger.debug("Syncing completed")

@@ -78,6 +78,9 @@ def bjobs(delimiter="\7"):
     head = [l.lower() for l in lines[0].split(delimiter)]
     jobs = lines[1:-1]
 
+    # limit to 20000 lsf job updates
+    # jobs = jobs[-10000:]
+
     jobout = []
 
     for raw in jobs:

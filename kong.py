@@ -432,7 +432,6 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
         throttle = 5.0 / len(submit_tasks)
 
     submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
-    spinner.finish()
    
     
 
@@ -485,7 +484,7 @@ def cli_submit(args, config):
     )
 
 
-def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=None, buildno=None, dry_run=False):
+def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=None, W=300, buildno=None, dry_run=False):
     """
     Input format for lists is a list of tuples with (NAME, LISTFILE).
     """
@@ -642,7 +641,7 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
                 stdout=stdoutfile,
                 stderr=stderrfile,
                 exe=" ".join(cmd), 
-                W=300, 
+                W=W, 
                 app=config.get("analysis", "application_profile"), 
                 R=config.get("analysis", "resource")+blacklist_string, 
                 queue=queue,
@@ -655,7 +654,7 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
     throttle = 0
     if dry_run:
         throttle = 10.0 / len(submit_tasks)
-        print(throttle)
+        # print(throttle)
     submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
 
     for jobid, subjobid, subjoblsfid in submit_results:
