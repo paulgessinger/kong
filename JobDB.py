@@ -192,7 +192,7 @@ class JobDB:
 
                 logger.debug("Job updated / inserted")
             except:
-                logger.warning("Unable to update job {} ({}). Probably submitted from outside".format(job["jobid"], job["job_name"]))
+                logger.info("Unable to update job {} ({}). Probably submitted from outside".format(job["jobid"], job["job_name"]))
         self.fileconn.commit()
 
         logger.debug("Syncing completed")

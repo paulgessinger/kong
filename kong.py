@@ -319,6 +319,18 @@ def make_status_string(ntotal, npend, ndone, nrun, nexit, nother):
         nother
     ))
 
+def get_next_jobid():
+    config = get_config()
+    kongdir, regdir, outdir = get_directories(config)
+    return get_job_id(kongdir, dry=True)
+
+def get_jobdir(jobid, name):
+    config = get_config()
+    analysis_outdir = config.get("analysis", "output")
+    joboutdir = os.path.join(analysis_outdir, JOBOUTDIR_FORMAT.format(jobid=jobid, jobname=name))
+    return joboutdir
+
+
 def get_job_id(dir, dry=False):
 
     idfile = os.path.join(dir, "current_jobid")
@@ -972,7 +984,7 @@ def resubmit(args, config):
         
         for jobid in job_range:
             if not jobid in all_jobfiles:
-                logger.warning("job with id {} is not found in registry".format(jobid))
+                logger.info("job with id {} is not found in registry".format(jobid))
                 continue
 
             path = all_jobfiles[jobid]
