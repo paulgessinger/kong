@@ -9,6 +9,7 @@ from ConfigParser import SafeConfigParser
 import fcntl
 from contextlib import contextmanager
 import datetime
+import time
 import shutil
 import logging
 import collections
@@ -378,12 +379,11 @@ def get_job_id(dir, dry=False):
 
 def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"], W="05:00", dir=None, verbosity=None, dry_run=False):
     "Submit an array of lsf jobs"
+    logger.setLevel(logging.WARNING)
+    if verbosity > 0:
+        logger.setLevel(logging.INFO)
     if verbosity > 1:
         logger.setLevel(logging.DEBUG)
-    elif verbosity > 0:
-        logger.setLevel(logging.INFO)
-    else:
-        logger.setLevel(logging.WARNING)
 
     # if verbosity != None:
         # if verbosity > 1:
@@ -522,6 +522,7 @@ def cli_submit(args, config):
         W=args.W,
         queue=args.queue,
         dir=os.getcwd(),
+        verbosity=args.verbose,
         dry_run=args.dry_run
     )
 

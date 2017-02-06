@@ -92,10 +92,15 @@ class SGE(BatchSystem):
 
     def submit(self, jobid, subjobid, command, name, queue, walltime, stdout, stderr, extraopts=[], dry=False):
         
+        w_h, w_m = walltime.split(":")
+        W = ":".join((w_h, w_m, "00"))
+
         cmd = [
             "qsub",
             # "-W", walltime,
-            # "-q", queue,
+            "-V",
+            "-v", "QUEUE=\"{}\"".format(queue),
+            "-l", "h_rt={}".format(W)
         ]
         
         # if R != None:
@@ -114,7 +119,7 @@ class SGE(BatchSystem):
 
         cmd.append(scriptfile)
 
-        logger.debug(" ".join(cmd))
+        # logger.debug(" ".join(cmd))
 
 
         # create both paths
@@ -154,9 +159,11 @@ class SGE(BatchSystem):
             'exit $exit_status',
         ]
 
+        # print(logger.getEffectiveLevel())
         if logger.getEffectiveLevel() <= 10:
             print("\n".join(script_body))
-            print(" ".join(cmd))
+            # print(" ".join(cmd))
+            print(" ".join(map(quote, cmd)))
 
         # print(scriptfile)
         # print("\n".join(script_body))
@@ -175,7 +182,7 @@ class SGE(BatchSystem):
                 batchid = output.split(" ")[2]
                 return batchid
             except subprocess.CalledProcessError as e:
-                logger.error(str(e), e.output)
+                logger.error(str(e), e.output, e.cmd)
                 raise
         else:
             return 42
@@ -195,6 +202,7 @@ class SGE(BatchSystem):
         scriptfile = os.path.join(self.workdir, "jobscripts", "{}_{}.sh".format(jobid, subjobid))
         job_info = os.path.join(self.workdir, "jobinfo", "{}.txt".format(batchjobid))
         for p in (scriptfile, job_info):
+            logger.debug("Remove file at {}".format(p))
             if os.path.exists(p):
                 os.remove(p)
 
