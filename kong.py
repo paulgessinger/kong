@@ -70,9 +70,8 @@ backend = LSF
 # tarball_dir=/home/pgessing/workspace_xAOD/input_tarballs
 # binary=./Analysis
 # algo=AlgoWPR
-# base_release=Base,2.4.18
-# application_profile=Reserve10G
-# resource=rusage[atlasio=10]
+# base_release=Base,2.4.25
+# extraopts = -app Reserve10G -R "rusage[atlasio=10]" ; use shell syntax here, use quotes!
 # default_queue=atlasshort
 # splitsize=5.5
 """
