@@ -172,7 +172,9 @@ class LSF(BatchSystem):
         scriptfile = os.path.join(self.workdir, "jobscripts", "{}_{}.sh".format(jobid, subjobid))
         job_info = os.path.join(self.workdir, "jobinfo", "{}.txt".format(batchjobid))
         for p in (scriptfile, job_info):
-            os.remove(p)
+            logger.debug("Remove file at {}".format(p))
+            if os.path.exists(p):
+                os.remove(p)
 
 
 

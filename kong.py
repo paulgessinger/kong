@@ -67,6 +67,7 @@ output={outdir}
 batch_cache_timeout = 60
 backend = LSF
 # default_queue=atlasshort
+# default_extraopts = -app Reserve10G
 
 [analysis]
 # output=/etapfs02/atlashpc/pgessing/output/
