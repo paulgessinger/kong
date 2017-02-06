@@ -136,7 +136,10 @@ class JobDB:
                 values.append(BatchJob.Status.EXIT)
             elif ji.exit_status:
                 columns.append("stat")
-                values.append(BatchJob.Status.DONE)
+                if ji.exit_status == "0":
+                    values.append(BatchJob.Status.DONE)
+                else:
+                    values.append(BatchJob.Status.EXIT)
             elif ji.start_time:
                 columns.append("stat")
                 values.append(BatchJob.Status.RUNNING)
@@ -207,8 +210,6 @@ class JobDB:
                     parsed_subjobid,
                     job.status,
                     job.name,
-                    # job.queue,
-                    # job.submit_time,
                     job.exec_host,
                     # job.command,
                     job.jobid,
@@ -269,6 +270,7 @@ class JobDB:
         c.execute("VACUUM")
 
     def register_subjob(self, jobid, subjobid, batchid, cmd, queue, walltime):
+        # print(jobid, subjobid, batchid, cmd, queue, walltime)
         c = self.fileconn.cursor()
         c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid, cmd, queue, walltime) VALUES (?, ?, ?, ?, ?, ?)', (
             jobid,

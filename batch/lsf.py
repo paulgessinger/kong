@@ -62,11 +62,6 @@ class LSF(BatchSystem):
 
     def submit(self, jobid, subjobid, command, name, queue, walltime, stdout, stderr, extraopts=[], dry=False):
         
-        # assert type(walltime) == Walltime, "Walltime must be kong.batch.Walltime"
-        # assert type(extraopts) == list
-
-        # W = "{}:{}".format(walltime.hours + walltime.days * 24, walltime.minutes)
-
         cmd = [
             "bsub",
             "-W", walltime,
@@ -124,8 +119,10 @@ class LSF(BatchSystem):
         ]
 
         script_body += [
-            'echo "exit_status: $?" >>%s' % job_info_path,
-            'echo "end_time: $(LC_ALL=en_US.utf8 date \'+%%a %%b %%d %%H:%%M:%%S %%Y\')" >>%s' % job_info_path
+            'exit_status=$?',
+            'echo "exit_status: $exit_status" >>%s' % job_info_path,
+            'echo "end_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(dateformat, job_info_path),
+            'exit $exit_status',
         ]
 
         if logger.getEffectiveLevel() <= 10:

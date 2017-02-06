@@ -362,7 +362,7 @@ def get_job_id(dir, dry=False):
         fcntl.flock(f, fcntl.LOCK_UN)
     return i
 
-def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, dir=None, verbosity=None, dry_run=False):
+def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"], W="05:00", dir=None, verbosity=None, dry_run=False):
     "Submit an array of lsf jobs"
     if verbosity > 1:
         logger.setLevel(logging.DEBUG)
@@ -440,9 +440,8 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
             stdout=stdoutfile,
             stderr=stderrfile,
             exe=cmd,
-            W=W, 
-            app=app, 
-            R=R, 
+            walltime=W, 
+            extraopts=extraopts,
             queue=queue,
             dry=dry_run
         ))
@@ -457,11 +456,12 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
    
     
 
-    for jobid, subjobid, subjoblsfid in submit_results:
+    for jobid, subjobid, batchid, exe in submit_results:
         if not dry_run:
-            logger.debug("{}:{}\n".format(subjobid, subjoblsfid))
-            jobfile.write("{}:{}\n".format(subjobid, subjoblsfid))
-            jobdb.register_subjob(jobid, subjobid, subjoblsfid)
+            logger.debug("{}:{}\n".format(subjobid, batchid))
+            jobfile.write("{}:{}\n".format(subjobid, batchid))
+            jobdb.register_subjob(jobid, subjobid, batchid, cmd=exe, queue=queue, walltime=W)
+    jobdb.commit()
 
     if not dry_run:
         logger.debug("closing jobfile handle")
@@ -492,13 +492,18 @@ def cli_submit(args, config):
         logger.debug("Reading input job submit file")
         cmds = args.submit_file.read().split("\n")[:-1]
 
+    if type(args.extraopts) == str:
+        extraopts = shlex.split(args.extraopts)
+    else:
+        extraopts = args.extraopts
     
+    # print(args)
+    # print("extraopts", args.extraopts,  extraopts)
     submit(
         cmds=cmds,
         name=name,
         config=config,
-        app=args.app,
-        R=args.R,
+        extraopts=extraopts,
         W=args.W,
         queue=args.queue,
         dir=os.getcwd(),
@@ -684,11 +689,11 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
         # print(throttle)
     submit_results = thread_map(partial(submit_thread, backend=backend), submit_tasks, desc="Submitting", throttle=throttle)
 
-    for jobid, subjobid, batchid in submit_results:
+    for jobid, subjobid, batchid, exe in submit_results:
         # print(subjobid, subjoblsfid)
         if not dry_run:
             jobfiles[jobid].write("{}:{}\n".format(subjobid, batchid))
-            jobdb.register_subjob(jobid, subjobid, batchid, cmd=" ".join(cmd), queue=queue, walltime=W)
+            jobdb.register_subjob(jobid, subjobid, batchid, cmd=exe, queue=queue, walltime=W)
 
     if not dry_run:
         jobdb.commit()
@@ -701,8 +706,9 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
 
 
 def submit_thread(t, backend):
-   
-    subjoblsfid = backend.submit(
+    
+    
+    batchid = backend.submit(
         t.jobid,
         t.subjobid,
         command=t.exe,
@@ -715,12 +721,12 @@ def submit_thread(t, backend):
         dry=t.dry
     )
     
-    logger.debug("{}.{} => {} submitted to LSF".format(t.jobid, t.subjobid, subjoblsfid))
+    logger.debug("{}.{} => {} submitted to LSF".format(t.jobid, t.subjobid, batchid))
 
     # if not dry_run:
         # jobfile.write("{}:{}\n".format(t.subjobid, subjoblsfid))
 
-    return (t.jobid, t.subjobid, subjoblsfid)
+    return (t.jobid, t.subjobid, batchid, t.exe)
 
 def thread_map(func, values, n=mp.cpu_count(), tick=lambda x:x, pool=None, desc="", throttle=0):
     if pool == None:
@@ -736,6 +742,7 @@ def thread_map(func, values, n=mp.cpu_count(), tick=lambda x:x, pool=None, desc=
         return func(item)
 
     try:
+        # print(values)
         submit_results = pool.map_async(work, values).get(99999)
         prog.close()
         return submit_results
@@ -865,10 +872,9 @@ def main():
     submitp.add_argument("--name", help="Name to assign to the job. If not specified, submit file name is used")
     submitp.add_argument("--dry-run", action="store_true", help="Don't really do anything")
     submitp.add_argument("--queue", "-q", help="Submit to this queue")
-    submitp.add_argument("-R")
-    submitp.add_argument("--app")
-    submitp.add_argument("-n")
-    submitp.add_argument("-W")
+    submitp.add_argument("--extraopts", default="-app Reserve2G -R \"rusage[atlasio=10]\"")
+    # submitp.add_argument("-n")
+    submitp.add_argument("-W", default="5:00")
     
     # jobdirp = subparsers.add_parser("jobdir", aliases=['jd'] parents=[parentp], help=cli_jobdir.__doc__)
     # jobdirp.set_defaults(func=cli_jobdir)
@@ -1132,6 +1138,14 @@ def view(args, config):
         #         print(colored(outstr, color))
 
         # print("JID   | SJID | BATCHJID | STAT | QUEUE      | W")
+        colors = []
+        rows = []
+        commands = []
+
+        rows.append(["JOBID", "SUB", "BJOBID", "STAT", "QUEUE", "W", "HOST", "SUBMIT", "START", "END", "SIG"])
+        colors.append("white")
+        commands.append("")
+
         for subjob in jobdb.getBatchJobsForJob(jobid):
             stat = subjob["stat"]
             if args.status and stat != args.status.upper():
@@ -1147,6 +1161,8 @@ def view(args, config):
             elif stat == "EXIT":
                 color = "red"
 
+            colors.append(color)
+
             now = datetime.datetime.now().strftime("%Y-%m-%d")
             st = subjob["submit_time"]
             stt = subjob["start_time"]
@@ -1161,24 +1177,54 @@ def view(args, config):
             if st and st[:10] == now:
                 st = st[11:]
             
-            outstr = colored("{:>5} : {:<5} | {:>8} | {} | {q:.10} | {w} | {h} | {st} | {stt} | {et} | {sig}".format(
+            row = (
                 jobid,
                 subjob["subjobid"],
                 subjob["batchjobid"],
                 stat.ljust(4),
-                q = subjob["queue"],
-                w = subjob["walltime"],
-                h = subjob["exec_host"],
-                st = st,
-                stt = stt,
-                et = et,
-                sig = subjob["signal"]
-            ), color)
+                subjob["queue"],
+                subjob["walltime"],
+                subjob["exec_host"],
+                st,
+                stt,
+                et,
+                subjob["signal"],
+            )
+            # outstr = colored("{:>5} : {:<5} | {:>8} | {} | {q:.10} | {w} | {h} | {st} | {stt} | {et} | {sig}".format(
+                # jobid,
+                # subjob["subjobid"],
+                # subjob["batchjobid"],
+                # stat.ljust(4),
+                # q = subjob["queue"],
+                # w = subjob["walltime"],
+                # h = subjob["exec_host"],
+                # st = st,
+                # stt = stt,
+                # et = et,
+                # sig = subjob["signal"]
+            # ), color)
 
             if args.cmd:
-                outstr += "\n"+subjob["cmd"]+"\n"
+                commands.append(subjob["cmd"])
+                # print(colored(" | ".join(map(str, row)), color)+"\n"+subjob["cmd"]+"\n")
 
-            print(outstr)
+            rows.append(row)
+    
+        col_lengths = []
+        for i in range(0, len(rows[0])):
+            # print(i)
+            col = [len(str(r[i])) for r in rows]
+            col_lengths.append(max(col))
+
+        for ri, r in enumerate(rows):
+            pr = [(str(c) if c != None else "-").ljust(col_lengths[i]) for i, c in enumerate(r)]
+            print(colored(" | ".join(pr), colors[ri]))
+            if args.cmd:
+                print(commands[ri]+"\n")
+            # for c in r:
+                
+        # print(col_lengths)
+
 
 
 
@@ -1282,7 +1328,8 @@ def rm(args, config):
         
         
         for batchjob in jobdb.getBatchJobsForJob(jobid):
-            jobdb.backend.remove((batchjob["jobid"], batchjob["subjobid"], batchjob["batchjobid"]))
+            # print(batchjob)
+            jobdb.backend.remove(batchjob["jobid"], batchjob["subjobid"], batchjob["batchjobid"])
         
         jobdb.remove(jobid)
 
