@@ -18,6 +18,13 @@ import threading as th
 import argcomplete
 from glob import glob
 from tqdm import tqdm
+from functools import partial
+import shlex
+try:  # py3
+    from shlex import quote
+except ImportError:  # py2
+    from pipes import quote
+
 
 import imp
 from termcolor import colored
@@ -29,9 +36,10 @@ except ImportError:
     humanize_available = False
 
 
-from lsf import *
+# from lsf import *
 from python_utils.printing import *
 from log import logger
+from batch.lsf import LSF
 from JobDB import JobDB
 
 """:type : JobDB"""
@@ -53,6 +61,7 @@ kongdir={kongdir}
 registry={regdir}
 output={outdir}
 batch_cache_timeout = 60
+backend = LSF
 
 [analysis]
 # output=/etapfs02/atlashpc/pgessing/output/
@@ -395,9 +404,10 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
 
 
     kongdir, regdir, outdir = get_directories(config)
+    backend = get_backend(config)
     global jobdb
     if jobdb == None:
-        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
+        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"), backend)
 
     submit_dir = dir if dir else regdir
     if not os.path.isabs(submit_dir):
@@ -443,7 +453,7 @@ def submit(cmds, name, config=None, queue=None, R=None, app="Reserve2G", W=300, 
     if dry_run:
         throttle = 5.0 / len(submit_tasks)
 
-    submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
+    submit_results = thread_map(partial(submit_thread, backend=backend), submit_tasks, desc="Submitting", throttle=throttle)
    
     
 
@@ -496,7 +506,7 @@ def cli_submit(args, config):
     )
 
 
-def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=None, W=300, buildno=None, dry_run=False):
+def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=None, W="5:00", buildno=None, dry_run=False):
     """
     Input format for lists is a list of tuples with (NAME, LISTFILE).
     """
@@ -548,9 +558,10 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
 
     
     kongdir, regdir, outdir = get_directories(config)
+    backend = get_backend(config)
     global jobdb
     if jobdb == None:
-        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
+        jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"), backend)
 
     submit_dir = dir if dir else regdir
     if not os.path.isabs(submit_dir):
@@ -603,6 +614,9 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
     submit_tasks = []
     jobfiles = {}
 
+    extraopts_raw = config.get("analysis", "extraopts")
+    extraopts = shlex.split(extraopts_raw)
+
     for jobName, list, splits in name_list_splits:
         jobid = get_job_id(kongdir, dry=dry_run)
         subjobid = 0
@@ -620,7 +634,7 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
             stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=jobid, subjobid=subjobid))
             stderrfile = os.path.join(outdir, JOBSTDERR_FORMAT.format(jobid=jobid, subjobid=subjobid))
            
-            composedOptions = '\'{algo} -p 0. -n 0{sys} --wn --wnDir . \''.format(
+            composedOptions = '{algo} -p 0. -n 0{sys} --wn --wnDir . '.format(
                     algo=algo,
                     sys=" --sys" if syst else ""
                 )
@@ -630,7 +644,7 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
             cmd = [
                 config.get("analysis", "framework_job_script"), 
                 '--binary', binary, 
-                '--composedOptions', composedOptions,
+                '--composedOptions', quote(composedOptions),
                 '--filelist', list, 
                 '--outputMask', 'Plots\\*.root', 
                 '--outputDir', joboutdir,
@@ -653,9 +667,10 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
                 stdout=stdoutfile,
                 stderr=stderrfile,
                 exe=" ".join(cmd), 
-                W=W, 
-                app=config.get("analysis", "application_profile"), 
-                R=config.get("analysis", "resource")+blacklist_string, 
+                walltime=W,
+                extraopts=extraopts,
+                # app=config.get("analysis", "application_profile"), 
+                # R=config.get("analysis", "resource")+blacklist_string, 
                 queue=queue,
                 dry=dry_run
             ))
@@ -667,13 +682,13 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
     if dry_run:
         throttle = 10.0 / len(submit_tasks)
         # print(throttle)
-    submit_results = thread_map(submit_thread, submit_tasks, desc="Submitting", throttle=throttle)
+    submit_results = thread_map(partial(submit_thread, backend=backend), submit_tasks, desc="Submitting", throttle=throttle)
 
-    for jobid, subjobid, subjoblsfid in submit_results:
+    for jobid, subjobid, batchid in submit_results:
         # print(subjobid, subjoblsfid)
         if not dry_run:
-            jobfiles[jobid].write("{}:{}\n".format(subjobid, subjoblsfid))
-            jobdb.register_subjob(jobid, subjobid, subjoblsfid)
+            jobfiles[jobid].write("{}:{}\n".format(subjobid, batchid))
+            jobdb.register_subjob(jobid, subjobid, batchid, cmd=" ".join(cmd), queue=queue, walltime=W)
 
     if not dry_run:
         jobdb.commit()
@@ -685,13 +700,14 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
     jobdb.invalidate()
 
 
-def submit_thread(t):
+def submit_thread(t, backend):
    
-    subjoblsfid = bsub(
-        exe=t.exe,
-        W=t.W,
-        app=t.app,
-        R=t.R,
+    subjoblsfid = backend.submit(
+        t.jobid,
+        t.subjobid,
+        command=t.exe,
+        walltime=t.walltime,
+        extraopts=t.extraopts,
         queue=t.queue,
         stdout=t.stdout,
         stderr=t.stderr,
@@ -782,8 +798,17 @@ def get_subjob_ids(fullf):
 # CLI FUNCTIONS #
 #################
 
-def get_default_jobdb(kongdir, timeout):
-    return JobDB(dbfile=os.path.join(kongdir, "kong.sqlite"), timeout=timeout)
+def get_default_jobdb(kongdir, timeout, backend):
+    return JobDB(dbfile=os.path.join(kongdir, "kong.sqlite"), timeout=timeout, backend=backend)
+
+def get_backend(config):
+    backend = config.get("kong", "backend")
+    workdir = config.get("kong", "kongdir")
+    if backend == "LSF":
+        return LSF(workdir = workdir)
+    else:
+        raise ValueError("Backend {} does not exist".format(backend))
+
 
 def main():
     """
@@ -795,11 +820,13 @@ def main():
     config = get_config()
     
     kongdir, regdir, outdir = get_directories(config)
+    
 
     # set up the global jobdb
+    backend = get_backend(config)
 
     global jobdb
-    jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"))
+    jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"), backend)
 
     # setting environment variables
 
@@ -1006,7 +1033,9 @@ def resubmit(args, config):
                 mode = args.status[0].lower()
             print(s)
             try:
-                brequeue(s, mode)
+                
+                # brequeue(s, mode)
+                jobdb.backend.resubmit(s, mode)
                 if args.queue:
                     time.sleep(2)
                     bmod(s, queue=args.queue)
@@ -1102,6 +1131,7 @@ def view(args, config):
         #
         #         print(colored(outstr, color))
 
+        # print("JID   | SJID | BATCHJID | STAT | QUEUE      | W")
         for subjob in jobdb.getBatchJobsForJob(jobid):
             stat = subjob["stat"]
             if args.status and stat != args.status.upper():
@@ -1117,13 +1147,32 @@ def view(args, config):
             elif stat == "EXIT":
                 color = "red"
 
-            outstr = colored("{:>5} : {:<5} | {:>8} | {} | {q} | {h}".format(
+            now = datetime.datetime.now().strftime("%Y-%m-%d")
+            st = subjob["submit_time"]
+            stt = subjob["start_time"]
+            et = subjob["end_time"]
+
+            if stt and stt[:11] == st[:11]:
+                stt = stt[11:]
+            
+            if et and et[:11] == st[:11]:
+                et = et[11:]
+
+            if st and st[:10] == now:
+                st = st[11:]
+            
+            outstr = colored("{:>5} : {:<5} | {:>8} | {} | {q:.10} | {w} | {h} | {st} | {stt} | {et} | {sig}".format(
                 jobid,
                 subjob["subjobid"],
                 subjob["batchjobid"],
                 stat.ljust(4),
                 q = subjob["queue"],
-                h = subjob["exec_host"]
+                w = subjob["walltime"],
+                h = subjob["exec_host"],
+                st = st,
+                stt = stt,
+                et = et,
+                sig = subjob["signal"]
             ), color)
 
             if args.cmd:
@@ -1144,6 +1193,9 @@ def kill(args, config):
 
     tgt = args.tgt
     kongdir, regdir, outdir = get_directories(config)
+    # backend = get_backend(config)
+    # global jobdb
+    # jobdb = get_default_jobdb(kongdir, config.getint("kong", "batch_cache_timeout"), backend)
     analysis_output = config.get("analysis", "output")
    
     job_range = parse_job_range_list(tgt)
@@ -1162,13 +1214,14 @@ def kill(args, config):
             continue
         
         logger.info("killing job {}".format(jobid))
-        path = all_jobfiles[jobid]
+        # path = all_jobfiles[jobid]
         
-        with open(path, "r") as f:
-            # subjobs = [ l.split(":") for l in f.read().split("\n")[:-1]]
-            for l in f.read().split("\n")[:-1]:
-                subjobid, subjoblsfid = l.split(":")
-                kills.append((jobid, subjobid, subjoblsfid))
+        # with open(path, "r") as f:
+            # for l in f.read().split("\n")[:-1]:
+                # subjobid, subjoblsfid = l.split(":")
+                # kills.append((jobid, subjobid, subjoblsfid))
+        for batchjob in jobdb.getBatchJobsForJob(jobid):
+            kills.append((batchjob["jobid"], batchjob["subjobid"], batchjob["batchjobid"]))
 
     spinner = Spinner("Killing batch system tasks")
     def tick(n):
@@ -1176,9 +1229,9 @@ def kill(args, config):
         spinner.next("{}/{} {:.2f}%".format(n, len(kills), perc))
 
     def dokill(k):
-        jobid, subjobid, subjoblsfid = k
-        bkill(subjoblsfid)
-        logger.info("Job {}.{} => {} killed".format(jobid, subjobid, subjoblsfid))
+        jobid, subjobid, batchid = k
+        jobdb.backend.kill(batchid)
+        logger.info("Job {}.{} => {} killed".format(jobid, subjobid, batchid))
 
 
     results = thread_map(dokill, kills, tick=tick)
@@ -1226,10 +1279,14 @@ def rm(args, config):
         except: pass
 
         remove_joboutput(jobid, outdir, regdir, analysis_output)
+        
+        
+        for batchjob in jobdb.getBatchJobsForJob(jobid):
+            jobdb.backend.remove((batchjob["jobid"], batchjob["subjobid"], batchjob["batchjobid"]))
+        
         jobdb.remove(jobid)
 
     jobdb.commit()
-    # jobdb.vacuum()
 
     if len(tgt) == 1 and os.path.isdir(tgt[0]) and tgt[0] != ".":
         cmd = "rm -r {}".format(tgt[0])
@@ -1616,9 +1673,8 @@ submit_task = collections.namedtuple("submit_task", [
     "stdout",
     "stderr",
     "exe",
-    "W",
-    "app",
-    "R",
+    "walltime",
+    "extraopts",
     "queue",
     "dry"
 ])

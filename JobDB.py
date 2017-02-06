@@ -4,17 +4,20 @@ import os
 import sys
 import sqlite3
 # import subprocess
-import lsf
 from log import logger
 import datetime
 import time
 from tqdm import tqdm
+from batch import BatchSystem, BatchJobInfoFile, BatchJob
+from traceback import print_tb
 
 
 
 class JobDB:
 
-    def __init__(self, dbfile, timeout):
+    def __init__(self, dbfile, timeout, backend):
+        assert isinstance(backend, BatchSystem)
+        self.backend = backend
         self.dbfile = dbfile
         self.validfile = os.path.join(os.path.dirname(self.dbfile), "kong_db_valid")
         if not os.path.exists(self.dbfile):
@@ -55,7 +58,11 @@ class JobDB:
             stat VARCHAR,
             job_name VARCHAR,
             queue VARCHAR,
+            walltime VARCHAR,
             submit_time VARCHAR,
+            start_time VARCHAR,
+            end_time VARCHAR,
+            signal VARCHAR,
             exec_host VARCHAR,
             cmd TEXT
         )''')
@@ -107,43 +114,104 @@ class JobDB:
                 logger.debug("Skip updating jobs db. age: {} < {}".format(now-mtime, self.cache_timeout))
                 return
 
-        jobs = lsf.bjobs()
-
         filec = self.fileconn.cursor()
-        memc = self.memconn.cursor()
+        
+        # updating first from kong job info file
+        jobinfodir = self.backend.jobinfodir
+        logger.debug("Updating from internal job info files")
 
-        # sys.stdout.write("Updating...\r")
-        # sys.stdout.flush()
+        for j in os.listdir(jobinfodir):
+            jf = os.path.join(jobinfodir, j)
+            jobid = j[:-4]
+            if not os.path.isfile(jf): continue
+            ji = BatchJobInfoFile(jf)
+            # print(ji)
+            logger.debug("Updating job {}".format(jobid))
+
+            columns = []
+            values = []
+
+            if ji.signal:
+                columns.append("stat")
+                values.append(BatchJob.Status.EXIT)
+            elif ji.exit_status:
+                columns.append("stat")
+                values.append(BatchJob.Status.DONE)
+            elif ji.start_time:
+                columns.append("stat")
+                values.append(BatchJob.Status.RUNNING)
+
+            if ji.end_time:
+                columns.append("end_time")
+                values.append(ji.end_time)
+            
+            if ji.submit_time:
+                columns.append("submit_time")
+                values.append(ji.submit_time)
+            
+            if ji.start_time:
+                columns.append("start_time")
+                values.append(ji.start_time)
+
+            if ji.hostname:
+                columns.append("exec_host")
+                values.append(ji.hostname)
+
+            if ji.signal:
+                columns.append("signal")
+                values.append(ji.signal)
+
+            values.append(jobid)
+
+            columns = [c + " = ?" for c in columns]
+
+            stmt = '''UPDATE jobs SET\n{c}\nWHERE batchjobid = ?;'''
+
+            stmt = stmt.format(c = ",\n".join(columns))
+
+            # print(stmt, values)
+
+            logger.debug("Updating job {}".format(jobid))
+            
+            filec.execute(stmt, values)
+
+        self.fileconn.commit()
+        
+    
+    
+        jobs = self.backend.get_job_info()
+
 
         logger.debug("Syncing to database")
 
 
         for job in tqdm(jobs, leave=False, desc="Updating", bar_format="{l_bar}{bar}|{n_fmt}/{total_fmt}"):
             try:
-                # print("syncing", job)
 
                 # figure out kong job id
-                # print(job["job_name"])
-                jobid, _ = job["job_name"].split("_", 1)
-                jobid = int(jobid)
+                
                 
                 # parse jobid and subjobid from name
-                parsed_jobid, parsed_subjobid, _ = job["job_name"].split("_", 2)
-                parsed_jobid, parsed_subjobid = int(parsed_jobid), int(parsed_subjobid)
+                if job.name.count("_") < 2:
+                    logger.info("Unable to update job {} ({}). Probably submitted from outside".format(job.jobid, job.name))
+                    continue
+
+                jobid, parsed_subjobid, _ = job.name.split("_", 2)
+                jobid, parsed_subjobid = int(jobid), int(parsed_subjobid)
                 # print(parsed_jobid, parsed_subjobid)
                 
-                assert jobid == parsed_jobid, "Jobid != Jobid in job name {}, {}".format(jobid, parsed_jobid)
+                # assert jobid == parsed_jobid, "Jobid != Jobid in job name {}, {}".format(jobid, parsed_jobid)
 
                 values = (
                     jobid,
                     parsed_subjobid,
-                    job["stat"],
-                    job["job_name"],
-                    job["queue"],
-                    job["submit_time"],
-                    job["exec_host"],
-                    job["command"],
-                    job["jobid"],
+                    job.status,
+                    job.name,
+                    # job.queue,
+                    # job.submit_time,
+                    job.exec_host,
+                    # job.command,
+                    job.jobid,
                 )
 
 
@@ -152,28 +220,24 @@ class JobDB:
                     subjobid = ?,
                     stat = ?,
                     job_name = ?,
-                    queue = ?,
-                    submit_time = ?,
-                    exec_host = ?,
-                    cmd = ?
+                    exec_host = ?
                 WHERE batchjobid = ?;'''
-                logger.debug("Updating job {}".format(job["jobid"]))
-                # print(stmt)
+                logger.debug("Updating job {}".format(job.jobid))
+                
                 filec.execute(stmt, values)
-                # memc.execute(stmt, values)
                 if filec.rowcount == 0:
                     logger.debug("Not found, inserting")
                     # this did not affect anything, insert!
                     values = (
                         jobid,
                         parsed_subjobid,
-                        job["jobid"],
-                        job["stat"],
-                        job["job_name"],
-                        job["queue"],
-                        job["submit_time"],
-                        job["exec_host"],
-                        job["command"],
+                        job.jobid,
+                        job.status,
+                        job.name,
+                        # job.queue,
+                        # job.submit_time,
+                        job.exec_host,
+                        # job.command,
                     )
                     stmt = '''INSERT INTO jobs (
                             jobid, 
@@ -181,23 +245,20 @@ class JobDB:
                             batchjobid, 
                             stat, 
                             job_name, 
-                            queue, 
-                            submit_time, 
-                            exec_host, 
-                            cmd
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+                            exec_host
+                        ) VALUES (?, ?, ?, ?, ?, ?)'''
                     filec.execute(stmt, values)
-                    # memc.execute(stmt, values)
-                    # logger.debug("Inserting {}".format(job["jobid"]))
 
                 logger.debug("Job updated / inserted")
-            except:
-                logger.info("Unable to update job {} ({}). Probably submitted from outside".format(job["jobid"], job["job_name"]))
+            except BaseException as e:
+                _, _, tb = sys.exc_info()
+                # print(tb)
+                print_tb(tb)
+                logger.error(str(type(e))+" "+str(e))
         self.fileconn.commit()
 
         logger.debug("Syncing completed")
         os.system("touch {}".format(self.validfile))
-        # print(jobs)
 
     def remove(self, jobid):
         c = self.fileconn.cursor()
@@ -207,9 +268,16 @@ class JobDB:
         c = self.fileconn.cursor()
         c.execute("VACUUM")
 
-    def register_subjob(self, jobid, subjobid, lsfid):
+    def register_subjob(self, jobid, subjobid, batchid, cmd, queue, walltime):
         c = self.fileconn.cursor()
-        c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid) VALUES (?, ?, ?)', (jobid, subjobid, lsfid))
+        c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid, cmd, queue, walltime) VALUES (?, ?, ?, ?, ?, ?)', (
+            jobid,
+            subjobid,
+            batchid,
+            cmd,
+            queue,
+            walltime,
+        ))
         # self.fileconn.commit()
 
     def commit(self):
