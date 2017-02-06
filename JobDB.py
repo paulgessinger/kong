@@ -68,7 +68,7 @@ class JobDB:
         )''')
         c.execute('''CREATE INDEX jobs_jobid ON jobs (jobid);''')
         c.execute('''CREATE INDEX jobs_batchjobid ON jobs (batchjobid);''')
-        c.commit()
+        self.fileconn.commit()
 
     def getBatchJob(self, batchjobid):
         c = self.fileconn.cursor()
@@ -205,24 +205,30 @@ class JobDB:
                 
                 # assert jobid == parsed_jobid, "Jobid != Jobid in job name {}, {}".format(jobid, parsed_jobid)
 
-                values = (
+                columns = [
+                    "jobid",
+                    "subjobid",
+                    "stat",
+                    "job_name",
+                    "exec_host",
+                ]
+                values = [
                     jobid,
                     parsed_subjobid,
                     job.status,
                     job.name,
                     job.exec_host,
-                    # job.command,
-                    job.jobid,
-                )
+                ]
 
+                if job.queue != None:
+                    columns.append("queue")
+                    values.append(job.queue)
 
-                stmt = '''UPDATE jobs SET
-                    jobid = ?,
-                    subjobid = ?,
-                    stat = ?,
-                    job_name = ?,
-                    exec_host = ?
-                WHERE batchjobid = ?;'''
+                values.append(job.jobid)
+
+                cols = [c+" = ?" for c in columns]
+
+                stmt = '''UPDATE jobs SET\n{}\nWHERE batchjobid = ?;'''.format(",\n".join(cols))
                 logger.debug("Updating job {}".format(job.jobid))
                 
                 filec.execute(stmt, values)
@@ -235,7 +241,7 @@ class JobDB:
                         job.jobid,
                         job.status,
                         job.name,
-                        # job.queue,
+                        job.queue,
                         # job.submit_time,
                         job.exec_host,
                         # job.command,
@@ -246,6 +252,7 @@ class JobDB:
                             batchjobid, 
                             stat, 
                             job_name, 
+                            queue,
                             exec_host
                         ) VALUES (?, ?, ?, ?, ?, ?)'''
                     filec.execute(stmt, values)

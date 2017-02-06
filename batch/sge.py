@@ -1,6 +1,7 @@
 from __future__ import print_function
 import subprocess
 import os
+import sys
 import stat
 import re
 import datetime
@@ -11,51 +12,77 @@ try:  # py3
     from shlex import quote
 except ImportError:  # py2
     from pipes import quote
+import xml.etree.ElementTree as ET
 
 from . import BatchSystem
 from . import Walltime
 from . import BatchJob
 
-class LSF(BatchSystem):
+class SGE(BatchSystem):
     def __init__(self, workdir):
         self.workdir = workdir
         self.jobinfodir = os.path.join(workdir, "jobinfo")
         self.jobscriptsdir = os.path.join(workdir, "jobscripts")
 
+    def parse_job_xml(self, xml):
+        name = xml.find("JB_name").text
+        state = xml.find("state").text
+        runinf = xml.find("queue_name").text
+        
+        if runinf and "@" in runinf:
+            queue, host = runinf.split("@")
+        else:
+            queue, host = None, None
+
+        jobid = xml.find("JB_job_number").text
+
+        p = BatchJob.Status.PENDING
+        e = BatchJob.Status.EXIT
+        r = BatchJob.Status.RUNNING
+        d = BatchJob.Status.DONE
+        u = BatchJob.Status.UNKNOWN
+
+        if state == "qw":
+            status = p
+        elif state == "t":
+            status = p
+        elif state == "r": 
+            status = r
+        elif state == "Eqw":
+            status = p
+        elif "E" in state: 
+            status = e
+        return name, status, jobid, queue, host
+
     def get_job_info(self):
-        delimiter="\7"
 
-        logger.debug("bjobs info read from actual output")
-        keys = ("jobid", "stat", "queue", "exec_host", "job_name", "submit_time", "cmd")
-        out = subprocess.check_output(["bjobs", "-a", "-o", " ".join(keys)+" delimiter='"+delimiter+"'"])
+        logger.debug("Batch info read from actual output")
+        out = subprocess.check_output(["qstat", "-xml"])
 
-        lines = out.split("\n")
-        head = [l.lower() for l in lines[0].split(delimiter)]
-        jobs = lines[1:-1]
+        info = ET.fromstring(out)
+        jobs = []
+        
+        for child in info:
+            # print(child.tag)
+            if child.tag == "queue_info":
+                for jl in child:
+                    jobs.append(self.parse_job_xml(jl))
+            elif child.tag == "job_info":
+                for jl in child:
+                    jobs.append(self.parse_job_xml(jl))
 
-        jobout = []
+
+        # for j in jobs:
+            # print(j)
+
 
         batchjobs = []
-
-        for raw in jobs:
-            job = dict(zip(head, raw.split(delimiter)))
-            # jobout.append(job)
-            
-            status = {
-                "PEND": BatchJob.Status.PENDING,
-                "RUN": BatchJob.Status.RUNNING,
-                "EXIT": BatchJob.Status.EXIT,
-                "DONE": BatchJob.Status.DONE,
-            }[job["stat"]]
-
-            # print(job)
+        for name, status, jobid, queue, host in jobs:
             batchjobs.append(BatchJob(
-                jobid = job["jobid"],
-                # command = job["command"],
-                name = job["job_name"],
-                queue = job["queue"],
-                # submit_time = job["submit_time"],
-                exec_host = job["exec_host"],
+                jobid = jobid,
+                name = name[2:],
+                queue = queue,
+                exec_host = host,
                 status = status
             ))
 
@@ -66,26 +93,24 @@ class LSF(BatchSystem):
     def submit(self, jobid, subjobid, command, name, queue, walltime, stdout, stderr, extraopts=[], dry=False):
         
         cmd = [
-            "bsub",
-            "-W", walltime,
-            "-q", queue,
+            "qsub",
+            # "-W", walltime,
+            # "-q", queue,
         ]
         
         # if R != None:
             # cmd += ["-R", R]
         
         cmd += [
-            "-J", name,
-            "-eo", stderr,
-            "-oo", stdout,
+            "-N", "k_"+name,
+            "-e", stderr,
+            "-o", stdout,
         ]
 
         cmd += extraopts
 
-        # cmd += [command]
-
         scriptfile = os.path.join(self.jobscriptsdir, "{}_{}.sh".format(jobid, subjobid))
-        job_info_path = os.path.join(self.jobinfodir, "$LSB_JOBID.txt")
+        job_info_path = os.path.join(self.jobinfodir, "$JOB_ID.txt")
 
         cmd.append(scriptfile)
 
@@ -99,6 +124,7 @@ class LSF(BatchSystem):
 
         dateformat = "%Y-%m-%d %H:%M:%S"
         script_body = [
+            '#!/bin/bash',
             'function aborted() {',
             '  echo Aborted with signal $1.',
             '  echo "signal: $1" >> {}'.format(job_info_path),
@@ -108,7 +134,7 @@ class LSF(BatchSystem):
             # 'mkdir -p %s' % self.,
             'for sig in SIGHUP SIGINT SIGQUIT SIGTERM SIGUSR1 SIGUSR2; do trap "aborted $sig" $sig; done',
             'echo "hostname: $HOSTNAME" > {}'.format(job_info_path),
-            'echo "batchjobid: $LSB_JOBID" >> {}'.format(job_info_path),
+            'echo "batchjobid: $JOB_ID" >> {}'.format(job_info_path),
             'echo "submit_time: {}" >> {}'.format(datetime.datetime.now().strftime(dateformat), job_info_path),
             'echo "start_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(dateformat, job_info_path)
         ]
@@ -143,15 +169,19 @@ class LSF(BatchSystem):
             st = os.stat(scriptfile)
             os.chmod(scriptfile, st.st_mode | stat.S_IEXEC)
 
-            output = subprocess.check_output(cmd)
-            bsub_regex = re.compile("Job <(.*?)>")
-            lsf_id = bsub_regex.findall(output)[0]
-            return lsf_id
+            # print(quote(cmd))
+            try:
+                output = subprocess.check_output(cmd)
+                batchid = output.split(" ")[2]
+                return batchid
+            except subprocess.CalledProcessError as e:
+                logger.error(str(e), e.output)
+                raise
         else:
             return 42
 
     def kill(self, jobid):
-        cmd = ["bkill", jobid]
+        cmd = ["qdel", jobid]
         logger.debug(" ".join(cmd))
         try:
             out = subprocess.check_output(cmd)
@@ -159,32 +189,13 @@ class LSF(BatchSystem):
             logger.warning(str(e))
 
     def resubmit(self, jobid, mode):
-        cmd = ["brequeue"] 
-        
-        if len(mode) > 0:
-            cmd.append("-"+mode)
-
-        cmd.append(jobid)
-        
-        out = subprocess.check_output(cmd)
-
+        raise NotImplementedError()
+    
     def remove(self, jobid, subjobid, batchjobid):
         scriptfile = os.path.join(self.workdir, "jobscripts", "{}_{}.sh".format(jobid, subjobid))
         job_info = os.path.join(self.workdir, "jobinfo", "{}.txt".format(batchjobid))
         for p in (scriptfile, job_info):
-            os.remove(p)
+            if os.path.exists(p):
+                os.remove(p)
 
-
-
-
-# def bmod(lsfid, queue=None, W=None):
-    # cmd = ["bmod", lsfid]
-    # if queue != None:
-        # cmd.append("-q")
-        # cmd.append(queue)
-    # if W != None:
-        # cmd.append("-W")
-        # cmd.append(W)
-
-    # out = subprocess.check_output(cmd)
 

@@ -40,13 +40,16 @@ except ImportError:
 from python_utils.printing import *
 from log import logger
 from batch.lsf import LSF
+from batch.sge import SGE
 from JobDB import JobDB
 
 """:type : JobDB"""
 jobdb = None
 
-sys.path.append('/project/atlas/software/python_include/')
-from SUSYHelpers import *
+IS_MOGON = "mogon" in os.uname()[1]
+if IS_MOGON:
+    sys.path.append('/project/atlas/software/python_include/')
+    from SUSYHelpers import *
 
 __all__ = ["submit", "list_submit"]
 
@@ -62,6 +65,7 @@ registry={regdir}
 output={outdir}
 batch_cache_timeout = 60
 backend = LSF
+# default_queue=atlasshort
 
 [analysis]
 # output=/etapfs02/atlashpc/pgessing/output/
@@ -72,7 +76,6 @@ backend = LSF
 # algo=AlgoWPR
 # base_release=Base,2.4.25
 # extraopts = -app Reserve10G -R "rusage[atlasio=10]" ; use shell syntax here, use quotes!
-# default_queue=atlasshort
 # splitsize=5.5
 """
 # input_tarball=/home/pgessing/workspace_xAOD/input_tarballs//input.tar
@@ -103,13 +106,15 @@ def get_config():
         kongdir = raw_input()
         if len(kongdir) == 0: kongdir = os.path.expanduser("~/kongdir")
 
-        print("Where do you want the job registry to be? [{}/registry]".format(kongdir))
-        regdir = raw_input()
-        if len(regdir) == 0: regdir = os.path.expanduser("%(kongdir)s/registry")
+        # print("Where do you want the job registry to be? [{}/registry]".format(kongdir))
+        # regdir = raw_input()
+        # if len(regdir) == 0: regdir = os.path.expanduser("%(kongdir)s/registry")
+        regdir = os.path.expanduser("%(kongdir)s/registry")
 
-        print("Where do you want the job std output to be? [{}/output]".format(kongdir))
-        stdoutdir = raw_input()
-        if len(stdoutdir) == 0: stdoutdir = os.path.expanduser("%(kongdir)s/output")
+        # print("Where do you want the job std output to be? [{}/output]".format(kongdir))
+        # stdoutdir = raw_input()
+        # if len(stdoutdir) == 0: stdoutdir = os.path.expanduser("%(kongdir)s/output")
+        stdoutdir = os.path.expanduser("%(kongdir)s/output")
 
         with open(config_file, "w+") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
@@ -120,9 +125,12 @@ def get_config():
     
     cp = SafeConfigParser()
     cp.read(config_file)
+    kongdir = cp.get("kong", "kongdir")
 
     regdir = cp.get("kong", "registry")
     outdir = cp.get("kong", "output")
+    jobinfodir = os.path.join(kongdir, "jobinfo")
+    jobscriptdir = os.path.join(kongdir, "jobscripts")
 
     # check folders
     if not os.path.exists(regdir):
@@ -130,7 +138,14 @@ def get_config():
 
     if not os.path.exists(outdir):
         mkdir(outdir)
+    
+    if not os.path.exists(jobinfodir):
+        mkdir(jobinfodir)
 
+    if not os.path.exists(jobscriptdir):
+        mkdir(jobscriptdir)
+    
+    
     if first_time:
         logger.info("Setup completed, you should probably have a look at {} before continuing".format(config_file))    
         sys.exit(0)
@@ -386,7 +401,7 @@ def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"],
         config = get_config()
 
     if queue == None:
-        queue = config.get("analysis", "default_queue")
+        queue = config.get("kong", "default_queue")
 
     width = get_tty_width()
 
@@ -416,8 +431,9 @@ def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"],
     logger.info("Submitting to queue {}".format(queue))
     logger.info("Walltime is {}".format(W))
     
-    blacklist_string = str(GetFullBlacklist(3)).strip()
-    if len(blacklist_string) > 0: " && "+blacklist_string
+    if IS_MOGON:
+        blacklist_string = str(GetFullBlacklist(3)).strip()
+        if len(blacklist_string) > 0: " && "+blacklist_string
 
     submit_tasks = []
         
@@ -812,6 +828,8 @@ def get_backend(config):
     workdir = config.get("kong", "kongdir")
     if backend == "LSF":
         return LSF(workdir = workdir)
+    if backend == "SGE":
+        return SGE(workdir = workdir)
     else:
         raise ValueError("Backend {} does not exist".format(backend))
 
@@ -871,7 +889,8 @@ def main():
     submitp.add_argument("--name", help="Name to assign to the job. If not specified, submit file name is used")
     submitp.add_argument("--dry-run", action="store_true", help="Don't really do anything")
     submitp.add_argument("--queue", "-q", help="Submit to this queue")
-    submitp.add_argument("--extraopts", default="-app Reserve2G -R \"rusage[atlasio=10]\"")
+    default_extraopts = config.get("kong", "default_extraopts")
+    submitp.add_argument("--extraopts", default=default_extraopts)
     # submitp.add_argument("-n")
     submitp.add_argument("-W", default="5:00")
     
@@ -1090,7 +1109,7 @@ def view(args, config):
 
     tgt = args.tgt
     kongdir, regdir, outdir = get_directories(config)
-    analysis_output = config.get("analysis", "output")
+    # analysis_output = config.get("analysis", "output")
     
     # jobcachefile = os.path.join(kongdir, "bjobs_cache")
     # if args.force and os.path.exists(jobcachefile):

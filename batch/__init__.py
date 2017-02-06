@@ -38,8 +38,7 @@ class BatchJob:
         DONE = "DONE"
         UNKNOWN = "UNKWN"
 
-    def __init__(self, jobid, status, command, name, queue, exec_host, extraopts=[]):
-        self.command = command
+    def __init__(self, jobid, status, name, queue, exec_host, extraopts=[]):
         self.name = name
         self.queue = queue
         self.exec_host = exec_host
