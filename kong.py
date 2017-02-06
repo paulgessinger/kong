@@ -349,10 +349,17 @@ def get_next_jobid():
     kongdir, regdir, outdir = get_directories(config)
     return get_job_id(kongdir, dry=True)
 
-def get_jobdir(jobid, name):
+def get_jobdir(jobid, name=None):
     config = get_config()
     analysis_outdir = config.get("analysis", "output")
-    joboutdir = os.path.join(analysis_outdir, JOBOUTDIR_FORMAT.format(jobid=jobid, jobname=name))
+    if name != None:
+        joboutdir = os.path.join(analysis_outdir, JOBOUTDIR_FORMAT.format(jobid=jobid, jobname=name))
+    else:
+        pat = os.path.join(analysis_outdir, "*"+str(jobid)+"*")
+        # print(pat)
+        res = glob(pat)
+        # print(res)
+        joboutdir = res[0]
     return joboutdir
 
 
@@ -1237,7 +1244,7 @@ def view(args, config):
             col_lengths.append(max(col))
 
         for ri, r in enumerate(rows):
-            pr = [(str(c) if c != None else "-").ljust(col_lengths[i]) for i, c in enumerate(r)]
+            pr = [(str(c) if c != None and c != "" else "-").ljust(col_lengths[i]) for i, c in enumerate(r)]
             print(colored(" | ".join(pr), colors[ri]))
             if args.cmd:
                 print(commands[ri]+"\n")

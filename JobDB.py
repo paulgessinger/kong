@@ -160,9 +160,12 @@ class JobDB:
                 columns.append("exec_host")
                 values.append(ji.hostname)
 
+            columns.append("signal")
             if ji.signal:
-                columns.append("signal")
                 values.append(ji.signal)
+            else:
+                values.append("")
+
 
             values.append(jobid)
 
@@ -254,7 +257,7 @@ class JobDB:
                             job_name, 
                             queue,
                             exec_host
-                        ) VALUES (?, ?, ?, ?, ?, ?)'''
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)'''
                     filec.execute(stmt, values)
 
                 logger.debug("Job updated / inserted")
