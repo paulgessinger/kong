@@ -40,13 +40,16 @@ class LSF(BatchSystem):
         for raw in jobs:
             job = dict(zip(head, raw.split(delimiter)))
             # jobout.append(job)
-            
-            status = {
-                "PEND": BatchJob.Status.PENDING,
-                "RUN": BatchJob.Status.RUNNING,
-                "EXIT": BatchJob.Status.EXIT,
-                "DONE": BatchJob.Status.DONE,
-            }[job["stat"]]
+           
+            try: 
+                status = {
+                    "PEND": BatchJob.Status.PENDING,
+                    "RUN": BatchJob.Status.RUNNING,
+                    "EXIT": BatchJob.Status.EXIT,
+                    "DONE": BatchJob.Status.DONE,
+                }[job["stat"]]
+            except:
+                status = BatchJob.Status.UNKNOWN
 
             # print(job)
             batchjobs.append(BatchJob(
@@ -158,7 +161,7 @@ class LSF(BatchSystem):
         except subprocess.CalledProcessError as e:
             logger.warning(str(e))
 
-    def resubmit(self, jobid, mode):
+    def resubmit(self, jobid, mode=""):
         cmd = ["brequeue"] 
         
         if len(mode) > 0:

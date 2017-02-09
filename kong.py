@@ -1038,6 +1038,14 @@ def resubmit(args, config):
 
     print("Looking for lsf jobs with status {} in job(s) {}".format(bold(args.status.upper()), ", ".join(str(j) for j in job_range)))
 
+    if args.status == "unkwn":
+        mode = ""
+    else:
+        mode = args.status[0].lower()
+    def res_thread(jobid):
+        # print(jobid)
+        jobdb.backend.resubmit(jobid, mode)
+
     def do_resubmit():
         selected = []
         # job_info = get_job_info(jobcachefile)
@@ -1059,29 +1067,31 @@ def resubmit(args, config):
             if not confirm("Resubmitting the following {} LSF jobs: {}".format(len(selected), ", ".join(selected))):
                 return
         
-        for s in selected:
-            if args.status == "unkwn":
-                mode = ""
-            else:
-                mode = args.status[0].lower()
-            print(s)
-            try:
+        thread_map(res_thread, selected)
+        # for s in selected:
+
+            # if args.status == "unkwn":
+                # mode = ""
+            # else:
+                # mode = args.status[0].lower()
+            # print(s)
+            # try:
                 
-                # brequeue(s, mode)
-                jobdb.backend.resubmit(s, mode)
-                if args.queue:
-                    time.sleep(2)
-                    bmod(s, queue=args.queue)
-                    # print("new queue", args.queue)
-                if args.W:
-                    time.sleep(2)
-                    # print("new W", args.W)
-                    bmod(s, W=args.W)
+                # # brequeue(s, mode)
+                # jobdb.backend.resubmit(s, mode)
+                # if args.queue:
+                    # time.sleep(2)
+                    # bmod(s, queue=args.queue)
+                    # # print("new queue", args.queue)
+                # if args.W:
+                    # time.sleep(2)
+                    # # print("new W", args.W)
+                    # bmod(s, W=args.W)
 
 
-            except Exception as e:
-                print(colored("Error requeueing {}".format(s), "white", "on_red"))
-                print(e)
+            # except Exception as e:
+                # print(colored("Error requeueing {}".format(s), "white", "on_red"))
+                # print(e)
         
 
     if args.interval:
