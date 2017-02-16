@@ -349,8 +349,8 @@ def get_next_jobid():
     kongdir, regdir, outdir = get_directories(config)
     return get_job_id(kongdir, dry=True)
 
-def get_jobdir(jobid, name=None):
-    config = get_config()
+def get_jobdir(jobid, name=None, config=None):
+    if config == None: config = get_config()
     analysis_outdir = config.get("analysis", "output")
     if name != None:
         joboutdir = os.path.join(analysis_outdir, JOBOUTDIR_FORMAT.format(jobid=jobid, jobname=name))
@@ -446,10 +446,13 @@ def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"],
     submit_tasks = []
         
     jobid = get_job_id(kongdir, dry=dry_run)
+    jobdir = get_jobdir(jobid, name=name, config=config)
     subjobid = 0
         
+    logger.debug("Make jobdir at {}".format(jobdir))
     if not dry_run:
         jobfile = open(os.path.join(submit_dir, make_jobfile_name(jobid, name)), "w")
+        mkdir(jobdir)
 
     for subjobid, cmd in enumerate(cmds):
         stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=jobid, subjobid=subjobid))
@@ -562,7 +565,7 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
         config = get_config()
 
     if queue == None:
-        queue = config.get("analysis", "default_queue")
+        queue = config.get("kong", "default_queue")
 
     width = get_tty_width()
 
@@ -900,11 +903,7 @@ def main():
     submitp.add_argument("--queue", "-q", help="Submit to this queue")
     default_extraopts = config.get("kong", "default_extraopts")
     submitp.add_argument("--extraopts", default=default_extraopts)
-    # submitp.add_argument("-n")
     submitp.add_argument("-W", default="5:00")
-    
-    # jobdirp = subparsers.add_parser("jobdir", aliases=['jd'] parents=[parentp], help=cli_jobdir.__doc__)
-    # jobdirp.set_defaults(func=cli_jobdir)
     
     cdp = subparsers.add_parser("cd", parents=[parentp], help=cd.__doc__)
     cdp.set_defaults(func=cd)
@@ -928,6 +927,14 @@ def main():
 
     pushp = subparsers.add_parser("push", parents=[parentp])
     pushp.set_defaults(func=push)
+    
+    updatep = subparsers.add_parser("update", parents=[parentp])
+    updatep.add_argument("--interval", "-i", type=int, default=config.getint("kong", "batch_cache_timeout"))
+    # updatep.add_argument("--force", "-f", action="store_true")
+    updatep.set_defaults(func=update)
+    
+    cleanupp = subparsers.add_parser("cleanup", parents=[parentp])
+    cleanupp.set_defaults(func=do_cleanup)
 
     renamep = subparsers.add_parser("rename", aliases=["rn"], parents=[parentp], help=rename.__doc__)
     renamep.set_defaults(func=rename)
@@ -1116,8 +1123,9 @@ def resubmit(args, config):
 
     else:
         do_resubmit()
+        jobdb.invalidate()
 
-        jobdb.update(force=True)
+        # jobdb.update(force=True)
 
 
 
@@ -1386,7 +1394,7 @@ def monitor(args, config):
     args.force = False
     args.human = False
 
-    interval = 30
+    interval = config.getint("kong", "batch_cache_timeout")
     
     
     stdscr = curses.initscr()
@@ -1522,7 +1530,15 @@ def rename(args, config):
     cmd = "mv {} {:05d}_{}.job".format(jobfile, jobid, args.dest)
     os.system(cmd)
 
+def do_cleanup(args, config):
+    jobdb.cleanup()
 
+def update(args, config):
+    while True:
+        print("Updating...")
+        jobdb.update()
+        print("Sleeping for", args.interval)
+        time.sleep(args.interval)
 
 def push(args, config):
     import requests
@@ -1573,7 +1589,6 @@ def push(args, config):
 
 
 
-        # f = os.path.basename(fullf)
 
 def sum_columns(x, y):
     res = []

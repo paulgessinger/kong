@@ -15,6 +15,7 @@ except ImportError:  # py2
 from . import BatchSystem
 from . import Walltime
 from . import BatchJob
+from . import DATEFORMAT
 
 class LSF(BatchSystem):
     def __init__(self, workdir):
@@ -100,20 +101,19 @@ class LSF(BatchSystem):
             logger.debug("Creating dir {}".format(p))
             os.system("mkdir -p {}".format(p))
 
-        dateformat = "%Y-%m-%d %H:%M:%S"
         script_body = [
             'function aborted() {',
             '  echo Aborted with signal $1.',
             '  echo "signal: $1" >> {}'.format(job_info_path),
-            '  echo "end_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(dateformat, job_info_path),
+            '  echo "end_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(DATEFORMAT, job_info_path),
             '  exit -1',
             '}',
             # 'mkdir -p %s' % self.,
             'for sig in SIGHUP SIGINT SIGQUIT SIGTERM SIGUSR1 SIGUSR2; do trap "aborted $sig" $sig; done',
             'echo "hostname: $HOSTNAME" > {}'.format(job_info_path),
             'echo "batchjobid: $LSB_JOBID" >> {}'.format(job_info_path),
-            'echo "submit_time: {}" >> {}'.format(datetime.datetime.now().strftime(dateformat), job_info_path),
-            'echo "start_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(dateformat, job_info_path)
+            'echo "submit_time: {}" >> {}'.format(datetime.datetime.now().strftime(DATEFORMAT), job_info_path),
+            'echo "start_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(DATEFORMAT, job_info_path)
         ]
 
         script_body += [
@@ -127,7 +127,7 @@ class LSF(BatchSystem):
         script_body += [
             'exit_status=$?',
             'echo "exit_status: $exit_status" >>%s' % job_info_path,
-            'echo "end_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(dateformat, job_info_path),
+            'echo "end_time: $(LC_ALL=en_US.utf8 date \'+{}\')" >> {}'.format(DATEFORMAT, job_info_path),
             'exit $exit_status',
         ]
 

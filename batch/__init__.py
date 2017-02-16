@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+DATEFORMAT = "%Y-%m-%d %H:%M:%S"
 
 class BatchSystem:
     # def __init__(self):

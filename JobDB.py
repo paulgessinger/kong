@@ -8,7 +8,7 @@ from log import logger
 import datetime
 import time
 from tqdm import tqdm
-from batch import BatchSystem, BatchJobInfoFile, BatchJob
+from batch import BatchSystem, BatchJobInfoFile, BatchJob, DATEFORMAT
 from traceback import print_tb
 
 
@@ -103,6 +103,31 @@ class JobDB:
 
         return res
 
+    def cleanup(self):
+        logger.debug("Cleaning up")
+
+        jobinfodir = self.backend.jobinfodir
+        c = self.fileconn.cursor()
+        for j in os.listdir(jobinfodir):
+            jf = os.path.join(jobinfodir, j)
+            jobid = j[:-4]
+            if not os.path.isfile(jf): continue
+            ji = BatchJobInfoFile(jf)
+            # print(ji)
+            # print(jobid, ji.exit_status != None, ji.exit_status == "0", ji.end_time != None)
+            now = datetime.datetime.now()
+            if ji.exit_status != None and ji.exit_status == "0" and ji.end_time != None:
+                # looks like this is done. how long?
+                end = datetime.datetime.strptime(ji.end_time, DATEFORMAT)
+                delta = now-end
+                # print(delta.days)
+                if delta.days > 2:
+                    logger.debug("{} is older than 2 days ({})".format(jobid, delta.days))
+                    logger.debug("Deleting {}".format(jf))
+                    # print(ji.exit_status)
+                    os.remove(jf)
+                # print(end)
+
     def update(self, force=False):
 
         # check mod time
@@ -119,8 +144,14 @@ class JobDB:
         # updating first from kong job info file
         jobinfodir = self.backend.jobinfodir
         logger.debug("Updating from internal job info files")
+        
+        jobinfofiles = os.listdir(jobinfodir)
+        crit = 10000
+        if len(jobinfofiles) > crit:
+            logger.warning("Over {} job info files found ({}). You might want to run `kong cleanup`".format(crit, len(jobinfofiles)))
 
-        for j in os.listdir(jobinfodir):
+        for j in tqdm(jobinfofiles, leave=False, desc="Updating from internal files", bar_format="{l_bar}{bar}|{n_fmt}/{total_fmt}"):
+        # for j in os.listdir(jobinfodir):
             jf = os.path.join(jobinfodir, j)
             jobid = j[:-4]
             if not os.path.isfile(jf): continue
@@ -177,12 +208,13 @@ class JobDB:
 
             # print(stmt, values)
 
-            logger.debug("Updating job {}".format(jobid))
+            # logger.debug("Updating job {}".format(jobid))
             
             filec.execute(stmt, values)
 
         self.fileconn.commit()
         
+        logger.debug("Completed, updating from internal job info files")
     
     
         jobs = self.backend.get_job_info()
