@@ -159,7 +159,7 @@ class LSF(BatchSystem):
         try:
             out = subprocess.check_output(cmd)
         except subprocess.CalledProcessError as e:
-            logger.warning(str(e))
+            logger.info(str(e))
 
     def resubmit(self, jobid, mode=""):
         cmd = ["brequeue"] 

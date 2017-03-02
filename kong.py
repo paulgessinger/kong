@@ -41,6 +41,7 @@ except ImportError:
 from python_utils.printing import *
 from log import logger
 from batch.lsf import LSF
+from batch import BatchJob
 from batch.sge import SGE
 from JobDB import JobDB
 
@@ -247,8 +248,9 @@ def remove_joboutput(jobid, outdir, regdir, analysis_output):
             fullf = os.path.join(outdir, f)
             logger.debug("rm {}".format(fullf))
             try:
-                os.remove(f)
-            except: pass 
+                os.remove(fullf)
+            except: 
+                logger.error("Unable to remove joboutput at {}".format(fullf))
 
     logger.debug("remove analysis output")
     for f in os.listdir(analysis_output):
@@ -439,9 +441,9 @@ def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"],
     logger.info("Submitting to queue {}".format(queue))
     logger.info("Walltime is {}".format(W))
     
-    if IS_MOGON:
-        blacklist_string = str(GetFullBlacklist(3)).strip()
-        if len(blacklist_string) > 0: " && "+blacklist_string
+    # if IS_MOGON:
+        # blacklist_string = str(GetFullBlacklist(3)).strip()
+        # if len(blacklist_string) > 0: " && "+blacklist_string
 
     submit_tasks = []
         
@@ -478,15 +480,17 @@ def submit(cmds, name, config=None, queue=None, extraopts=["-app", "Reserve2G"],
     if dry_run:
         throttle = 5.0 / len(submit_tasks)
 
+    # jobdb.lock()
     submit_results = thread_map(partial(submit_thread, backend=backend), submit_tasks, desc="Submitting", throttle=throttle)
    
     
 
-    for jobid, subjobid, batchid, exe in submit_results:
+    for batchid, t in submit_results:
         if not dry_run:
-            logger.debug("{}:{}\n".format(subjobid, batchid))
-            jobfile.write("{}:{}\n".format(subjobid, batchid))
-            jobdb.register_subjob(jobid, subjobid, batchid, cmd=exe, queue=queue, walltime=W)
+            logger.debug("{}:{}\n".format(t.subjobid, batchid))
+            # jobfile.write("{}:{}\n".format(t.subjobid, t.batchid))
+            jobdb.register_subjob(t.jobid, t.subjobid, batchid, cmd=t.exe, queue=t.queue, walltime=t.walltime, extraopts=" ".join(map(quote, t.extraopts)))
+            # jobdb.register_subjob(jobid, subjobid, batchid, cmd=exe, queue=queue, walltime=W)
     jobdb.commit()
 
     if not dry_run:
@@ -714,13 +718,14 @@ def list_submit(lists, config=None, queue=None, dir=None, syst=False, verbosity=
     if dry_run:
         throttle = 10.0 / len(submit_tasks)
         # print(throttle)
+    # jobdb.lock()
     submit_results = thread_map(partial(submit_thread, backend=backend), submit_tasks, desc="Submitting", throttle=throttle)
 
-    for jobid, subjobid, batchid, exe in submit_results:
+    for batchid, t in submit_results:
         # print(subjobid, subjoblsfid)
         if not dry_run:
-            jobfiles[jobid].write("{}:{}\n".format(subjobid, batchid))
-            jobdb.register_subjob(jobid, subjobid, batchid, cmd=exe, queue=queue, walltime=W)
+            jobfiles[jobid].write("{}:{}\n".format(t.subjobid, batchid))
+            jobdb.register_subjob(t.jobid, t.subjobid, batchid, cmd=t.exe, queue=t.queue, walltime=t.walltime, extraopts=" ".join(map(quote, t.extraopts)))
 
     if not dry_run:
         jobdb.commit()
@@ -753,9 +758,10 @@ def submit_thread(t, backend):
     # if not dry_run:
         # jobfile.write("{}:{}\n".format(t.subjobid, subjoblsfid))
 
-    return (t.jobid, t.subjobid, batchid, t.exe)
+    return (batchid, t)
 
 def thread_map(func, values, n=mp.cpu_count(), tick=lambda x:x, pool=None, desc="", throttle=0):
+
     if pool == None:
         pool = ThreadPool(n)
     
@@ -768,6 +774,8 @@ def thread_map(func, values, n=mp.cpu_count(), tick=lambda x:x, pool=None, desc=
         prog.update()
         return func(item)
 
+    if n == 1:
+        return map(func, values)
     try:
         # print(values)
         submit_results = pool.map_async(work, values).get(99999)
@@ -953,15 +961,20 @@ def main():
     recoverp.set_defaults(func=recover)
     recoverp.add_argument("job", type=int, help="Job id, for which to attempt recovery")
 
+    requeuep = subparsers.add_parser("requeue", parents=[parentp], help=requeue.__doc__)
+    requeuep.set_defaults(func=requeue)
+    requeuep.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
+    requeuep.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], default="exit", help="Specify the status with which jobs qualify to be requeueted")
+    requeuep.add_argument("--force", "-f", action="store_true", help="Kill the the bjobs cache file before doing anything")
+    requeuep.add_argument("--yes", "-y", action="store_true", help="Yep! If anyone asks")
+    requeuep.add_argument("--interval", "-i", type=int)
+    requeuep.add_argument("--queue", "-q")
+    requeuep.add_argument("-W")
+
     resubmitp = subparsers.add_parser("resubmit", parents=[parentp], help=resubmit.__doc__)
     resubmitp.set_defaults(func=resubmit)
     resubmitp.add_argument("tgt", nargs="+", help=JOB_RANGE_HELP)
-    resubmitp.add_argument("--status", "-s", choices=["done", "pend", "exit", "run", "unkwn"], default="exit", help="Specify the status with which jobs qualify to be resubmitted")
-    resubmitp.add_argument("--force", "-f", action="store_true", help="Kill the the bjobs cache file before doing anything")
-    resubmitp.add_argument("--yes", "-y", action="store_true", help="Yep! If anyone asks")
-    resubmitp.add_argument("--interval", "-i", type=int)
-    resubmitp.add_argument("--queue", "-q")
-    resubmitp.add_argument("-W")
+    resubmitp.add_argument("--status", "-s", nargs="+", choices=["done", "pend", "exit", "run", "unkwn"], default="exit", help="Specify the status with which jobs qualify to be resubmitted")
 
     viewp = subparsers.add_parser("view", parents=[parentp], help=view.__doc__)
     viewp.set_defaults(func=view)
@@ -1024,7 +1037,7 @@ def recover(args, config):
     # print(info)
     # print(out
 
-def resubmit(args, config):
+def requeue(args, config):
     """
     Requeue subjobs with a specified status back to the batch system
     """
@@ -1126,6 +1139,102 @@ def resubmit(args, config):
         jobdb.invalidate()
 
         # jobdb.update(force=True)
+
+def resubmit(args, config):
+
+    tgt = args.tgt
+    kongdir, regdir, outdir = get_directories(config)
+    analysis_output = config.get("analysis", "output")
+    
+    jobdb.update(force=True)
+    
+    job_range = parse_job_range_list(tgt)
+    # all_jobfiles = find_job_files(regdir)
+    # print(args.status)
+    statuses = map(str.upper, args.status)
+    print("Looking for batch jobs with statuses in job(s) {}".format(bold(", ".join(statuses)), ", ".join(str(j) for j in job_range)))
+
+    # if args.status == "unkwn":
+        # mode = ""
+    # else:
+        # mode = args.status[0].lower()
+    def res_thread(job):
+        stat = subjob["stat"].upper()
+        
+        if stat in (BatchJob.Status.PENDING, BatchJob.Status.RUNNING):
+            print("KILL", job["batchjobid"])
+            jobdb.backend.kill(job["batchjobid"])
+            time.sleep(1.)
+
+        print("RESUBMIT AS NEW")
+        # jobdb.backend()
+        stdoutfile = os.path.join(outdir, JOBSTDOUT_FORMAT.format(jobid=job["jobid"], subjobid=job["subjobid"]))
+        stderrfile = os.path.join(outdir, JOBSTDERR_FORMAT.format(jobid=job["jobid"], subjobid=job["subjobid"]))
+
+        for f in stdoutfile, stderrfile:
+            with open(f, "w") as fd:
+                # fd.write("-")
+                fd.truncate()
+            print("remove", f)
+            # print(os.system("rm -f {}".format(f)))
+
+        # jobdb.backend.resubmit(jobid, mode)
+        if not job["extraopts"]:
+            logger.error("Cannot resubmit {} without extraopts".format(job["batchjobid"]))
+            raise ValueError()
+
+        extraopts = shlex.split(job["extraopts"])
+        newbid = jobdb.backend.submit(
+            job["jobid"],
+            job["subjobid"],
+            command=job["cmd"],
+            walltime=job["walltime"],
+            extraopts=extraopts,
+            queue=job["queue"],
+            stdout=stdoutfile,
+            stderr=stderrfile,
+            name=job["job_name"],
+            dry=False
+        )
+
+        try:
+            jobdb.replace(
+                oldbid=job["batchjobid"],
+                newbid=newbid,
+                jobid=job["jobid"],
+                subjobid=job["subjobid"],
+                cmd=job["cmd"],
+                queue=job["queue"],
+                walltime=job["walltime"],
+                extraopts=job["extraopts"]
+            )
+        except Exception as e:
+            logger.error("Failed to replace {0} => {1}. Killing {1}".format(job["batchjobid"], newbid))
+            print(e)
+            jobdb.backend.kill(newbid)
+        print("DONE")
+
+
+    batch_jobs = []
+    # selected = []
+    
+    for jobid in job_range:
+        for subjob in jobdb.getBatchJobsForJob(jobid):
+                # subjobid, batchid = subjob["subjobid"], subjob["batchjobid"]
+                stat = subjob["stat"].upper()
+                # selected.append(subjob)
+                
+                if stat in statuses:
+                    batch_jobs.append(subjob)
+
+    selected = [j["batchjobid"] for j in batch_jobs]
+    # print(selected)
+    if not confirm("Resubmitting the following {} batch jobs (will kill them first): {}".format(len(selected), ", ".join(selected))):
+        return
+    
+    # thread_map(res_thread, batch_jobs, n=1)
+    map(res_thread, batch_jobs)
+    jobdb.invalidate()
 
 
 
@@ -1312,6 +1421,9 @@ def kill(args, config):
                 # subjobid, subjoblsfid = l.split(":")
                 # kills.append((jobid, subjobid, subjoblsfid))
         for batchjob in jobdb.getBatchJobsForJob(jobid):
+            if batchjob["stat"] in (BatchJob.Status.DONE, BatchJob.Status.EXIT, BatchJob.Status.UNKNOWN):
+                continue
+            # print(batchjob)
             kills.append((batchjob["jobid"], batchjob["subjobid"], batchjob["batchjobid"]))
 
     spinner = Spinner("Killing batch system tasks")
@@ -1533,6 +1645,25 @@ def rename(args, config):
 def do_cleanup(args, config):
     jobdb.cleanup()
 
+    kongdir, regdir, outdir = get_directories(config)
+    jobfiles = get_all_jobs(regdir)
+    jobs_to_keep = []
+    for d, f in jobfiles:
+        jobid, _ = f.split("_", 1)
+        jobs_to_keep.append(int(jobid))
+
+    for f in tqdm(os.listdir(outdir)):
+        jobid, _ = f.split("_", 1)
+        jobid = int(jobid)
+        if jobid in jobs_to_keep:
+            pass
+            # print(f, "keep")
+        else:
+            fullf = os.path.join(outdir, f)
+            os.remove(fullf)
+        # print(f),
+
+
 def update(args, config):
     while True:
         print("Updating...")
@@ -1602,6 +1733,7 @@ def ls(args, config, noprint=False):
     """
     Show information over job files or directory hierarchies with job files
     """
+    logger.debug("ls go")
 
     kongdir, regdir, outdir = get_directories(config)
     # jobcachefile = os.path.join(kongdir, "bjobs_cache")
@@ -1613,7 +1745,14 @@ def ls(args, config, noprint=False):
     if not os.path.realpath(args.dir).startswith(regdir):
         raise ValueError("Dir {} is not inside registry dir {}".format(args.dir, regdir))
 
-    jobdb.update(force=args.force)
+    did_update = jobdb.update(force=args.force)
+
+    # check length of output files
+    if did_update:
+        ofc = len(os.listdir(outdir))
+        ofc_crit = 100000
+        if ofc > ofc_crit:
+            logger.warning("Number of joboutput files in {} exceeds {}. You might want to run `kong cleanup`".format(outdir, ofc_crit))
 
     dirs = []
     dir = "."

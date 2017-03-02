@@ -20,18 +20,23 @@ class JobDB:
         self.backend = backend
         self.dbfile = dbfile
         self.validfile = os.path.join(os.path.dirname(self.dbfile), "kong_db_valid")
+        
+        self.cache_timeout = timeout
+
         if not os.path.exists(self.dbfile):
             self.fileconn = sqlite3.connect(self.dbfile)
             self.setup()
+            self.fileconn.row_factory = sqlite3.Row
         else:
             self.fileconn = sqlite3.connect(self.dbfile)
+            self.fileconn.row_factory = sqlite3.Row
+        
+        # self.fileconn = sqlite3.connect(":memory:")
+        # self.fileconn.row_factory = sqlite3.Row
+        # self.setup()
 
 
-        self.cache_timeout = timeout
-        self.fileconn.row_factory = sqlite3.Row
 
-        self.memconn = sqlite3.connect(":memory:")
-        self.memconn.row_factory = sqlite3.Row
 
         self.load()
 
@@ -42,12 +47,13 @@ class JobDB:
     def load(self):
         # print("BEGIN LOAD")
         filedb = self.fileconn
-        memdbc = self.memconn.cursor()
+        # memdbc = self.memconn.cursor()
 
         # for line in filedb.iterdump():
         #     memdbc.executescript(line)
         # self.memconn.commit()
         # print("END LOAD")
+
 
     def setup(self):
         c = self.fileconn.cursor()
@@ -64,7 +70,9 @@ class JobDB:
             end_time VARCHAR,
             signal VARCHAR,
             exec_host VARCHAR,
-            cmd TEXT
+            cmd TEXT,
+            extraopts VARCHAR,
+            hidden INTEGER DEFAULT 0
         )''')
         c.execute('''CREATE INDEX jobs_jobid ON jobs (jobid);''')
         c.execute('''CREATE INDEX jobs_batchjobid ON jobs (batchjobid);''')
@@ -78,14 +86,14 @@ class JobDB:
     def getBatchJobsForJob(self, jobid):
         c = self.fileconn.cursor()
 
-        c.execute('SELECT * FROM jobs WHERE jobid = ? ORDER BY subjobid ASC', (jobid,))
+        c.execute('SELECT * FROM jobs WHERE jobid = ? and hidden = 0 ORDER BY subjobid ASC', (jobid,))
         # return sorted(c.fetchall(), key=lambda r: int(r["subjobid"]))
         return c.fetchall()
     def getJobInfo(self, jobid):
         c = self.fileconn.cursor()
 
 
-        c.execute('SELECT COUNT(*) FROM jobs WHERE jobid = ?', (jobid,))
+        c.execute('SELECT COUNT(*) FROM jobs WHERE jobid = ? AND hidden = 0', (jobid,))
         total = c.fetchone()[0]
 
         res = [total]
@@ -94,7 +102,7 @@ class JobDB:
 
         for status in ["pend", "done", "run", "exit"]:
             # logger.debug("Counting {} for job {}".format(status, jobid))
-            c.execute('SELECT COUNT(*) as num FROM jobs WHERE jobid = ? and stat = ?', (jobid, status.upper()))
+            c.execute('SELECT COUNT(*) as num FROM jobs WHERE jobid = ? and stat = ? AND hidden = 0', (jobid, status.upper()))
             row = c.fetchone()
             found += row[0]
             res.append(row[0])
@@ -121,12 +129,17 @@ class JobDB:
                 end = datetime.datetime.strptime(ji.end_time, DATEFORMAT)
                 delta = now-end
                 # print(delta.days)
-                if delta.days > 2:
-                    logger.debug("{} is older than 2 days ({})".format(jobid, delta.days))
+                if delta.days > 1:
+                    logger.debug("{} is older than 1 days ({})".format(jobid, delta.days))
                     logger.debug("Deleting {}".format(jf))
                     # print(ji.exit_status)
                     os.remove(jf)
                 # print(end)
+
+    # def lock(self):
+        # conn = self.fileconn
+        # conn.isolation_level = "EXCLUSIVE"
+        # conn.execute("BEGIN EXCLUSIVE")
 
     def update(self, force=False):
 
@@ -137,7 +150,7 @@ class JobDB:
             # print(now-mtime)
             if now-mtime < self.cache_timeout and not force:
                 logger.debug("Skip updating jobs db. age: {} < {}".format(now-mtime, self.cache_timeout))
-                return
+                return False
 
         filec = self.fileconn.cursor()
         
@@ -302,25 +315,52 @@ class JobDB:
 
         logger.debug("Syncing completed")
         os.system("touch {}".format(self.validfile))
+        return True
 
     def remove(self, jobid):
         c = self.fileconn.cursor()
         c.execute("DELETE FROM jobs WHERE jobid = ?", (jobid,))
 
+    def replace(self, oldbid, newbid, jobid, subjobid, cmd, queue, walltime, extraopts=""):
+        # get old values
+        # oldjob = self.getBatchJob(oldbid)
+        try:
+            c = self.fileconn.cursor()
+            # c.execute("begin")
+            # print(newbid)
+            c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid, cmd, queue, walltime, extraopts) VALUES (?, ?, ?, ?, ?, ?, ?)', (
+                jobid,
+                subjobid,
+                newbid,
+                cmd,
+                queue,
+                walltime,
+                extraopts
+            ))
+            c.execute("UPDATE jobs SET hidden = 1 WHERE batchjobid = ?", (oldbid,))
+            self.fileconn.commit()
+            # c.execute("commit")
+        except:
+            # c.execute("rollback")
+            c.execute("UPDATE jobs SET hidden = 0 WHERE batchjobid = ?", (oldbid,))
+            c.execute("UPDATE jobs SET hidden = 1 WHERE batchjobid = ?", (newbid,))
+            raise
+
     def vacuum(self):
         c = self.fileconn.cursor()
         c.execute("VACUUM")
 
-    def register_subjob(self, jobid, subjobid, batchid, cmd, queue, walltime):
+    def register_subjob(self, jobid, subjobid, batchid, cmd, queue, walltime, extraopts = ""):
         # print(jobid, subjobid, batchid, cmd, queue, walltime)
         c = self.fileconn.cursor()
-        c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid, cmd, queue, walltime) VALUES (?, ?, ?, ?, ?, ?)', (
+        c.execute('INSERT INTO jobs (jobid, subjobid, batchjobid, cmd, queue, walltime, extraopts) VALUES (?, ?, ?, ?, ?, ?, ?)', (
             jobid,
             subjobid,
             batchid,
             cmd,
             queue,
             walltime,
+            extraopts
         ))
         # self.fileconn.commit()
 
