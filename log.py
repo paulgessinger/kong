@@ -22,6 +22,7 @@ class ColoredFormatter(logging.Formatter):
         else:
             pf = lambda s:s
 
+
         str = "[ {} : {} ] {}".format(record.name, pf(record.levelname), pf(record.msg % record.args))
 
         # if level <= 30:
