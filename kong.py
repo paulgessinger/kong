@@ -256,10 +256,14 @@ def remove_joboutput(jobid, outdir, regdir, analysis_output):
     for f in os.listdir(analysis_output):
         if f.startswith(jobid_padded):
             fullf = os.path.join(analysis_output, f)
+            realf = os.path.realpath(fullf)
             logger.debug("rm {}".format(fullf))
             try:
                 shutil.rmtree(fullf)
-            except: pass
+                if fullf != realf:
+                    shutil.rmtree(realf)
+            except:
+                logger.error("Unable to remove joboutput at {}".format(fullf))
 
 def sum_up_directory(dir):
     contents = os.listdir(dir)
@@ -922,6 +926,7 @@ def main():
     lsp.add_argument("dir", nargs="?", default=os.getcwd(), help="The directory or files to list. You can glob")
     lsp.add_argument("--all", "-a", action="store_true", help="If given, list all jobs found in the registry")
     lsp.add_argument("--force", "-f", action="store_true", help="Kill the bjobs cache")
+    lsp.add_argument("--sizes", "-s", action="store_true", help="Output size")
     if humanize_available:
         lsp.add_argument("--human", "-H", action="store_true", help="Human readable output of times")
 
@@ -942,6 +947,8 @@ def main():
     updatep.set_defaults(func=update)
     
     cleanupp = subparsers.add_parser("cleanup", parents=[parentp])
+    cleanupp.add_argument("--output", action="store_true")
+    cleanupp.add_argument("--dry-run", "-n", action="store_true", help="Don't really do anything")
     cleanupp.set_defaults(func=do_cleanup)
 
     renamep = subparsers.add_parser("rename", aliases=["rn"], parents=[parentp], help=rename.__doc__)
@@ -1643,25 +1650,63 @@ def rename(args, config):
     os.system(cmd)
 
 def do_cleanup(args, config):
-    jobdb.cleanup()
+    if not args.dry_run:
+        jobdb.cleanup()
 
     kongdir, regdir, outdir = get_directories(config)
+    output_dir = config.get("analysis", "output")
     jobfiles = get_all_jobs(regdir)
     jobs_to_keep = []
     for d, f in jobfiles:
         jobid, _ = f.split("_", 1)
         jobs_to_keep.append(int(jobid))
 
-    for f in tqdm(os.listdir(outdir)):
+    it = os.listdir(outdir)
+    if not args.verbose: it = tqdm(it)
+    for f in it:
         jobid, _ = f.split("_", 1)
         jobid = int(jobid)
+        fullf = os.path.join(outdir, f)
         if jobid in jobs_to_keep:
+            # logger.info("keep "+fullf)
             pass
-            # print(f, "keep")
         else:
-            fullf = os.path.join(outdir, f)
-            os.remove(fullf)
-        # print(f),
+            # if args.verbose:
+            logger.info("remove "+fullf)
+            if not args.dry_run:
+                os.remove(fullf)
+
+    if args.output:
+        def rem(f):
+            if os.path.isdir(f) and not os.path.islink(f):
+                shutil.rmtree(f)
+            else:
+                os.remove(f)
+
+        it = os.listdir(output_dir)
+        if not args.verbose: it = tqdm(it)
+        for f in it:
+            fullf = os.path.join(output_dir, f)
+            realf = os.path.realpath(fullf)
+            # print(f)
+            if f in (".", "..") or f.startswith("."): continue
+            if not os.path.isdir(fullf) and not os.path.islink(fullf): continue
+            # print(f)
+            jobid, _ = f.split("_", 1)
+            jobid = int(jobid)
+            keep = jobid in jobs_to_keep
+            # print(f, "keep", keep)
+            # logger.info("keep "+fullf)
+            if not keep:
+                # print(f, "<- delete")
+                if not args.dry_run:
+                    rem(fullf)
+                logger.info("remove "+fullf)
+                if fullf != realf:
+                    logger.info("remove "+realf)
+                    if not args.dry_run:
+                        rem(realf)
+
 
 
 def update(args, config):
@@ -1787,14 +1832,51 @@ def ls(args, config, noprint=False):
             continue
 
         jobinfo = [sum(i) for i in zip(*map(jobdb.getJobInfo, jobs_in_dir))]
+        
+        size_str = ""
+        total_size = 0
+        if args.sizes:
+            # print(jobinfo)
+            for jobid in jobs_in_dir:
+                jobdir = os.path.realpath(get_jobdir(int(jobid), config=config))
+                out = subprocess.check_output(["du", "-sh", jobdir])
+                size, _ = out.split("\t", 1)
+                # print(size)
+
+                num = float(size[:-1])
+                unit = size[-1]
+                if unit == "K":
+                    total_size += num * 1e-6
+                elif unit == "M":
+                    total_size += num * 1e-3
+                elif unit == "G":
+                    total_size += num * 1
+                elif unit == "T":
+                    total_size += num * 1e3
+
+                # size_str = " "+size+" "
+        
+            funit = "G"
+            if total_size > 1e-3 and total_size < 1:
+                total_size *= 1e3
+                funit = "M"
+            if total_size < 1e-3:
+                total_size *= 1e6
+                funit = "K"
+            if total_size > 1e3:
+                total_size /= 1e3
+                funit = "T"
+            
+            size_str = "{:.2f}{} ".format(total_size, funit)
 
         # print(jobinfo)
         status_string, color, info = make_status_string(*jobinfo)
-        outstr = " "*7 + "| {name} ({min}-{max}) | {status}".format(
+        outstr = " "*7 + "| {name} {size_str}({min}-{max}) | {status}".format(
             name="{name}",
             status=status_string,
             min=min(jobs_in_dir),
-            max=max(jobs_in_dir)
+            max=max(jobs_in_dir),
+            size_str=size_str
         )
 
         name = os.path.relpath(subdir, dir)
@@ -1838,10 +1920,18 @@ def ls(args, config, noprint=False):
         else:
             date = mtime.strftime("%H:%M:%S %d.%m.%Y")
 
-        outstr = "{jobid: 6d} | {name} | {date} | {status}".format(
+        size_str = ""
+        if args.sizes:
+            jobdir = os.path.realpath(get_jobdir(int(jobid), name, config=config))
+            out = subprocess.check_output(["du", "-sh", jobdir])
+            size, _ = out.split("\t", 1)
+            size_str = " "+size+" "
+
+        outstr = "{jobid: 6d} | {name} {size_str}| {date} | {status}".format(
             jobid=int(jobid), 
             name="{name}",
             date=date, 
+            size_str=size_str,
             status=status_string
         )
        
@@ -1898,7 +1988,7 @@ def cli_list_submit(args, config):
         config=config,
         queue=args.queue,
         dir=os.getcwd(),
-        sys=args.sys,
+        syst=args.sys,
         buildno=args.build,
         dry_run=args.dry_run
     )
