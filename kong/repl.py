@@ -98,10 +98,13 @@ class Repl(cmd.Cmd):
         return self.complete_path(path)
 
     @parse
-    def do_cd(self, name):
+    def do_cd(self, name=""):
         # find the folder
         try:
-            folder = Folder.find_by_path(self.config.cwd, name)
+            if name == "":
+                folder = Folder.get_root()
+            else:
+                folder = Folder.find_by_path(self.config.cwd, name)
             if folder is None:
                 raise pw.DoesNotExist()
             self.config.cwd = folder
