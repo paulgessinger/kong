@@ -42,6 +42,9 @@ def test_setup_implicit(app_env, db, cli):
     # assert db and root folder was created
     assert Folder.get_or_none(name="root", parent=None) is not None
 
+    # run again
+    result = cli.invoke(main, ["-vv"])
+
 
 def test_setup_invalid_driver(app_env, db, cli):
     app_dir, config_path, tmp_path = app_env
