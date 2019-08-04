@@ -31,7 +31,7 @@ def test_setup_implicit(app_env, db, cli):
     app_dir, config_path, tmp_path = app_env
 
     assert not os.path.exists(config_path)
-    result = cli.invoke(main, [], input="\n\n")
+    result = cli.invoke(main, ["-vv"], input="\n\n")
     assert result.exit_code == 0
     assert result.exception is None
     assert os.path.exists(config_path)

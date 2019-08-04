@@ -237,6 +237,7 @@ def test_exit(repl):
 def test_preloop(repl, monkeypatch):
     m = Mock()
     monkeypatch.setattr("readline.read_history_file", m)
+    monkeypatch.setattr("os.path.exists", Mock(return_value=True))
     repl.preloop()
     m.assert_called_once()
     monkeypatch.setattr("os.path.exists", Mock(return_value=False))

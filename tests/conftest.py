@@ -25,6 +25,8 @@ def app_env(tmp_path, monkeypatch):
     config_path = os.path.join(app_dir, "config.yml")
     monkeypatch.setattr("kong.config.APP_DIR", app_dir)
     monkeypatch.setattr("kong.config.CONFIG_FILE", config_path)
+    monkeypatch.setattr("kong.config.DB_FILE", os.path.join(app_dir, "database.sqlite"))
+    monkeypatch.setattr("kong.repl.history_file", os.path.join(tmp_path, "histfile"))
     assert not os.path.exists(config_path)
     assert kong.config.APP_DIR == app_dir
     assert kong.config.CONFIG_FILE == config_path

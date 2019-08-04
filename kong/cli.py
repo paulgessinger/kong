@@ -42,15 +42,24 @@ def main(ctx, show_version, verbosity):
 
     # check if setup was executed
     if not os.path.exists(config.CONFIG_FILE):
-        logger.debug("Setup was not executed yet")
+        logger.debug(
+            "Setup was not executed yet, config file at %s does not exist",
+            config.CONFIG_FILE,
+        )
         try:
             setup.setup(None)
         except Exception as e:
+            logger.error("Got error during setup", exc_info=True)
             raise click.ClickException(e)
+    else:
+        logger.debug("Setup executed already")
+    logger.debug("Setup completed")
 
     ctx.ensure_object(config.Config)
 
-    logging.debug("Initializing database '%s' at '%s'", config.APP_NAME, config.DB_FILE)
+    logger.debug("Initialized config: %s", ctx.obj.data)
+
+    logger.debug("Initializing database '%s' at '%s'", config.APP_NAME, config.DB_FILE)
     database.init(config.DB_FILE)
 
     # ensure database is set up
