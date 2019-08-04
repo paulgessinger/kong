@@ -1,0 +1,17 @@
+stages:
+    - test
+
+.test:
+    stage: test
+    before_script:
+        - pip install -e ".[dev]"
+    script:
+        - pytest --cov=kong
+        - coverage html
+    artifacts:
+        paths:
+            - htmlcov
+
+python3.7:
+    extends: .test
+    image: python:3.7
