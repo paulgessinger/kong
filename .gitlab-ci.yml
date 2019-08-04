@@ -15,7 +15,7 @@ stages:
 format:
     image: python:3.7
     before_script:
-        - pip install -e ".[test]"
+        - pip install -e ".[dev]"
     script:
         - black --check kong
 
