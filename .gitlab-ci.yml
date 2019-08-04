@@ -4,13 +4,24 @@ stages:
 .test:
     stage: test
     before_script:
-        - pip install -e ".[dev]"
+        - pip install -e ".[test]"
     script:
         - pytest --cov=kong
         - coverage html
     artifacts:
         paths:
             - htmlcov
+
+format:
+    image: python:3.7
+    before_script:
+        - pip install -e ".[test]"
+    script:
+        - black --check kong
+
+python-latest:
+    extends: .test
+    image: python:latest
 
 python3.7:
     extends: .test

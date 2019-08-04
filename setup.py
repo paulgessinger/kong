@@ -1,5 +1,6 @@
 from setuptools import setup
 
+dev_requires = ["black"]
 tests_require = ["pytest", "coverage", "pytest-cov"]
 setup(
     name="kong",
@@ -20,7 +21,7 @@ setup(
         "humanfriendly",
     ],
     tests_require=tests_require,
-    extras_require={"dev": ["black"] + tests_require},
+    extras_require={"dev": dev_requires, "test": tests_require},
     entry_points={"console_scripts": ["kong=kong.cli:main"]},
     packages=["kong"],
 )
