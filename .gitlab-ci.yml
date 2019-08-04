@@ -30,7 +30,3 @@ python3.7:
 python3.6:
     extends: .test
     image: python:3.6
-
-python3.5:
-    extends: .test
-    image: python:3.5
