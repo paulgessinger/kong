@@ -2,7 +2,6 @@ import os
 
 import click
 import yaml
-from attrdict import AttrDict
 
 from . import drivers
 
@@ -15,8 +14,8 @@ DB_FILE = os.path.join(APP_DIR, "database.sqlite")
 class Config:
     def __init__(self):
         with open(CONFIG_FILE) as f:
-            self.data = AttrDict(yaml.safe_load(f))
-            self.driver = getattr(drivers, self.data.driver)(self)
+            self.data = yaml.safe_load(f)
+            self.driver = getattr(drivers, self.data["driver"])(self)
 
     def __getattr__(self, key):
-        return getattr(self.data, key)
+        return self.data[key]

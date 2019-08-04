@@ -1,5 +1,6 @@
 from setuptools import setup
 
+tests_require = ["pytest", "coverage", "pytest-cov"]
 setup(
     name="kong",
     version="0.1.0",
@@ -17,9 +18,9 @@ setup(
         "peewee",
         "coloredlogs",
         "humanfriendly",
-        "attrdict",
     ],
-    extras_require={"dev": ["black"]},
+    tests_require=tests_require,
+    extras_require={"dev": ["black"] + tests_require},
     entry_points={"console_scripts": ["kong=kong.cli:main"]},
     packages=["kong"],
 )

@@ -17,31 +17,17 @@ import pkg_resources  # part of setuptools
 version = pkg_resources.require(config.APP_NAME)[0].version
 
 
-class CatchAllExceptions(click.Group):
-    def __call__(self, *args, **kwargs):
-        try:
-            return self.main(*args, **kwargs)
-        except AssertionError as exc:
-            logger.debug("Exception caught", exc_info=True)
-            click.secho(f"AssertionFailed: {exc}", fg="red")
-            sys.exit(1)
-
-
-@click.group(invoke_without_command=True, cls=CatchAllExceptions)
+@click.group(invoke_without_command=True)
 @click.option("--version", "show_version", is_flag=True)
 @click.option("-v", "--verbose", "verbosity", count=True)
 @click.pass_context
 def main(ctx, show_version, verbosity):
-    global_level = logging.WARNING
     if verbosity == 0:
         level = logging.WARNING
     elif verbosity == 1:
         level = logging.INFO
     elif verbosity == 2:
         level = logging.DEBUG
-    else:
-        level = logging.DEBUG
-        global_level = logging.DEBUG
 
     coloredlogs.install(
         fmt="%(asctime)s %(levelname)s %(name)s %(filename)s:%(funcName)s %(message)s",
@@ -51,13 +37,16 @@ def main(ctx, show_version, verbosity):
     logger.setLevel(level)
 
     if show_version:
-        click.echo(config.APP_NAME, "version:", version)
+        click.echo(f"{config.APP_NAME} version: {version}")
         return
 
     # check if setup was executed
     if not os.path.exists(config.CONFIG_FILE):
         logger.debug("Setup was not executed yet")
-        setup.setup(None)
+        try:
+            setup.setup(None)
+        except Exception as e:
+            raise click.ClickException(e)
 
     ctx.ensure_object(config.Config)
 
@@ -72,7 +61,11 @@ def main(ctx, show_version, verbosity):
     ctx.obj.cwd = Folder.get_root()
 
     if ctx.invoked_subcommand is None:
-        Repl(ctx.obj).cmdloop()
+        try:
+            Repl(ctx.obj).cmdloop()
+        except Exception as e:
+            logger.error("Exception caught", exc_info=True)
+            raise click.ClickException(e)
 
 
 @main.command("setup")

@@ -15,7 +15,7 @@ history_file = os.path.join(APP_DIR, "history")
 
 def parse(f):
     @functools.wraps(f)
-    def wrapper(self, args):
+    def wrapper(self, args=""):
         return f(self, *shlex.split(args))
 
     return wrapper
@@ -27,7 +27,6 @@ class Repl(cmd.Cmd):
 
     def __init__(self, config):
         self.config = config
-        self.cwd = "/"
         super().__init__()
 
     def precmd(self, line):
@@ -89,7 +88,7 @@ class Repl(cmd.Cmd):
             folder = Folder.create(name=tail, parent=location)
         except pw.IntegrityError:
             click.secho(
-                f"Folder {name} in {self.config.cwd.path} already exists", fg="red"
+                f"Folder {path} in {self.config.cwd.path} already exists", fg="red"
             )
 
     def complete_mkdir(self, text, line, begidx, endidx):
