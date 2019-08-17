@@ -80,3 +80,6 @@ class Folder(BaseModel):
 
     def subfolder(self, name):
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
+
+
+__all__ = ["Folder"]

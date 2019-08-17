@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from kong.cli import main
 import kong
 from kong.model import Folder
+from kong import logger
 
 
 def test_verbosity(app_env, db, cli):
@@ -16,19 +17,24 @@ def test_verbosity(app_env, db, cli):
     result = cli.invoke(main, ["--version"])
     assert result.exception is None
     assert result.exit_code == 0
-    assert kong.logger.logger.getEffectiveLevel() == logging.WARNING
+    assert logger.logger.getEffectiveLevel() == logging.WARNING
     result = cli.invoke(main, ["--version", "-v"])
     assert result.exit_code == 0
     assert result.exception is None
-    assert kong.logger.logger.getEffectiveLevel() == logging.INFO
+    assert logger.logger.getEffectiveLevel() == logging.INFO
     result = cli.invoke(main, ["--version", "-vv"])
     assert result.exit_code == 0
     assert result.exception is None
-    assert kong.logger.logger.getEffectiveLevel() == logging.DEBUG
+    assert logger.logger.getEffectiveLevel() == logging.DEBUG
 
 
-def test_setup_implicit(app_env, db, cli):
+def test_setup_implicit(app_env, db, cli, monkeypatch):
     app_dir, config_path, tmp_path = app_env
+    print("APPDIR:", kong.config.APP_DIR)
+    print("CONFDIR:", kong.config.CONFIG_FILE)
+
+    repl = Mock()
+    monkeypatch.setattr("kong.cli.Repl", repl)
 
     assert not os.path.exists(config_path)
     result = cli.invoke(main, ["-vv"], input="\n\n")
@@ -59,7 +65,7 @@ def test_setup_explicit(app_env, db, cli):
     app_dir, config_path, tmp_path = app_env
 
     assert not os.path.exists(config_path)
-    result = cli.invoke(main, ["setup"], input="\n\n")
+    result = cli.invoke(main, ["-vv", "setup"], input="\n\n")
     assert result.exit_code == 0
     assert result.exception is None
     assert os.path.exists(config_path)

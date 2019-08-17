@@ -2,6 +2,7 @@ import functools
 import shlex
 import cmd
 import readline
+import os
 
 import click
 import peewee as pw
@@ -25,8 +26,8 @@ class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, state):
+        self.state = state
         super().__init__()
 
     def precmd(self, line):
@@ -43,11 +44,11 @@ class Repl(cmd.Cmd):
 
     def complete_path(self, path):
         if path.endswith("/"):
-            folder = Folder.find_by_path(self.config.cwd, path)
+            folder = Folder.find_by_path(self.state.cwd, path)
             prefix = ""
         else:
             head, prefix = os.path.split(path)
-            folder = Folder.find_by_path(self.config.cwd, head)
+            folder = Folder.find_by_path(self.state.cwd, head)
 
         options = []
         for child in folder.children:
@@ -59,7 +60,8 @@ class Repl(cmd.Cmd):
     def do_ls(self, arg="."):
         "List the current directory content"
         try:
-            folder = Folder.find_by_path(self.config.cwd, arg)
+            logger.debug("LS: %s", list(self.state.cwd.children))
+            folder = Folder.find_by_path(self.state.cwd, arg)
             if folder is None:
                 raise pw.DoesNotExist()
             for child in folder.children:
@@ -78,7 +80,7 @@ class Repl(cmd.Cmd):
         # check if exists in this folder
         head, tail = os.path.split(path)
 
-        location = Folder.find_by_path(self.config.cwd, head)
+        location = Folder.find_by_path(self.state.cwd, head)
         if location is None:
             click.secho(f"Cannot create folder at '{path}'", fg="red")
             return
@@ -88,7 +90,7 @@ class Repl(cmd.Cmd):
             folder = Folder.create(name=tail, parent=location)
         except pw.IntegrityError:
             click.secho(
-                f"Folder {path} in {self.config.cwd.path} already exists", fg="red"
+                f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
             )
 
     def complete_mkdir(self, text, line, begidx, endidx):
@@ -103,13 +105,13 @@ class Repl(cmd.Cmd):
             if name == "":
                 folder = Folder.get_root()
             else:
-                folder = Folder.find_by_path(self.config.cwd, name)
+                folder = Folder.find_by_path(self.state.cwd, name)
             if folder is None:
                 raise pw.DoesNotExist()
-            self.config.cwd = folder
+            self.state.cwd = folder
         except pw.DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
-        self.prompt = f"({APP_NAME} > {self.config.cwd.path}) "
+        self.prompt = f"({APP_NAME} > {self.state.cwd.path}) "
 
     def complete_cd(self, text, line, begidx, endidx):
         args = shlex.split(line)
@@ -122,7 +124,7 @@ class Repl(cmd.Cmd):
             click.secho("Cannot delete root folder", fg="red")
             return
         try:
-            folder = Folder.find_by_path(self.config.cwd, name)
+            folder = Folder.find_by_path(self.state.cwd, name)
             if folder is None:
                 raise pw.DoesNotExist()
             path = folder.path
@@ -140,7 +142,7 @@ class Repl(cmd.Cmd):
     @parse
     def do_cwd(self):
         "Show the current location"
-        click.echo(self.config.cwd.path)
+        click.echo(self.state.cwd.path)
 
     def do_exit(self, arg):
         return True
@@ -158,10 +160,10 @@ class Repl(cmd.Cmd):
     def postloop(self):
         logger.debug(
             "Writing history of length %d to file %s",
-            self.config.history_length,
+            self.state.config.history_length,
             history_file,
         )
-        readline.set_history_length(self.config.history_length)
+        readline.set_history_length(self.state.config.history_length)
         readline.write_history_file(history_file)
 
     def cmdloop(self):

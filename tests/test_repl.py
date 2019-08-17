@@ -10,9 +10,13 @@ from kong.repl import Repl
 import kong.setup
 import kong
 
+import logging
+
+kong.logger.logger.setLevel(logging.DEBUG)
+
 
 @pytest.fixture
-def cfg(app_env, db, monkeypatch):
+def state(app_env, db, monkeypatch):
     app_dir, config_path, tmp_path = app_env
     with monkeypatch.context() as m:
         m.setattr(
@@ -20,14 +24,14 @@ def cfg(app_env, db, monkeypatch):
             Mock(side_effect=["LocalDriver", os.path.join(app_dir, "joblog")]),
         )
         kong.setup.setup(None)
-    _cfg = kong.config.Config()
-    _cfg.cwd = Folder.get_root()
-    return _cfg
+    cfg = kong.config.Config()
+    _state = kong.state.State(cfg, Folder.get_root())
+    return _state
 
 
 @pytest.fixture
-def repl(cfg):
-    return Repl(cfg)
+def repl(state):
+    return Repl(state)
 
 
 @pytest.fixture
@@ -44,7 +48,7 @@ def tree(db):
     return root
 
 
-def test_ls(tree, cfg, repl, capsys):
+def test_ls(tree, state, repl, capsys):
     repl.do_ls(".")
     out, err = capsys.readouterr()
     assert out == "f1\nf2\nf3\n"
@@ -53,13 +57,13 @@ def test_ls(tree, cfg, repl, capsys):
     out, err = capsys.readouterr()
     assert "not exist" in out
 
-    cfg.cwd = Folder.find_by_path(cfg.cwd, "/f2")
+    state.cwd = Folder.find_by_path(state.cwd, "/f2")
     repl.do_ls(".")
     out, err = capsys.readouterr()
     assert out == "alpha\nbeta\ngamma\n"
 
 
-def test_complete_funcs(cfg, tree, repl, monkeypatch):
+def test_complete_funcs(state, tree, repl, monkeypatch):
     cmpl = Mock()
     monkeypatch.setattr("kong.repl.Repl.complete_path", cmpl)
 
@@ -75,7 +79,7 @@ def test_complete_funcs(cfg, tree, repl, monkeypatch):
         cmpl.reset_mock()
 
 
-def test_complete_path(cfg, tree, repl):
+def test_complete_path(state, tree, repl):
     alts = repl.complete_path("f")
     assert alts == ["f1/", "f2/", "f3/"]
 
@@ -85,18 +89,18 @@ def test_complete_path(cfg, tree, repl):
     alts = repl.complete_path("f2/")
     assert alts == ["alpha/", "beta/", "gamma/"]
 
-    cfg.cwd = Folder.find_by_path(cfg.cwd, "/f2")
+    state.cwd = Folder.find_by_path(state.cwd, "/f2")
 
     alts = repl.complete_path("a")
     assert alts == ["alpha/"]
 
 
-def test_mkdir(cfg, repl, db, capsys):
+def test_mkdir(state, repl, db, capsys):
     root = Folder.get_root()
     sub = root.add_folder("sub")
 
     for cwd in [root, sub]:
-        cfg.cwd = cwd
+        state.cwd = cwd
 
         assert cwd.subfolder("alpha") is None
         repl.do_mkdir("alpha")
@@ -129,7 +133,7 @@ def test_mkdir(cfg, repl, db, capsys):
         out, err = capsys.readouterr()
         assert "omega/game" in out and "annot create" in out
 
-        cfg.cwd = beta
+        state.cwd = beta
         assert cwd.subfolder("gamma") is None
         repl.do_mkdir("../../gamma")
         out, err = capsys.readouterr()
@@ -137,59 +141,59 @@ def test_mkdir(cfg, repl, db, capsys):
         assert gamma is not None
 
 
-def test_cd(cfg, repl, db, capsys):
+def test_cd(state, repl, db, capsys):
     root = Folder.get_root()
-    assert cfg.cwd == root
+    assert state.cwd == root
 
     repl.do_cd("nope")
     out, err = capsys.readouterr()
     assert "not exist" in out, "nope" in out
-    assert cfg.cwd == root
+    assert state.cwd == root
 
     nope = root.add_folder("nope")
     repl.do_cd("nope")
     out, err = capsys.readouterr()
-    assert cfg.cwd == nope
+    assert state.cwd == nope
 
     repl.do_cd("")
     out, err = capsys.readouterr()
-    assert cfg.cwd == root
+    assert state.cwd == root
 
     repl.do_cd("..")
     out, err = capsys.readouterr()
     assert "not exist" in out
-    assert cfg.cwd == root
+    assert state.cwd == root
 
     repl.do_cd("../nope")
     out, err = capsys.readouterr()
     assert "not exist" in out
-    assert cfg.cwd == root
+    assert state.cwd == root
 
     more = root.add_folder("more")
     another = nope.add_folder("another")
 
     repl.do_cd("/nope")
     out, err = capsys.readouterr()
-    assert cfg.cwd == nope
+    assert state.cwd == nope
 
     repl.do_cd("/nope/another")
     out, err = capsys.readouterr()
-    assert cfg.cwd == another
+    assert state.cwd == another
 
     repl.do_cd("/../")
     out, err = capsys.readouterr()
-    assert cfg.cwd == another
+    assert state.cwd == another
 
     repl.do_cd("..")
     out, err = capsys.readouterr()
-    assert cfg.cwd == nope
+    assert state.cwd == nope
 
     repl.do_cd("/more")
     out, err = capsys.readouterr()
-    assert cfg.cwd == more
+    assert state.cwd == more
 
 
-def test_rm(cfg, repl, db, capsys, monkeypatch):
+def test_rm(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()
 
     repl.do_rm("../nope")
@@ -212,18 +216,18 @@ def test_rm(cfg, repl, db, capsys, monkeypatch):
     out, err = capsys.readouterr()
 
 
-def test_cwd(cfg, repl, tree, capsys):
+def test_cwd(state, repl, tree, capsys):
     root = tree
     repl.do_cwd()
     out, err = capsys.readouterr()
     assert out.strip() == "/"
 
-    cfg.cwd = root / "f1"
+    state.cwd = root / "f1"
     repl.do_cwd()
     out, err = capsys.readouterr()
     assert out.strip() == "/f1"
 
-    cfg.cwd = root / "f2" / "gamma"
+    state.cwd = root / "f2" / "gamma"
     repl.do_cwd()
     out, err = capsys.readouterr()
     assert out.strip() == "/f2/gamma"
@@ -244,7 +248,7 @@ def test_preloop(repl, monkeypatch):
     repl.preloop()
 
 
-def test_postloop(cfg, repl, monkeypatch):
+def test_postloop(state, repl, monkeypatch):
     set_length = Mock()
     write = Mock()
     monkeypatch.setattr("readline.set_history_length", set_length)
@@ -252,7 +256,7 @@ def test_postloop(cfg, repl, monkeypatch):
 
     repl.postloop()
 
-    set_length.assert_called_once_with(cfg.history_length)
+    set_length.assert_called_once_with(state.config.history_length)
     write.assert_called_once()
 
 

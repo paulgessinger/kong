@@ -7,6 +7,7 @@ import coloredlogs
 
 from . import config
 from . import setup
+from .state import State
 from .logger import logger
 from .db import database
 from .repl import Repl
@@ -55,22 +56,14 @@ def main(ctx, show_version, verbosity):
         logger.debug("Setup executed already")
     logger.debug("Setup completed")
 
-    ctx.ensure_object(config.Config)
+    inst = State.get_instance()
 
-    logger.debug("Initialized config: %s", ctx.obj.data)
-
-    logger.debug("Initializing database '%s' at '%s'", config.APP_NAME, config.DB_FILE)
-    database.init(config.DB_FILE)
-
-    # ensure database is set up
-    database.connect()
-    database.create_tables([Folder])
-
-    # ensure we have a root folder
-    ctx.obj.cwd = Folder.get_root()
+    # ctx.ensure_object(config.Config)
+    ctx.obj = inst
 
     if ctx.invoked_subcommand is None:
         try:
+            logger.debug("Entering REPL")
             Repl(ctx.obj).cmdloop()
         except Exception as e:
             logger.error("Exception caught", exc_info=True)
@@ -79,5 +72,5 @@ def main(ctx, show_version, verbosity):
 
 @main.command("setup")
 @click.pass_obj
-def setup_command(config):
-    setup.setup(config)
+def setup_command(state):
+    setup.setup(state.config)
