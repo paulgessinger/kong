@@ -2,11 +2,11 @@ import os
 import functools
 
 import pytest
-import peewee as pw
 import click
 from unittest.mock import Mock
 
 from kong.db import database
+from kong import model
 from kong.model import Folder
 import kong.setup
 import kong
@@ -16,7 +16,7 @@ import kong
 def db():
     database.init(":memory:")
     database.connect()
-    database.create_tables([Folder])
+    database.create_tables([getattr(model, m) for m in model.__all__])
     yield database
     database.close()
 

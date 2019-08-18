@@ -1,9 +1,9 @@
+from typing import Any
+
 import os
 
 import click
 import yaml
-
-from . import drivers
 
 APP_NAME = "kong"
 APP_DIR = click.get_app_dir(APP_NAME, force_posix=True)
@@ -12,10 +12,9 @@ DB_FILE = os.path.join(APP_DIR, "database.sqlite")
 
 
 class Config:
-    def __init__(self):
+    def __init__(self) -> None:
         with open(CONFIG_FILE) as f:
             self.data = yaml.safe_load(f)
-            self.driver = getattr(drivers, self.data["driver"])(self)
 
-    def __getattr__(self, key):
+    def __getattr__(self, key: str) -> Any:
         return self.data[key]

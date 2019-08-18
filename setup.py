@@ -1,7 +1,7 @@
 from setuptools import setup
 
 dev_requires = ["black"]
-tests_require = ["pytest", "coverage", "pytest-cov"]
+tests_require = ["pytest", "coverage", "pytest-cov", "mypy"]
 setup(
     name="kong",
     version="0.1.0",

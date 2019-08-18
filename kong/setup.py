@@ -1,4 +1,5 @@
 import os
+from typing import Optional, Any, Dict
 
 import yaml
 import click
@@ -8,24 +9,25 @@ from .logger import logger
 from . import drivers
 
 
-def setup(cfg):
+def setup(cfg: Optional[config.Config]) -> None:
     logger.debug("Running setup")
     if not os.path.exists(config.APP_DIR):
         os.makedirs(config.APP_DIR)
 
+    data: Dict[str, Any]
     if cfg is None:
         data = dict()
     else:
         data = dict(cfg.data)
 
-    available_drivers = [d.__name__ for d in drivers.__all__ if d != drivers.DriverBase]
+    available_drivers = [d for d in drivers.__all__]
 
-    data["driver"] = click.prompt(
-        f"Which batch system driver shall we use? ({', '.join(available_drivers)})",
-        default=data.get("driver", "LocalDriver"),
+    data["default_driver"] = click.prompt(
+        f"Which batch system driver shall we use by default? ({', '.join(available_drivers)})",
+        default=data.get("default_driver", "LocalDriver"),
     )
 
-    assert data["driver"] in available_drivers, "Please select a valid driver"
+    assert data["default_driver"] in available_drivers, "Please select a valid driver"
 
     data["logdir"] = os.path.expanduser(
         click.prompt(

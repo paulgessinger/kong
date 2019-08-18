@@ -6,6 +6,7 @@ import peewee as pw
 
 import kong
 from kong.model import Folder
+import kong.drivers
 
 
 @pytest.fixture
@@ -162,3 +163,7 @@ def test_rm(state, db):
     state.rm("alpha", confirm)
     confirm.assert_called_once()
     assert root.subfolder("alpha") is None
+
+def test_get_driver(state, db):
+    driver = state.default_driver
+    assert driver == kong.drivers.LocalDriver

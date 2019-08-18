@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+from typing import Any
 
 import click
 import coloredlogs
@@ -22,7 +23,7 @@ version = pkg_resources.require(config.APP_NAME)[0].version
 @click.option("--version", "show_version", is_flag=True)
 @click.option("-v", "--verbose", "verbosity", count=True)
 @click.pass_context
-def main(ctx, show_version, verbosity):
+def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     if verbosity == 0:
         level = logging.WARNING
     elif verbosity == 1:
@@ -51,7 +52,7 @@ def main(ctx, show_version, verbosity):
             setup.setup(None)
         except Exception as e:
             logger.error("Got error during setup", exc_info=True)
-            raise click.ClickException(e)
+            raise click.ClickException(str(e))
     else:
         logger.debug("Setup executed already")
     logger.debug("Setup completed")
@@ -67,10 +68,10 @@ def main(ctx, show_version, verbosity):
             Repl(ctx.obj).cmdloop()
         except Exception as e:
             logger.error("Exception caught", exc_info=True)
-            raise click.ClickException(e)
+            raise click.ClickException(str(e))
 
 
 @main.command("setup")
 @click.pass_obj
-def setup_command(state):
+def setup_command(state: State) -> None:
     setup.setup(state.config)

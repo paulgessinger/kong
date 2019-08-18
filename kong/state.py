@@ -1,10 +1,12 @@
 import os
+from typing import List, Callable
 
 import peewee as pw
 
-from . import config
+from . import config, drivers
 from .db import database
-from .model import *
+from . import model
+from .model import Folder
 from .logger import logger
 
 class CannotCreateError(RuntimeError):
@@ -14,12 +16,13 @@ class CannotRemoveRoot(RuntimeError):
     pass
 
 class State:
-    def __init__(self, config, cwd):
+    def __init__(self, config: config.Config, cwd: Folder) -> None:
         self.config = config
         self.cwd = cwd
+        self.default_driver = getattr(drivers, self.config.default_driver)
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> 'State':
         cfg = config.Config()
         logger.debug("Initialized config: %s", cfg.data)
 
@@ -30,13 +33,13 @@ class State:
 
         # ensure database is set up
         database.connect()
-        database.create_tables([Folder])
+        database.create_tables([getattr(model, m) for m in model.__all__])
 
         cwd = Folder.get_root()
 
         return cls(cfg, cwd)
 
-    def ls(self, path="."):
+    def ls(self, path: str=".") -> List['Folder']:
         "List the current directory content"
         logger.debug("%s", list(self.cwd.children))
         folder = Folder.find_by_path(self.cwd, path)
@@ -44,16 +47,18 @@ class State:
             raise pw.DoesNotExist()
         return folder.children
 
-    def cd(self, name="."):
+    def cd(self, name: str=".") -> None:
         if name == "":
             folder = Folder.get_root()
         else:
-            folder = Folder.find_by_path(self.cwd, name)
+            _folder = Folder.find_by_path(self.cwd, name)
+            assert _folder is not None
+            folder = _folder
         if folder is None:
             raise pw.DoesNotExist()
         self.cwd = folder
 
-    def mkdir(self, path):
+    def mkdir(self, path: str) -> None:
         head, tail = os.path.split(path)
 
         location = Folder.find_by_path(self.cwd, head)
@@ -63,7 +68,7 @@ class State:
 
         Folder.create(name=tail, parent=location)
 
-    def rm(self, name, confirm=lambda: True):
+    def rm(self, name: str, confirm: Callable[[], bool] = lambda: True) -> bool:
         if name == "/":
             raise CannotRemoveRoot()
         folder = Folder.find_by_path(self.cwd, name)

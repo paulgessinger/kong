@@ -3,6 +3,7 @@ import shlex
 import cmd
 import readline
 import os
+from typing import Any, Callable, List, Tuple, Optional
 
 import click
 import peewee as pw
@@ -15,9 +16,9 @@ from . import state
 history_file = os.path.join(APP_DIR, "history")
 
 
-def parse(f):
+def parse(f: Any) -> Callable[[str], Any]:
     @functools.wraps(f)
-    def wrapper(self, args=""):
+    def wrapper(self: Any, args: str="") -> Any:
         return f(self, *shlex.split(args))
 
     return wrapper
@@ -27,23 +28,24 @@ class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
 
-    def __init__(self, state):
+    def __init__(self, state: state.State) -> None:
         self.state = state
         super().__init__()
 
-    def precmd(self, line):
+    def precmd(self, line: str) -> str:
         logger.debug("called '%s'", line)
         return line
 
-    def onecmd(self, *args):
+    def onecmd(self, *args: str) -> bool:
         try:
             return super().onecmd(*args)
         except TypeError as e:
             click.secho(f"{e}", fg="red")
         except Exception as e:
             logger.error("Exception occured", exc_info=True)
+        return False
 
-    def complete_path(self, path):
+    def complete_path(self, path: str) -> List[str]:
         if path.endswith("/"):
             folder = Folder.find_by_path(self.state.cwd, path)
             prefix = ""
@@ -51,6 +53,7 @@ class Repl(cmd.Cmd):
             head, prefix = os.path.split(path)
             folder = Folder.find_by_path(self.state.cwd, head)
 
+        assert folder is not None
         options = []
         for child in folder.children:
             if child.name.startswith(prefix):
@@ -58,7 +61,7 @@ class Repl(cmd.Cmd):
         return options
 
     @parse
-    def do_ls(self, arg="."):
+    def do_ls(self, arg: str =".") -> None:
         "List the current directory content"
         try:
             children = self.state.ls(arg)
@@ -67,13 +70,13 @@ class Repl(cmd.Cmd):
         except pw.DoesNotExist:
             click.secho(f"Folder {arg} does not exist", fg="red")
 
-    def complete_ls(self, text, line, begidx, endidx):
+    def complete_ls(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
 
     @parse
-    def do_mkdir(self, path):
+    def do_mkdir(self, path: str) -> None:
         "Create a directory at the current location"
         try:
             self.state.mkdir(path)
@@ -84,13 +87,13 @@ class Repl(cmd.Cmd):
                 f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
             )
 
-    def complete_mkdir(self, text, line, begidx, endidx):
+    def complete_mkdir(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
 
     @parse
-    def do_cd(self, name=""):
+    def do_cd(self, name:str ="") -> None:
         # find the folder
         try:
             self.state.cd(name)
@@ -98,13 +101,13 @@ class Repl(cmd.Cmd):
             click.secho(f"Folder {name} does not exist", fg="red")
         self.prompt = f"({APP_NAME} > {self.state.cwd.path}) "
 
-    def complete_cd(self, text, line, begidx, endidx):
+    def complete_cd(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
 
     @parse
-    def do_rm(self, name):
+    def do_rm(self, name: str) -> None:
         try:
             if self.state.rm(name, lambda: click.confirm(f"Sure you want to delete {name}?")):
                 click.echo(f"{name} is gone")
@@ -113,30 +116,30 @@ class Repl(cmd.Cmd):
         except pw.DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
 
-    def complete_rm(self, text, line, begidx, endidx):
+    def complete_rm(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
 
     @parse
-    def do_cwd(self):
+    def do_cwd(self) -> None:
         "Show the current location"
         click.echo(self.state.cwd.path)
 
-    def do_exit(self, arg):
+    def do_exit(self, arg: str) -> bool:
         return True
 
-    def do_EOF(self, arg):
+    def do_EOF(self, arg: str) -> bool:
         return self.do_exit(arg)
 
-    def preloop(self):
+    def preloop(self) -> None:
         if os.path.exists(history_file):
             logger.debug("Loading history from %s", history_file)
             readline.read_history_file(history_file)
         else:
             logger.debug("No history file found")
 
-    def postloop(self):
+    def postloop(self) -> None:
         logger.debug(
             "Writing history of length %d to file %s",
             self.state.config.history_length,
@@ -145,7 +148,7 @@ class Repl(cmd.Cmd):
         readline.set_history_length(self.state.config.history_length)
         readline.write_history_file(history_file)
 
-    def cmdloop(self):
+    def cmdloop(self, intro: Optional[Any] = None) -> Any:
         print(self.intro)
         while True:
             try:
@@ -154,6 +157,6 @@ class Repl(cmd.Cmd):
             except KeyboardInterrupt:
                 print("^C")
 
-    def emptyline(self):
+    def emptyline(self) -> bool:
         # do nothing when called with empty
         pass
