@@ -10,6 +10,7 @@ import peewee as pw
 from .config import APP_NAME, APP_DIR
 from .logger import logger
 from .model import *
+from . import state
 
 history_file = os.path.join(APP_DIR, "history")
 
@@ -60,11 +61,8 @@ class Repl(cmd.Cmd):
     def do_ls(self, arg="."):
         "List the current directory content"
         try:
-            logger.debug("LS: %s", list(self.state.cwd.children))
-            folder = Folder.find_by_path(self.state.cwd, arg)
-            if folder is None:
-                raise pw.DoesNotExist()
-            for child in folder.children:
+            children = self.state.ls(arg)
+            for child in children:
                 click.echo(child.name)
         except pw.DoesNotExist:
             click.secho(f"Folder {arg} does not exist", fg="red")
@@ -77,17 +75,10 @@ class Repl(cmd.Cmd):
     @parse
     def do_mkdir(self, path):
         "Create a directory at the current location"
-        # check if exists in this folder
-        head, tail = os.path.split(path)
-
-        location = Folder.find_by_path(self.state.cwd, head)
-        if location is None:
-            click.secho(f"Cannot create folder at '{path}'", fg="red")
-            return
-        logger.debug("Attempt to create folder named '%s' in '%s'", tail, location.path)
-
         try:
-            folder = Folder.create(name=tail, parent=location)
+            self.state.mkdir(path)
+        except state.CannotCreateError:
+            click.secho(f"Cannot create folder at '{path}'", fg="red")
         except pw.IntegrityError:
             click.secho(
                 f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
@@ -102,13 +93,7 @@ class Repl(cmd.Cmd):
     def do_cd(self, name=""):
         # find the folder
         try:
-            if name == "":
-                folder = Folder.get_root()
-            else:
-                folder = Folder.find_by_path(self.state.cwd, name)
-            if folder is None:
-                raise pw.DoesNotExist()
-            self.state.cwd = folder
+            self.state.cd(name)
         except pw.DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
         self.prompt = f"({APP_NAME} > {self.state.cwd.path}) "
@@ -120,17 +105,11 @@ class Repl(cmd.Cmd):
 
     @parse
     def do_rm(self, name):
-        if name == "/":
-            click.secho("Cannot delete root folder", fg="red")
-            return
         try:
-            folder = Folder.find_by_path(self.state.cwd, name)
-            if folder is None:
-                raise pw.DoesNotExist()
-            path = folder.path
-            if click.confirm(f"Sure you want to delete {path}?"):
-                folder.delete_instance(recursive=True, delete_nullable=True)
-                click.echo(f"{path} is gone")
+            if self.state.rm(name, lambda: click.confirm(f"Sure you want to delete {name}?")):
+                click.echo(f"{name} is gone")
+        except state.CannotRemoveRoot:
+            click.secho("Cannot delete root folder", fg="red")
         except pw.DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
 

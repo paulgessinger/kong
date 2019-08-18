@@ -4,9 +4,11 @@ import functools
 import pytest
 import peewee as pw
 import click
+from unittest.mock import Mock
 
 from kong.db import database
 from kong.model import Folder
+import kong.setup
 import kong
 
 
@@ -65,3 +67,31 @@ def cli():
     cli_runner = class_()
 
     yield cli_runner
+
+
+@pytest.fixture
+def tree(db):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    f2 = root.add_folder("f2")
+    alpha = f2.add_folder("alpha")
+    beta = f2.add_folder("beta")
+    gamma = f2.add_folder("gamma")
+    delta = gamma.add_folder("delta")
+    f3 = root.add_folder("f3")
+    omega = f3.add_folder("omega")
+    return root
+
+
+@pytest.fixture
+def state(app_env, db, monkeypatch):
+    app_dir, config_path, tmp_path = app_env
+    with monkeypatch.context() as m:
+        m.setattr(
+            "click.prompt",
+            Mock(side_effect=["LocalDriver", os.path.join(app_dir, "joblog")]),
+        )
+        kong.setup.setup(None)
+    cfg = kong.config.Config()
+    _state = kong.state.State(cfg, Folder.get_root())
+    return _state
