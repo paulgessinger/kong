@@ -2,9 +2,9 @@ from typing import List, Any
 
 from abc import *
 
-from ..model import Folder, Job
-
 __all__: List[str] = ["DriverBase", "LocalDriver"]
+
+from ..model import Folder, Job
 
 
 class DriverBase(ABC):

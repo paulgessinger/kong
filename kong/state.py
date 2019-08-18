@@ -55,10 +55,9 @@ class State:
             folder = Folder.get_root()
         else:
             _folder = Folder.find_by_path(self.cwd, name)
-            assert _folder is not None
+            if _folder is None:
+                raise pw.DoesNotExist()
             folder = _folder
-        if folder is None:
-            raise pw.DoesNotExist()
         self.cwd = folder
 
     def mkdir(self, path: str) -> None:
