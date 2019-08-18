@@ -6,6 +6,7 @@ stages:
     before_script:
         - pip install -e ".[test]"
     script:
+        - mypy kong
         - pytest --cov=kong
         - coverage html
     artifacts:
