@@ -3,8 +3,8 @@ from typing import Any
 from . import DriverBase
 from ..model import *
 
-class LocalDriver(DriverBase):
 
+class LocalDriver(DriverBase):
     def __init__(self) -> None:
         print("LOCAL INIT")
         pass

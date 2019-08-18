@@ -18,7 +18,7 @@ history_file = os.path.join(APP_DIR, "history")
 
 def parse(f: Any) -> Callable[[str], Any]:
     @functools.wraps(f)
-    def wrapper(self: Any, args: str="") -> Any:
+    def wrapper(self: Any, args: str = "") -> Any:
         return f(self, *shlex.split(args))
 
     return wrapper
@@ -61,7 +61,7 @@ class Repl(cmd.Cmd):
         return options
 
     @parse
-    def do_ls(self, arg: str =".") -> None:
+    def do_ls(self, arg: str = ".") -> None:
         "List the current directory content"
         try:
             children = self.state.ls(arg)
@@ -87,13 +87,15 @@ class Repl(cmd.Cmd):
                 f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
             )
 
-    def complete_mkdir(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
+    def complete_mkdir(
+        self, text: str, line: str, begidx: int, endidx: int
+    ) -> List[str]:
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
 
     @parse
-    def do_cd(self, name:str ="") -> None:
+    def do_cd(self, name: str = "") -> None:
         # find the folder
         try:
             self.state.cd(name)
@@ -109,7 +111,9 @@ class Repl(cmd.Cmd):
     @parse
     def do_rm(self, name: str) -> None:
         try:
-            if self.state.rm(name, lambda: click.confirm(f"Sure you want to delete {name}?")):
+            if self.state.rm(
+                name, lambda: click.confirm(f"Sure you want to delete {name}?")
+            ):
                 click.echo(f"{name} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")

@@ -9,11 +9,14 @@ from . import model
 from .model import Folder
 from .logger import logger
 
+
 class CannotCreateError(RuntimeError):
     pass
 
+
 class CannotRemoveRoot(RuntimeError):
     pass
+
 
 class State:
     def __init__(self, config: config.Config, cwd: Folder) -> None:
@@ -22,7 +25,7 @@ class State:
         self.default_driver = getattr(drivers, self.config.default_driver)
 
     @classmethod
-    def get_instance(cls) -> 'State':
+    def get_instance(cls) -> "State":
         cfg = config.Config()
         logger.debug("Initialized config: %s", cfg.data)
 
@@ -39,7 +42,7 @@ class State:
 
         return cls(cfg, cwd)
 
-    def ls(self, path: str=".") -> List['Folder']:
+    def ls(self, path: str = ".") -> List["Folder"]:
         "List the current directory content"
         logger.debug("%s", list(self.cwd.children))
         folder = Folder.find_by_path(self.cwd, path)
@@ -47,7 +50,7 @@ class State:
             raise pw.DoesNotExist()
         return folder.children
 
-    def cd(self, name: str=".") -> None:
+    def cd(self, name: str = ".") -> None:
         if name == "":
             folder = Folder.get_root()
         else:

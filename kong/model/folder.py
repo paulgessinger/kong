@@ -7,6 +7,7 @@ import peewee as pw
 from ..logger import logger
 from . import BaseModel
 
+
 class Folder(BaseModel):
     folder_id = pw.AutoField()
     name = pw.CharField()
@@ -18,7 +19,7 @@ class Folder(BaseModel):
         indexes = ((("parent", "name"), True),)
 
     @classmethod
-    def create(cls, **kwargs: Any) -> 'Folder':
+    def create(cls, **kwargs: Any) -> "Folder":
         if "name" in kwargs:
             name = kwargs["name"]
             assert (
@@ -36,7 +37,7 @@ class Folder(BaseModel):
         return cast(str, os.path.join(self.parent.path, self.name))
 
     @staticmethod
-    def get_root() -> 'Folder':
+    def get_root() -> "Folder":
         folder = Folder.get_or_none(Folder.parent.is_null(), name="root")
         if folder is None:
             # bypass assertions
@@ -44,7 +45,7 @@ class Folder(BaseModel):
         return cast(Folder, folder)
 
     @staticmethod
-    def find_by_path(cwd: 'Folder', path: 'Folder') -> Optional['Folder']:
+    def find_by_path(cwd: "Folder", path: "Folder") -> Optional["Folder"]:
         if cwd == None:
             return None
         if path == "/":
