@@ -43,7 +43,7 @@ def test_setup_implicit(app_env, db, cli, monkeypatch):
     assert os.path.exists(config_path)
     cfg = kong.config.Config()
     assert cfg.default_driver == "LocalDriver"
-    assert cfg.logdir == os.path.join(app_dir, "joblog")
+    assert cfg.jobdir == os.path.join(app_dir, "jobdir")
 
     # assert db and root folder was created
     assert Folder.get_or_none(name="root", parent=None) is not None
@@ -71,7 +71,7 @@ def test_setup_explicit(app_env, db, cli):
     assert os.path.exists(config_path)
     cfg = kong.config.Config()
     assert cfg.default_driver == "LocalDriver"
-    assert cfg.logdir == os.path.join(app_dir, "joblog")
+    assert cfg.jobdir == os.path.join(app_dir, "jobdir")
 
     # assert db and root folder was created
     assert Folder.get_or_none(name="root", parent=None) is not None

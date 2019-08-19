@@ -29,15 +29,15 @@ def setup(cfg: Optional[config.Config]) -> None:
 
     assert data["default_driver"] in available_drivers, "Please select a valid driver"
 
-    data["logdir"] = os.path.expanduser(
+    data["jobdir"] = os.path.expanduser(
         click.prompt(
-            "Where is a good place to put job log files?",
-            default=data.get("logdir", os.path.join(config.APP_DIR, "joblog")),
+            "Where is a good place to put job files?",
+            default=data.get("jobdir", os.path.join(config.APP_DIR, "jobdir")),
         )
     )
 
-    if not os.path.exists(data["logdir"]):
-        os.makedirs(data["logdir"])
+    if not os.path.exists(data["jobdir"]):
+        os.makedirs(data["jobdir"])
 
     data["history_length"] = data.get("history_length", 1000)
 

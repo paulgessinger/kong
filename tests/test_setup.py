@@ -26,13 +26,13 @@ def test_setup(app_env, monkeypatch):
     with open(config_path) as f:
         data = yaml.safe_load(f)
     assert data["default_driver"] == "LocalDriver"
-    assert data["logdir"] == os.path.join(tmp_path, "jobs")
+    assert data["jobdir"] == os.path.join(tmp_path, "jobs")
     assert "history_length" in data
 
     # re-run setup
     cfg = kong.config.Config()
     assert cfg.data == data
-    assert cfg.logdir == os.path.join(tmp_path, "jobs")
+    assert cfg.jobdir == os.path.join(tmp_path, "jobs")
 
     with monkeypatch.context() as m:
         prompt = Mock(side_effect=["LocalDriver", os.path.join(tmp_path, "jobs_new")])
@@ -49,7 +49,7 @@ def test_setup(app_env, monkeypatch):
     with open(config_path) as f:
         data = yaml.safe_load(f)
     assert data["default_driver"] == "LocalDriver"  # still the same
-    assert data["logdir"] == os.path.join(tmp_path, "jobs_new")  # this has changed
+    assert data["jobdir"] == os.path.join(tmp_path, "jobs_new")  # this has changed
 
 
 def test_setup_invalid_driver(app_env, monkeypatch):

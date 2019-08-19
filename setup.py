@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup # type: ignore
 
 dev_requires = ["black"]
 tests_require = ["pytest", "coverage", "pytest-cov", "mypy"]
@@ -19,6 +19,7 @@ setup(
         "peewee",
         "coloredlogs",
         "humanfriendly",
+        "fs",
     ],
     tests_require=tests_require,
     extras_require={"dev": dev_requires, "test": tests_require},

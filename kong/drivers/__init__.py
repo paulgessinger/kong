@@ -1,23 +1,23 @@
-from typing import List, Any
+from typing import List, Any, Union, TYPE_CHECKING
 
 from abc import *
 
-__all__: List[str] = ["DriverBase", "LocalDriver"]
+__all__: List[str] = ["LocalDriver"]
+
+Driver = Union["LocalDriver"]
 
 from ..model import Folder, Job
+from ..config import Config
 
 
 class DriverBase(ABC):
-    def __init__(self) -> None:
-        raise TypeError("Driver classes cannot be instantiated")
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> None:
-        raise TypeError("Driver classes cannot be instantiated")
-
-    @classmethod
     @abstractmethod
-    def create_job(self, folder: Folder, *args: Any, **kwargs: Any) -> Job:
+    def __init__(self, config: Config) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def create_job(self, folder: 'Folder', command: str, cores: int, *args: Any, **kwargs: Any) -> 'Job':
         raise NotImplemented()
 
 
-from .local_driver import LocalDriver, Job
+from .local_driver import LocalDriver
