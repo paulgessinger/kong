@@ -1,4 +1,5 @@
-from typing import List, Any, Union, TYPE_CHECKING
+from contextlib import _GeneratorContextManager
+from typing import List, Any, Union, Optional, ContextManager
 
 from abc import *
 
@@ -17,6 +18,34 @@ class DriverBase(ABC):
 
     @abstractmethod
     def create_job(self, folder: 'Folder', command: str, cores: int, *args: Any, **kwargs: Any) -> 'Job':
+        raise NotImplemented()
+
+    @abstractmethod
+    def sync_status(self, job: Job) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def kill(self, job: Job) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def wait(self, job: Union[Job, List[Job]], timeout: Optional[int] = None) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def submit(self, job: Job) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def stdout(self, job: Job) -> ContextManager[None]:
+        raise NotImplemented()
+
+    @abstractmethod
+    def stderr(self, job: Job) -> ContextManager[None]:
+        raise NotImplemented()
+
+    @abstractmethod
+    def resubmit(self, job: Job) -> None:
         raise NotImplemented()
 
 
