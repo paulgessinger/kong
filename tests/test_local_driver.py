@@ -6,7 +6,7 @@ import psutil
 import pytest
 from unittest.mock import Mock
 
-from kong.drivers import LocalDriver
+from kong.drivers import LocalDriver, DriverMismatch
 import kong
 from kong.model import Folder, Job
 
@@ -78,9 +78,68 @@ def test_create_job(driver, tree, state):
     assert j1.batch_job_id != j2.batch_job_id
 
 
-import logging
+class ValidDriver(kong.drivers.DriverBase):
+    def __init__(self):
+        pass
 
-logging.getLogger("kong").setLevel(logging.DEBUG)
+
+def test_driver_mismatch(driver, state, monkeypatch):
+    root = Folder.get_root()
+
+    monkeypatch.setattr("kong.drivers.DriverBase.__abstractmethods__", set())
+
+    j1 = Job.create(folder=root, command="sleep 1", driver=ValidDriver)
+    assert j1.driver == ValidDriver
+
+    # updating with local driver does not work
+    with pytest.raises(DriverMismatch):
+        driver.sync_status(j1)
+
+    j2 = Job.get(j1.job_id)
+    with pytest.raises(DriverMismatch):
+        j2.ensure_driver_instance(driver)
+
+
+def test_job_rm_deletes_jobdir(driver, state):
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    assert j1 is not None
+    assert os.path.exists(
+        os.path.join(state.config.jobdir, j1.batch_job_id)
+    ), "Does not create job directory"
+    j1.delete_instance()
+    assert not os.path.exists(
+        os.path.join(state.config.jobdir, j1.batch_job_id)
+    ), "Driver does not cleanup job directory"
+
+
+def test_job_cleanup_status(driver, state):
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    assert j1 is not None
+    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+    j1.status = Job.Status.RUNNING
+    j1.save()
+    with pytest.raises(AssertionError):
+        driver.cleanup(j1)
+    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+    j1.status = Job.Status.SUBMITTED
+    j1.save()
+    with pytest.raises(AssertionError):
+        driver.cleanup(j1)
+    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+
+    for status in [
+        Job.Status.CREATED,
+        Job.Status.FAILED,
+        Job.Status.COMPLETED,
+        Job.Status.UNKOWN,
+    ]:
+        j = driver.create_job(command="sleep 1", folder=state.cwd)
+        assert j is not None
+        j.status = status
+        j.save()
+        assert os.path.exists(os.path.join(state.config.jobdir, j.batch_job_id))
+        driver.cleanup(j)
+        assert not os.path.exists(os.path.join(state.config.jobdir, j.batch_job_id))
 
 
 def test_job_env_is_valid(driver, state):

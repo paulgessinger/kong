@@ -17,7 +17,9 @@ from typing import (
 import peewee as pw
 from playhouse.sqlite_ext import JSONField  # type: ignore
 
-from kong.model import Folder
+from kong.drivers import DriverMismatch
+from ..config import Config
+from ..model import Folder
 from ..logger import logger
 from . import BaseModel
 from .. import drivers
@@ -39,9 +41,33 @@ class EnumField(pw.IntegerField):
 def with_driver(f: Any) -> Any:
     @wraps(f)
     def wrapper(self: "Job", *args: Any, **kwargs: Any) -> Any:
+        assert (
+            self._driver_instance is not None
+        ), "Cannot call this method without a driver instance"
         return f(self, self._driver_instance, *args, **kwargs)
 
     return wrapper
+
+
+class DriverField(pw.CharField):
+    def __init__(self, *args: Any, **kwargs: Any):
+        return super().__init__(*args, **kwargs)
+
+    def db_value(self, value: Any):
+        assert issubclass(value, drivers.DriverBase)
+        class_name = ".".join([value.__module__, value.__name__])
+        return class_name
+
+    def python_value(selfself, value: str):
+        import importlib
+
+        components = value.split(".")
+        module_name = ".".join(components[:-1])
+        class_name = components[-1]
+
+        module = importlib.import_module(module_name)
+        class_ = getattr(module, class_name)
+        return class_
 
 
 class Job(BaseModel):
@@ -71,23 +97,62 @@ class Job(BaseModel):
         batch_job_id = pw.CharField(
             index=True, null=True
         )  # can be null, some drivers only know after submission
-        driver = EnumField(choices=drivers.__all__, null=False)
+        # driver = EnumField(choices=drivers.__all__, null=False)
+        driver = DriverField(null=False)
         folder = pw.ForeignKeyField(Folder, null=False, backref="jobs")
         command = pw.CharField(null=False)  # should allow arbitrary length in sqlite
         data = JSONField(default={})
+        cores = pw.IntegerField(null=False, default=1)
         status = EnumField(choices=Status, null=False, default=Status.CREATED)
 
-    _driver_instance: Optional[drivers.Driver]
+    _driver_instance: Optional[drivers.Driver] = None
+
+    def ensure_driver_instance(self, arg: Union[drivers.Driver, Config]) -> None:
+        if self._driver_instance is not None:
+            return
+        self.driver_instance = arg
+
+    @property
+    def driver_instance(self) -> drivers.Driver:
+        assert self._driver_instance is not None
+        return self._driver_instance
+
+    @driver_instance.setter
+    def driver_instance(self, arg: Union[drivers.Driver, Config]) -> None:
+        assert self._driver_instance is None, "Resetting driver instance not possible"
+        if isinstance(arg, Config):
+            self._driver_instance = self.driver(arg)
+        else:
+            if not isinstance(arg, self.driver):
+                raise DriverMismatch(
+                    f"Given driver {arg} is not instance of {self.driver}"
+                )
+            self._driver_instance = arg
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        assert self.driver in drivers.__all__, f"{self.driver} is not a valid driver"
+        # assert self.driver in drivers.__all__, f"{self.driver} is not a valid driver"
         assert self.command is not None, "Need to specify a command"
         assert len(self.command) > 0, "Command must be longer than 0"
         super().save(*args, **kwargs)
 
+    def delete_instance(self, **kwargs: Any) -> None:
+        assert (
+            self._driver_instance is not None
+        ), f"Cannot delete job {self} without driver instance, cleanup would be skipped"
+        self._driver_instance.cleanup(self)
+        return super().delete_instance(**kwargs)
+
+    @property
+    def jobdir(self) -> str:
+        return self.data["jobdir"]
+
     @with_driver
     def submit(self, driver: drivers.Driver) -> Any:
         driver.submit(self)
+
+    @with_driver
+    def resubmit(self, driver: drivers.Driver) -> Any:
+        driver.resubmit(self)
 
     @with_driver
     def wait(self, driver: drivers.Driver, timeout: Optional[int] = None) -> None:
@@ -99,6 +164,7 @@ class Job(BaseModel):
 
     @with_driver
     def get_status(self, driver: drivers.Driver) -> Status:
+        self.reload()
         driver.sync_status(self)
         return self.status
 
@@ -119,3 +185,6 @@ class Job(BaseModel):
     @property
     def is_done(self) -> bool:
         return self.status not in (Job.Status.RUNNING, Job.Status.SUBMITTED)
+
+    def __str__(self):
+        return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"

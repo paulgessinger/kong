@@ -7,6 +7,15 @@ __all__: List[str] = ["LocalDriver"]
 
 Driver = Union["LocalDriver"]
 
+
+class InvalidJobStatus(BaseException):
+    pass
+
+
+class DriverMismatch(BaseException):
+    pass
+
+
 from ..model import Folder, Job
 from ..config import Config
 
@@ -52,6 +61,10 @@ class DriverBase(ABC):
 
     @abstractmethod
     def resubmit(self, job: Job) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def cleanup(self, job: Job) -> None:
         raise NotImplemented()
 
 

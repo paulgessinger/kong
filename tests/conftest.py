@@ -70,17 +70,45 @@ def cli():
 
 
 @pytest.fixture
-def tree(db):
+def tree(db, state):
+
     root = Folder.get_root()
+
     f1 = root.add_folder("f1")
     f2 = root.add_folder("f2")
+
     alpha = f2.add_folder("alpha")
     beta = f2.add_folder("beta")
+
     gamma = f2.add_folder("gamma")
     delta = gamma.add_folder("delta")
     f3 = root.add_folder("f3")
     omega = f3.add_folder("omega")
     return root
+
+
+@pytest.fixture
+def sample_jobs(tree, state):
+    driver = state.default_driver
+    jobs = []
+    job = lambda f: jobs.append(
+        driver.create_job(command="sleep 0.1", folder=Folder.find_by_path(state.cwd, f))
+    )
+    root = tree
+
+    for i in range(3):
+        job("/")
+
+    for i in range(4):
+        job("/f1")
+
+    for i in range(4):
+        job("/f2")
+
+    for i in range(2):
+        job("/f2/beta")
+
+    return jobs
 
 
 @pytest.fixture

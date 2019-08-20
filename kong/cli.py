@@ -59,7 +59,6 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
 
     inst = State.get_instance()
 
-    # ctx.ensure_object(config.Config)
     ctx.obj = inst
 
     if ctx.invoked_subcommand is None:

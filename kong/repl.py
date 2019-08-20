@@ -1,3 +1,4 @@
+import argparse
 import functools
 import shlex
 import cmd
@@ -8,6 +9,8 @@ from typing import Any, Callable, List, Tuple, Optional
 import click
 import peewee as pw
 
+from kong.drivers import DriverBase
+from kong.state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
 from .model import *
@@ -41,7 +44,7 @@ class Repl(cmd.Cmd):
             return super().onecmd(*args)
         except TypeError as e:
             click.secho(f"{e}", fg="red")
-        except Exception as e:
+        except BaseException as e:
             logger.error("Exception occured", exc_info=True)
         return False
 
@@ -60,13 +63,25 @@ class Repl(cmd.Cmd):
                 options.append(child.name + "/")
         return options
 
-    @parse
-    def do_ls(self, arg: str = ".") -> None:
+    def do_ls(self, arg: str = "") -> None:
         "List the current directory content"
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("dir", default=".", nargs="?")
+        p.add_argument("--refresh", "-r", action="store_true")
+
         try:
-            children = self.state.ls(arg)
-            for child in children:
-                click.echo(child.name)
+            args = p.parse_args(argv)
+            folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
+            for folder in folders:
+                click.echo(folder.name)
+            for job in jobs:
+                click.echo(str(job))
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
         except pw.DoesNotExist:
             click.secho(f"Folder {arg} does not exist", fg="red")
 
@@ -117,7 +132,7 @@ class Repl(cmd.Cmd):
                 click.echo(f"{name} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")
-        except pw.DoesNotExist:
+        except DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
 
     def complete_rm(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
@@ -129,6 +144,91 @@ class Repl(cmd.Cmd):
     def do_cwd(self) -> None:
         "Show the current location"
         click.echo(self.state.cwd.path)
+
+    def do_create_job(self, args: str):
+        argv = shlex.split(args)
+        p = argparse.ArgumentParser()
+        p.add_argument("--cores", "-c", type=int, default=1)
+        p.add_argument("command", nargs=argparse.REMAINDER)
+
+        try:
+            args = p.parse_args(argv)
+            if len(args.command) == 0:
+                click.secho("Please provide a command to run", fg="red")
+                p.print_help()
+                return
+            if args.command[0] == "--":
+                del args.command[0]
+            args.command = " ".join(args.command)
+
+            job = self.state.create_job(**vars(args))
+            click.secho(f"Created job {job}")
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_submit_job(self, args: str):
+        argv = shlex.split(args)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            self.state.submit_job(args.job_id)
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_kill_job(self, args: str):
+        argv = shlex.split(args)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            self.state.kill_job(args.job_id)
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_resubmit_job(self, args: str):
+        argv = shlex.split(args)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            self.state.resubmit_job(args.job_id)
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_status(self, args: str):
+        argv = shlex.split(args)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            job = self.state.get_job(args.job_id)
+            if job is None:
+                click.secho(f"Job {args.job_id} was not found", fg="red")
+                return
+
+            job.get_status()
+            click.echo(f"{job}")
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
 
     def do_exit(self, arg: str) -> bool:
         return True

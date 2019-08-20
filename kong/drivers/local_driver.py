@@ -1,3 +1,5 @@
+import functools
+import shutil
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime, timedelta
@@ -24,7 +26,7 @@ import psutil
 from ..model import Folder, Job
 from ..logger import logger
 from ..config import Config
-from . import DriverBase
+from . import DriverBase, DriverMismatch, InvalidJobStatus
 
 jobscript_tpl = """
 #!/usr/bin/env bash
@@ -52,8 +54,13 @@ echo $? > {exit_status_file}
 """.strip()
 
 
-class InvalidJobStatus(BaseException):
-    pass
+def checked_job(f: Any):
+    @functools.wraps(f)
+    def wrapper(self: Any, job: Job, *args: Any, **kwargs: Any) -> Any:
+        self._check_driver(job)
+        return f(self, job, *args, **kwargs)
+
+    return wrapper
 
 
 class LocalDriver(DriverBase):
@@ -101,14 +108,15 @@ class LocalDriver(DriverBase):
             exit_status_file=exit_status_file,
             jobscript=scriptpath,
             output_dir=output_dir,
-            nproc=cores,
+            jobdir=jobdir,
         )
 
         job: Job = Job.create(
             folder=folder,
             batch_job_id=batch_job_id,
             command=command,
-            driver=self.__class__.__name__,
+            driver=self.__class__,
+            cores=cores,
             data=data,
         )
 
@@ -131,8 +139,28 @@ class LocalDriver(DriverBase):
         job._driver_instance = self
         return job
 
-    def sync_status(self, job: Job) -> None:
+    def cleanup(self, job: Job) -> None:
+        assert job.status in (
+            Job.Status.CREATED,
+            Job.Status.FAILED,
+            Job.Status.COMPLETED,
+            Job.Status.UNKOWN,
+        ), f"Cannot clean up job {job} in {job.status}, please kill first"
 
+        logger.debug("Removing job output directory for job %s", job)
+        jobdir = job.data["jobdir"]
+        if os.path.exists(jobdir):
+            shutil.rmtree(jobdir)
+
+    def _check_driver(self, job: Job) -> None:
+        # check if we're the right driver for this
+        if not isinstance(self, job.driver):
+            raise DriverMismatch(
+                f"Job {job} is has driver {job.driver}, not {self.__class__}"
+            )
+
+    @checked_job
+    def sync_status(self, job: Job) -> None:
         if job.status not in (Job.Status.RUNNING, Job.Status.SUBMITTED):
             logger.debug(
                 "Job %s is neither RUNNING nor SUBMITTED (%s), so no status changes without intervention",
@@ -192,6 +220,7 @@ class LocalDriver(DriverBase):
         for job in jobs:
             self.sync_status(job)
 
+    @checked_job
     def kill(self, job: Job) -> None:
         self.sync_status(job)
         if job.status == Job.Status.CREATED:
@@ -210,6 +239,7 @@ class LocalDriver(DriverBase):
         else:
             logger.debug("Job %s in %s, do nothing")
 
+    @checked_job
     def submit(self, job: Job) -> None:
         self.sync_status(job)
         if job.status > Job.Status.CREATED:
@@ -238,6 +268,7 @@ class LocalDriver(DriverBase):
         job.save()
         logger.debug("Submitted job as %s", job)
 
+    @checked_job
     @contextmanager  # type: ignore
     def stdout(self, job: Job) -> ContextManager[None]:
         self.sync_status(job)
@@ -247,6 +278,7 @@ class LocalDriver(DriverBase):
         with open(job.data["stdout"], "r") as fh:
             yield fh
 
+    @checked_job
     @contextmanager  # type: ignore
     def stderr(self, job: Job) -> ContextManager[None]:
         self.sync_status(job)
@@ -256,6 +288,7 @@ class LocalDriver(DriverBase):
         with open(job.data["stderr"], "r") as fh:
             yield fh
 
+    @checked_job
     def _wait_single(self, job: Job, timeout: Optional[int] = None) -> None:
         logger.debug("Wait for job %s requested", job)
         self.sync_status(job)
@@ -282,6 +315,7 @@ class LocalDriver(DriverBase):
         for job in jobs:
             self._wait_single(job, timeout=timeout)
 
+    @checked_job
     def resubmit(self, job: Job) -> None:
         self.sync_status(job)
         if job.status not in (

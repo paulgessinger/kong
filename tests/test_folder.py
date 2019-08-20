@@ -52,6 +52,12 @@ def test_create_name_unique(db):
     assert f1.add_folder("f1").name == "f1"
 
 
+def test_create_name_validate(db):
+    root = Folder.get_root()
+    with pytest.raises(AssertionError):
+        Folder.create(name="123", parent=root)
+
+
 def test_get_subfolder(db):
     root = Folder.get_root()
 

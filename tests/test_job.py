@@ -1,10 +1,16 @@
+from unittest.mock import Mock
+
 import pytest
 
+from kong import config
+from kong.drivers import LocalDriver
+import kong.drivers
 from kong.model import Job
 import peewee as pw
 
+
 def test_create(tree):
-    j1 = Job.create(batch_job_id=42, folder=tree, command="sleep 2", driver="LocalDriver")
+    j1 = Job.create(batch_job_id=42, folder=tree, command="sleep 2", driver=LocalDriver)
     assert j1.job_id is not None
     job = Job.get(batch_job_id=42)
     assert job == j1
@@ -14,14 +20,74 @@ def test_create(tree):
     assert j1.command == "sleep 2"
 
     with pytest.raises(pw.IntegrityError):
-        Job.create(batch_job_id=42, command="sleep 4", folder=tree, driver="LocalDriver")
-    assert Job.create(batch_job_id=43, folder=tree, command="sleep 4", driver="LocalDriver") is not None
-
+        Job.create(batch_job_id=42, command="sleep 4", folder=tree, driver=LocalDriver)
+    assert (
+        Job.create(batch_job_id=43, folder=tree, command="sleep 4", driver=LocalDriver)
+        is not None
+    )
 
     f2 = tree.subfolder("f2")
-    j2 = Job.create(batch_job_id=44, folder=f2, command="sleep 4", driver="LocalDriver")
+    j2 = Job.create(batch_job_id=44, folder=f2, command="sleep 4", driver=LocalDriver)
     assert j2 is not None
     assert j2.command == "sleep 4"
     assert len(f2.jobs) == 1
     assert f2.jobs[0] == j2
     assert j2.folder == f2
+
+
+def test_set_driver(state, monkeypatch):
+    j1 = Job.create(
+        batch_job_id=42, folder=state.cwd, command="sleep 2", driver=LocalDriver
+    )
+
+    driver = LocalDriver(state.config)
+
+    class DummyDriver:
+        pass
+
+    j1.driver_instance = driver
+    assert j1.driver_instance == driver
+
+    with pytest.raises(AssertionError):
+        j1.driver_instance = DummyDriver()
+    assert not isinstance(j1.driver_instance, DummyDriver)
+
+    # bypass interface
+    monkeypatch.setattr("kong.drivers.DriverBase.__abstractmethods__", set())
+
+    class ValidDriver(kong.drivers.DriverBase):
+        def __init__(self):
+            pass
+
+    with pytest.raises(AssertionError):
+        j1.driver_instance = ValidDriver()
+    assert not isinstance(j1.driver_instance, ValidDriver)
+
+    j2 = Job.create(
+        batch_job_id=42, folder=state.cwd, command="sleep 2", driver=ValidDriver
+    )
+
+    valid_driver = ValidDriver()
+    j2.driver_instance = valid_driver
+    assert j2.driver_instance == valid_driver
+
+    with pytest.raises(AssertionError):
+        j2.driver_instance = driver
+    assert not isinstance(j2.driver_instance, LocalDriver)
+
+
+def test_rm(tree):
+    root = tree
+
+    j1 = Job.create(folder=tree, command="sleep 1", driver=LocalDriver)
+
+    pseudo_driver = Mock()
+    pseudo_driver.cleanup = Mock()
+    j1._driver_instance = pseudo_driver
+
+    assert j1.folder == root
+    assert len(root.jobs) == 1 and root.jobs[0] == j1
+    j1.delete_instance()
+    assert len(root.jobs) == 0
+
+    pseudo_driver.cleanup.assert_called_once_with(j1)

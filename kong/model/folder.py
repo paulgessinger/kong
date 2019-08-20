@@ -29,7 +29,9 @@ class Folder(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._ignore_save_assert:
             assert (
-                self.name not in (".", "..", "") and "/" not in self.name
+                self.name not in (".", "..", "")
+                and "/" not in self.name
+                and not self.name.isdigit()
             ), f"Invalid folder name '{self.name}'"
             assert self.parent is not None, "Need to specify a parent folder"
         self._ignore_save_assert = False
@@ -72,16 +74,13 @@ class Folder(BaseModel):
         if head == "..":
             return Folder.find_by_path(cwd.parent, tail)
         else:
-            # if head != "":
-            return Folder.find_by_path(cwd.subfolder(head), tail)
-            # else:
-            # return Folder.find_by_path(cwd, tail)
+            return Folder.find_by_path(cast(Folder, cwd.subfolder(head)), tail)
 
-    def __truediv__(self, name: str) -> "Folder":
+    def __truediv__(self, name: str) -> Optional["Folder"]:
         return self.subfolder(name)
 
     def add_folder(self, name: str) -> "Folder":
         return Folder.create(name=name, parent=self)
 
-    def subfolder(self, name: str) -> "Folder":
+    def subfolder(self, name: str) -> Optional["Folder"]:
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
