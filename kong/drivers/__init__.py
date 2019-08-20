@@ -17,7 +17,9 @@ class DriverBase(ABC):
         raise NotImplemented()
 
     @abstractmethod
-    def create_job(self, folder: 'Folder', command: str, cores: int, *args: Any, **kwargs: Any) -> 'Job':
+    def create_job(
+        self, folder: "Folder", command: str, cores: int, *args: Any, **kwargs: Any
+    ) -> "Job":
         raise NotImplemented()
 
     @abstractmethod

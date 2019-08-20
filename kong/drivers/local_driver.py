@@ -6,7 +6,17 @@ import time
 from contextlib import contextmanager, _GeneratorContextManager
 from shutil import rmtree
 from subprocess import Popen
-from typing import Any, Optional, IO, Iterator, ContextManager, Union, List, Generator, Iterable
+from typing import (
+    Any,
+    Optional,
+    IO,
+    Iterator,
+    ContextManager,
+    Union,
+    List,
+    Generator,
+    Iterable,
+)
 import uuid
 
 import psutil
@@ -60,7 +70,9 @@ class LocalDriver(DriverBase):
         logger.debug("Opening jobdir filesystem at %s", self.config.jobdir)
         assert os.path.exists(self.config.jobdir)
 
-    def create_job(self, folder: Folder, command: str, cores: int = 1, *args: Any, **kwargs: Any) -> Job:
+    def create_job(
+        self, folder: Folder, command: str, cores: int = 1, *args: Any, **kwargs: Any
+    ) -> Job:
         assert len(args) == 0 and len(kwargs) == 0, "No extra arguments allowed"
         batch_job_id = str(uuid.uuid1())
 
@@ -72,11 +84,15 @@ class LocalDriver(DriverBase):
         output_dir = os.path.abspath(os.path.join(jobdir, "output"))
         os.makedirs(output_dir)
 
-        stdout = os.path.abspath(os.path.join(self.config.jobdir, batch_job_id, "stdout.txt"))
-        stderr = os.path.abspath(os.path.join(self.config.jobdir, batch_job_id, "stderr.txt"))
-        exit_status_file = os.path.abspath(os.path.join(
-            self.config.jobdir, batch_job_id, "exit_status.txt"
-        ))
+        stdout = os.path.abspath(
+            os.path.join(self.config.jobdir, batch_job_id, "stdout.txt")
+        )
+        stderr = os.path.abspath(
+            os.path.join(self.config.jobdir, batch_job_id, "stderr.txt")
+        )
+        exit_status_file = os.path.abspath(
+            os.path.join(self.config.jobdir, batch_job_id, "exit_status.txt")
+        )
         scriptpath = os.path.join(jobdir, "jobscript.sh")
 
         data = dict(
@@ -85,7 +101,7 @@ class LocalDriver(DriverBase):
             exit_status_file=exit_status_file,
             jobscript=scriptpath,
             output_dir=output_dir,
-            nproc=cores
+            nproc=cores,
         )
 
         job: Job = Job.create(
@@ -93,7 +109,7 @@ class LocalDriver(DriverBase):
             batch_job_id=batch_job_id,
             command=command,
             driver=self.__class__.__name__,
-            data=data
+            data=data,
         )
 
         values = dict(
@@ -118,8 +134,11 @@ class LocalDriver(DriverBase):
     def sync_status(self, job: Job) -> None:
 
         if job.status not in (Job.Status.RUNNING, Job.Status.SUBMITTED):
-            logger.debug("Job %s is neither RUNNING nor SUBMITTED (%s), so no status changes without intervention", job,
-                         job.status)
+            logger.debug(
+                "Job %s is neither RUNNING nor SUBMITTED (%s), so no status changes without intervention",
+                job,
+                job.status,
+            )
             return
 
         logger.debug("Job %s in status %s, checking for updates", job, job.status)
@@ -128,7 +147,9 @@ class LocalDriver(DriverBase):
 
         def check_exit_code() -> None:
             if not os.path.exists(exit_status_file):
-                logger.debug("Job %s appears to have exited, but exit status file is not present")
+                logger.debug(
+                    "Job %s appears to have exited, but exit status file is not present"
+                )
                 job.status = Job.Status.UNKOWN
             else:
                 with open(exit_status_file, "r") as fh:
@@ -147,8 +168,10 @@ class LocalDriver(DriverBase):
             if proc.is_running():
                 # is running, but is it zombie waiting to be reaped?
                 if proc.status() == psutil.STATUS_ZOMBIE:
-                    logger.debug("Job %s with pid %s is running but zombie, reaping", job, pid)
-                    proc.wait() # reaping
+                    logger.debug(
+                        "Job %s with pid %s is running but zombie, reaping", job, pid
+                    )
+                    proc.wait()  # reaping
                     logger.debug("Reaped pid %d", pid)
                     check_exit_code()
                 else:
@@ -176,7 +199,9 @@ class LocalDriver(DriverBase):
             job.status = Job.Status.FAILED
             job.save()
         elif job.status in (Job.Status.RUNNING, Job.Status.SUBMITTED):
-            logger.debug("Job %s in %s, killing pid %d", job, job.status, job.data["pid"])
+            logger.debug(
+                "Job %s in %s, killing pid %d", job, job.status, job.data["pid"]
+            )
             proc = psutil.Process(job.data["pid"])
             proc.kill()
             proc.wait()
@@ -184,7 +209,6 @@ class LocalDriver(DriverBase):
             job.save()
         else:
             logger.debug("Job %s in %s, do nothing")
-
 
     def submit(self, job: Job) -> None:
         self.sync_status(job)
@@ -204,7 +228,6 @@ class LocalDriver(DriverBase):
                 logger.debug("Removing %s", path)
                 os.remove(path)
 
-
         cmd = ["/usr/bin/env", "bash", job.data["jobscript"]]
         logger.debug("About to submit job with command: %s", str(cmd))
 
@@ -215,7 +238,7 @@ class LocalDriver(DriverBase):
         job.save()
         logger.debug("Submitted job as %s", job)
 
-    @contextmanager # type: ignore
+    @contextmanager  # type: ignore
     def stdout(self, job: Job) -> ContextManager[None]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
@@ -224,7 +247,7 @@ class LocalDriver(DriverBase):
         with open(job.data["stdout"], "r") as fh:
             yield fh
 
-    @contextmanager # type: ignore
+    @contextmanager  # type: ignore
     def stderr(self, job: Job) -> ContextManager[None]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
@@ -237,7 +260,11 @@ class LocalDriver(DriverBase):
         logger.debug("Wait for job %s requested", job)
         self.sync_status(job)
         if job.status not in (Job.Status.SUBMITTED, Job.Status.RUNNING):
-            logger.info("Job %s is in status %s, neither SUBMITTED nor RUNNING, wait will not complete, returning now", job, job.status)
+            logger.info(
+                "Job %s is in status %s, neither SUBMITTED nor RUNNING, wait will not complete, returning now",
+                job,
+                job.status,
+            )
             return
 
         proc = psutil.Process(pid=job.data["pid"])
@@ -257,12 +284,17 @@ class LocalDriver(DriverBase):
 
     def resubmit(self, job: Job) -> None:
         self.sync_status(job)
-        if job.status not in (Job.Status.COMPLETED, Job.Status.FAILED, Job.Status.UNKOWN):
+        if job.status not in (
+            Job.Status.COMPLETED,
+            Job.Status.FAILED,
+            Job.Status.UNKOWN,
+        ):
             logger.error("Will not resubmit job %s in status %s", job, job.status)
-            raise InvalidJobStatus(f"Will not resubmit job {job} in status {job.status}")
+            raise InvalidJobStatus(
+                f"Will not resubmit job {job} in status {job.status}"
+            )
 
         self.kill(job)
         job.status = Job.Status.CREATED
         job.save()
         self.submit(job)
-

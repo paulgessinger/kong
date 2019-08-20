@@ -29,14 +29,13 @@ class Folder(BaseModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._ignore_save_assert:
             if "name" in kwargs:
-                    name = kwargs["name"]
-                    assert (
-                        name not in (".", "..", "") and "/" not in name
-                    ), f"Invalid folder name '{name}'"
+                name = kwargs["name"]
+                assert (
+                    name not in (".", "..", "") and "/" not in name
+                ), f"Invalid folder name '{name}'"
             assert self.parent is not None, "Need to specify a parent folder"
         self._ignore_save_assert = False
         return super().save(*args, **kwargs)
-
 
     @property
     def path(self) -> str:

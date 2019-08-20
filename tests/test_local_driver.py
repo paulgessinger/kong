@@ -77,8 +77,37 @@ def test_create_job(driver, tree, state):
 
     assert j1.batch_job_id != j2.batch_job_id
 
+
 import logging
+
 logging.getLogger("kong").setLevel(logging.DEBUG)
+
+
+def test_job_env_is_valid(driver, state):
+    root = Folder.get_root()
+
+    def run_get_env(**kwargs):
+        j1 = driver.create_job(folder=root, command="env", **kwargs)
+        j1.submit()
+        j1.wait()
+        env = {}
+        with j1.stdout() as fh:
+            raw = fh.read().strip().split("\n")
+            for line in raw:
+                k, v = line.split("=", 1)
+                env[k] = v
+        return j1, env
+
+    job, env = run_get_env()
+    assert env["KONG_JOB_NPROC"] == "1"
+    assert env["KONG_JOB_ID"] == str(job.job_id)
+    assert env["KONG_JOB_OUTPUT_DIR"] == job.data["output_dir"]
+
+    job, env = run_get_env(cores=8)
+    assert env["KONG_JOB_NPROC"] == "8"
+    assert env["KONG_JOB_ID"] == str(job.job_id)
+    assert env["KONG_JOB_OUTPUT_DIR"] == job.data["output_dir"]
+
 
 def test_run_job(driver, state, db):
     root = Folder.get_root()
@@ -92,7 +121,6 @@ def test_run_job(driver, state, db):
     driver.submit(j1)
     assert j1.status == Job.Status.SUBMITTED
 
-
     print("WAIT")
     driver.wait(j1, timeout=2)
     print("WAIT DONE")
@@ -103,6 +131,7 @@ def test_run_job(driver, state, db):
         out = so.read().strip()
 
     assert out == value
+
 
 def test_run_stdout_stderr(driver, state):
     root = Folder.get_root()
@@ -123,6 +152,7 @@ def test_run_stdout_stderr(driver, state):
     with j1.stdout() as fh:
         assert fh.read().strip() == value
 
+
 def test_run_job_already_completed(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'hi'", folder=root)
@@ -137,6 +167,7 @@ def test_run_job_already_completed(driver, state):
     driver.wait(j1)
     assert j1.status == Job.Status.COMPLETED
 
+
 def test_run_job_timeout(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="sleep 0.3", folder=root)
@@ -148,6 +179,7 @@ def test_run_job_timeout(driver, state):
     time.sleep(0.3)
     driver.wait(j1, timeout=0.1)
     assert j1.status == Job.Status.COMPLETED
+
 
 def test_run_failed(driver, state):
     root = Folder.get_root()
@@ -166,6 +198,7 @@ def test_run_failed(driver, state):
     assert j2.status == Job.Status.FAILED
     assert j2.data["exit_code"] == 127
 
+
 def test_run_killed(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="sleep 10", folder=root)
@@ -175,6 +208,7 @@ def test_run_killed(driver, state):
     j1.wait()
     assert j1.status == Job.Status.UNKOWN
 
+
 def test_run_terminated(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
@@ -183,11 +217,14 @@ def test_run_terminated(driver, state):
     time.sleep(0.2)
     driver.sync_status(j1)
     assert j1.status == Job.Status.RUNNING
-    for child in proc.children(recursive=True):  # or parent.children() for recursive=False
+    for child in proc.children(
+        recursive=True
+    ):  # or parent.children() for recursive=False
         child.terminate()
     proc.terminate()
     j1.wait()
     assert j1.status == Job.Status.FAILED
+
 
 def test_run_kill(driver, state):
     root = Folder.get_root()
@@ -199,12 +236,12 @@ def test_run_kill(driver, state):
 
     j2 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
     j2.submit()
-    time.sleep(0.2) # wait a bit until running
+    time.sleep(0.2)  # wait a bit until running
     assert j2.get_status() == Job.Status.RUNNING
     j2.kill()
-    assert j2.status == Job.Status.FAILED # should be failed right away
+    assert j2.status == Job.Status.FAILED  # should be failed right away
     j2.wait()
-    assert j2.status == Job.Status.FAILED # shouldn't change after waiting
+    assert j2.status == Job.Status.FAILED  # shouldn't change after waiting
 
 
 def test_bulk_wait(driver, state):
@@ -212,14 +249,19 @@ def test_bulk_wait(driver, state):
 
     jobs = []
     for i in range(15):
-        job = driver.create_job(folder=root, command=f"sleep {random.random()} ; echo 'JOB{i}'")
+        job = driver.create_job(
+            folder=root, command=f"sleep {random.random()} ; echo 'JOB{i}'"
+        )
         job.submit()
         jobs.append(job)
 
     sjobs = len(jobs)
 
     for i in range(15):
-        job = driver.create_job(folder=root, command=f"sleep {random.random()} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1")
+        job = driver.create_job(
+            folder=root,
+            command=f"sleep {random.random()} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
+        )
         job.submit()
         jobs.append(job)
 
@@ -234,29 +276,35 @@ def test_bulk_wait(driver, state):
         with job.stderr() as fh:
             assert fh.read().strip() == f"JOB{i+sjobs}"
 
+
 def test_bulk_sync(driver, state):
     root = Folder.get_root()
 
     jobs = []
     for i in range(15):
-        job = driver.create_job(folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i}'")
+        job = driver.create_job(
+            folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i}'"
+        )
         job.submit()
         jobs.append(job)
 
     sjobs = len(jobs)
 
     for i in range(15):
-        job = driver.create_job(folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1")
+        job = driver.create_job(
+            folder=root,
+            command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
+        )
         job.submit()
         jobs.append(job)
 
-    time.sleep(0.01) # should all be running now
+    time.sleep(0.01)  # should all be running now
     driver.bulk_sync_status(jobs)
 
     for job in jobs:
         assert job.status == Job.Status.RUNNING
 
-    time.sleep(0.5) # should all be finished now
+    time.sleep(0.5)  # should all be finished now
     driver.bulk_sync_status(jobs)
 
     for i, job in enumerate(jobs[:15]):
@@ -271,7 +319,9 @@ def test_bulk_sync(driver, state):
 
 def test_job_resubmit(driver, state):
     root = Folder.get_root()
-    j1 = driver.create_job(command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root)
+    j1 = driver.create_job(
+        command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+    )
     j1.submit()
     j1.wait()
     assert j1.status == Job.Status.FAILED
