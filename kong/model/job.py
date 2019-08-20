@@ -58,7 +58,7 @@ class Job(BaseModel):
             (("batch_job_id", "driver"), True),
         )  # batch job is is unique per driver
 
-    if TYPE_CHECKING:
+    if TYPE_CHECKING:  # pragma: no cover
         job_id: int
         batch_job_id: str
         driver: drivers.Driver

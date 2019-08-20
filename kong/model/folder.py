@@ -9,7 +9,7 @@ from . import BaseModel
 
 
 class Folder(BaseModel):
-    if TYPE_CHECKING:
+    if TYPE_CHECKING:  # pragma: no cover
         folder_id: int
         parent: "Folder"
         children: List["Folder"]
@@ -28,11 +28,9 @@ class Folder(BaseModel):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._ignore_save_assert:
-            if "name" in kwargs:
-                name = kwargs["name"]
-                assert (
-                    name not in (".", "..", "") and "/" not in name
-                ), f"Invalid folder name '{name}'"
+            assert (
+                self.name not in (".", "..", "") and "/" not in self.name
+            ), f"Invalid folder name '{self.name}'"
             assert self.parent is not None, "Need to specify a parent folder"
         self._ignore_save_assert = False
         return super().save(*args, **kwargs)

@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Any, List
 
 if not TYPE_CHECKING:
     from playhouse.sqlite_ext import *
-else:
+else:  # pragma: no cover
 
     class SqliteExtDatabase:
         def __init__(self, *args: Any) -> None:
