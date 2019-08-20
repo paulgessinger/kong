@@ -155,7 +155,7 @@ class LocalDriver(DriverBase):
                     job.status = Job.Status.RUNNING
                 job.save()
             else:
-                # job is not running, exit code should be set
+                logger.debug("Job %s is not running, exit code should be set", job)
                 check_exit_code()
                 job.save()
 
@@ -163,6 +163,11 @@ class LocalDriver(DriverBase):
             logger.debug("Job %s with pid %d doesn't exist, check exit code", job, pid)
             check_exit_code()
             job.save()
+
+    def bulk_sync_status(self, jobs: Iterable[Job]) -> None:
+        # simply implemented as loop over single sync status for local driver
+        for job in jobs:
+            self.sync_status(job)
 
     def kill(self, job: Job) -> None:
         self.sync_status(job)

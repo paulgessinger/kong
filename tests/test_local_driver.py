@@ -234,6 +234,41 @@ def test_bulk_wait(driver, state):
         with job.stderr() as fh:
             assert fh.read().strip() == f"JOB{i+sjobs}"
 
+def test_bulk_sync(driver, state):
+    root = Folder.get_root()
+
+    jobs = []
+    for i in range(15):
+        job = driver.create_job(folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i}'")
+        job.submit()
+        jobs.append(job)
+
+    sjobs = len(jobs)
+
+    for i in range(15):
+        job = driver.create_job(folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1")
+        job.submit()
+        jobs.append(job)
+
+    time.sleep(0.01) # should all be running now
+    driver.bulk_sync_status(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.RUNNING
+
+    time.sleep(0.5) # should all be finished now
+    driver.bulk_sync_status(jobs)
+
+    for i, job in enumerate(jobs[:15]):
+        assert job.status == Job.Status.COMPLETED
+        with job.stdout() as fh:
+            assert fh.read().strip() == f"JOB{i}"
+    for i, job in enumerate(jobs[15:]):
+        assert job.status == Job.Status.FAILED
+        with job.stderr() as fh:
+            assert fh.read().strip() == f"JOB{i+sjobs}"
+
+
 def test_job_resubmit(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root)

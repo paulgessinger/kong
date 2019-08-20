@@ -1,5 +1,5 @@
 from contextlib import _GeneratorContextManager
-from typing import List, Any, Union, Optional, ContextManager
+from typing import List, Any, Union, Optional, ContextManager, Iterable
 
 from abc import *
 
@@ -22,6 +22,10 @@ class DriverBase(ABC):
 
     @abstractmethod
     def sync_status(self, job: Job) -> None:
+        raise NotImplemented()
+
+    @abstractmethod
+    def bulk_sync_status(self, jobs: Iterable[Job]) -> None:
         raise NotImplemented()
 
     @abstractmethod
