@@ -340,8 +340,15 @@ class LocalDriver(DriverBase):
         for name in ["exit_status_file", "stdout", "stderr"]:
             path = job.data[name]
             if os.path.exists(path):
+                logger.debug("Removing %s", path)
                 os.remove(path)
             assert not os.path.exists(path)
+
+        scratch_dir = job.data["scratch_dir"]
+        if os.path.exists(scratch_dir):
+            logger.debug("Removing %s", scratch_dir)
+            shutil.rmtree(scratch_dir)
+            os.makedirs(scratch_dir)
 
         job.status = Job.Status.CREATED
         job.save()
