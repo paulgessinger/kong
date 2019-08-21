@@ -53,6 +53,21 @@ class State:
 
         return cls(cfg, cwd)
 
+    def refresh_jobs(self, jobs: List[Job]) -> None:
+        first_job: Job = jobs[0]
+        # try bulk refresh first
+        first_job.ensure_driver_instance(self.config)
+        driver: DriverBase = first_job.driver_instance
+        try:
+            logger.debug("Attempting bulk mode sync using %s", driver.__class__)
+            driver.bulk_sync_status(cast(Iterable[Job], jobs))
+        except DriverMismatch:
+            # fall back to slow mode
+            logger.debug("Bulk mode sync failed, falling back to slow loop mode")
+            for job in jobs:
+                job.ensure_driver_instance(self.config)
+                job.get_status()
+
     def ls(
         self, path: str = ".", refresh: bool = False
     ) -> Tuple[List["Folder"], List["Job"]]:
@@ -65,20 +80,7 @@ class State:
         jobs = folder.jobs
 
         if refresh == True and len(jobs) > 0:
-            first_job: Job = jobs[0]
-            # try bulk refresh first
-            first_job.ensure_driver_instance(self.config)
-            driver: DriverBase = first_job.driver_instance
-
-            try:
-                logger.debug("Attempting bulk mode sync using %s", driver.__class__)
-                driver.bulk_sync_status(cast(Iterable[Job], jobs))
-            except DriverMismatch:
-                # fall back to slow mode
-                logger.debug("Bulk mode sync failed, falling back to slow loop mode")
-                for job in jobs:
-                    job.ensure_driver_instance(self.config)
-                    job.get_status()
+            self.refresh_jobs(jobs)
 
         return folder.children, jobs
 
@@ -161,48 +163,63 @@ class State:
         kwargs["folder"] = self.cwd
         return self.default_driver.create_job(*args, **kwargs)
 
-    def _extract_job(self, name: JobSpec) -> Optional[Job]:
+    def _extract_jobs(self, name: JobSpec) -> List[Job]:
+        jobs: List[Job] = []
+
         if isinstance(name, int):
-            job = Job.get_or_none(name)
+            j = Job.get_or_none(name)
+            if j is None:
+                raise DoesNotExist(f"Did not find job with id {name}")
+            jobs = [j]
+
         elif isinstance(name, str):
             # check if we have path component
             if name.isdigit():
-                job = Job.get_or_none(int(name))
+                j = Job.get_or_none(int(name))
+                if j is None:
+                    raise DoesNotExist(f"Did not find job with path {name}")
+                jobs = [j]
             else:
                 head, tail = os.path.split(name)
                 logger.debug("Getting job: head: %s, tail: %s", head, tail)
-                assert tail.isdigit()
-                jobid = int(tail)
-                job = Job.get_or_none(jobid)
+                if tail.isdigit():
+                    # single job id, just get that
+                    j = Job.get_or_none(int(tail))
+                    if j is None:
+                        raise DoesNotExist(f"Did not find job with path {name}")
+                    jobs = [j]
+                elif tail == "*":
+                    # "glob" jobs: get folder, and select all jobs
+                    # this is not recursive right now
+                    folder = Folder.find_by_path(self.cwd, head)
+                    assert folder is not None
+                    jobs = list(folder.jobs)
+                else:
+                    raise RuntimeError(f"{name} jobspec is not understood")
         elif isinstance(name, Job):
-            job = name
+            jobs = [name]
         else:
-            raise TypeError("Name is neither job id nor job instance")
-        return job
+            raise TypeError("Name is neither job id, path to job(s) nor job instance")
+
+        return jobs
 
     def submit_job(self, name: JobSpec) -> None:
-        job = self._extract_job(name)
-        if job is None:
-            raise DoesNotExist(f"Job at {name} does not exist")
-        job.ensure_driver_instance(self.config)
-        job.submit()
+        jobs = self._extract_jobs(name)
+        for job in jobs:
+            job.ensure_driver_instance(self.config)
+            job.submit()
 
     def kill_job(self, name: JobSpec) -> None:
-        job = self._extract_job(name)
-        if job is None:
-            raise DoesNotExist(f"Job at {name} does not exist")
-        job.ensure_driver_instance(self.config)
-        job.kill()
+        jobs = self._extract_jobs(name)
+        for job in jobs:
+            job.ensure_driver_instance(self.config)
+            job.kill()
 
     def resubmit_job(self, name: JobSpec) -> None:
-        job = self._extract_job(name)
-        if job is None:
-            raise DoesNotExist(f"Job at {name} does not exist")
-        job.ensure_driver_instance(self.config)
-        job.resubmit()
-
-    def get_job(self, name: JobSpec) -> Optional[Job]:
-        job = self._extract_job(name)
-        if job is not None:
+        jobs = self._extract_jobs(name)
+        for job in jobs:
             job.ensure_driver_instance(self.config)
-        return job
+            job.resubmit()
+
+    def get_jobs(self, name: JobSpec) -> List[Job]:
+        return self._extract_jobs(name)

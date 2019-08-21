@@ -188,3 +188,6 @@ class Job(BaseModel):
 
     def __str__(self) -> str:
         return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"
+
+    def info(self) -> str:
+        pass

@@ -164,6 +164,8 @@ def test_job_env_is_valid(driver, state):
         with j1.stdout() as fh:
             raw = fh.read().strip().split("\n")
             for line in raw:
+                if "=" not in line:
+                    continue
                 k, v = line.split("=", 1)
                 env[k] = v
         return j1, env
@@ -386,13 +388,6 @@ def test_bulk_sync(driver, state):
         job.submit()
         jobs.append(job)
 
-    time.sleep(0.01)  # should all be running now
-    driver.bulk_sync_status(jobs)
-
-    for job in jobs:
-        assert job.status == Job.Status.RUNNING
-
-    time.sleep(0.5)  # should all be finished now
     driver.bulk_sync_status(jobs)
 
     for i, job in enumerate(jobs[:15]):

@@ -449,17 +449,17 @@ def test_resubmit_job(repl, state, capsys):
 def test_status(repl, state, capsys):
     root = Folder.get_root()
 
-    repl.do_status("")
+    repl.onecmd("status")
     out, err = capsys.readouterr()
     assert "usage" in out
 
-    repl.do_status("42")
+    repl.onecmd("status 42")
     out, err = capsys.readouterr()
-    assert "not found" in out
+    assert "not find" in out
 
     j1 = state.create_job(command="sleep 0.2")
 
-    repl.do_status(f"{j1.job_id}")
+    repl.onecmd(f"status {j1.job_id}")
     out, err = capsys.readouterr()
     assert "CREATED" in out
 
@@ -467,12 +467,12 @@ def test_status(repl, state, capsys):
 
     time.sleep(0.1)
 
-    repl.do_status(f"{j1.job_id}")
+    repl.onecmd(f"status {j1.job_id}")
     out, err = capsys.readouterr()
     assert "RUNNING" in out
 
     time.sleep(0.2)
 
-    repl.do_status(f"{j1.job_id}")
+    repl.onecmd(f"status {j1.job_id}")
     out, err = capsys.readouterr()
     assert "COMPLETED" in out

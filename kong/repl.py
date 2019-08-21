@@ -42,10 +42,9 @@ class Repl(cmd.Cmd):
     def onecmd(self, *args: str) -> bool:
         try:
             return super().onecmd(*args)
-        except TypeError as e:
-            click.secho(f"{e}", fg="red")
-        except BaseException as e:
+        except Exception as e:
             logger.error("Exception occured", exc_info=True)
+            click.secho(f"{e}", fg="red")
         return False
 
     def complete_path(self, path: str) -> List[str]:
@@ -217,13 +216,12 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
-            job = self.state.get_job(args.job_id)
-            if job is None:
-                click.secho(f"Job {args.job_id} was not found", fg="red")
-                return
+            jobs = self.state.get_jobs(args.job_id)
 
-            job.get_status()
-            click.echo(f"{job}")
+            self.state.refresh_jobs(jobs)
+
+            for job in jobs:
+                click.echo(f"{job}")
 
         except SystemExit as e:
             if e.code != 0:

@@ -259,17 +259,24 @@ def test_create_job(state, db):
     assert len(f2.jobs) == 1 and f2.jobs[0] == j2
 
 
-def test_get_job(state):
+def test_get_jobs(state):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
 
     f2 = root.add_folder("f2")
     state.cd("f2")
     j2 = state.create_job(command="sleep 1")
+    j3 = state.create_job(command="sleep 1")
 
-    assert state.get_job(f"{j1.job_id}") == j1
-    assert state.get_job(f"f2/{j2.job_id}") == j2
-    assert state.get_job("42") is None
+    assert state.get_jobs(f"{j1.job_id}")[0] == j1
+    assert state.get_jobs(f"f2/{j2.job_id}")[0] == j2
+    with pytest.raises(DoesNotExist):
+        state.get_jobs("42")
+
+    assert all(a == b for a, b in zip(state.get_jobs("../*"), [j1]))
+    assert all(a == b for a, b in zip(state.get_jobs("*"), [j2, j3]))
+    state.cwd = root
+    assert all(a == b for a, b in zip(state.get_jobs("f2/*"), [j2, j3]))
 
 
 def test_run_job(state, db):
