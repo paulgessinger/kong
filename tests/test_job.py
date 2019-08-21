@@ -5,6 +5,7 @@ import pytest
 from kong import config
 from kong.drivers import LocalDriver
 import kong.drivers
+from kong.drivers import DriverMismatch
 from kong.model import Job
 import peewee as pw
 
@@ -45,34 +46,38 @@ def test_set_driver(state, monkeypatch):
     class DummyDriver:
         pass
 
-    j1.driver_instance = driver
+    j1.ensure_driver_instance(driver)
     assert j1.driver_instance == driver
 
-    with pytest.raises(AssertionError):
-        j1.driver_instance = DummyDriver()
-    assert not isinstance(j1.driver_instance, DummyDriver)
+    # forcibly unset driver instanc
+    j1._driver_instance = None
+
+    with pytest.raises(DriverMismatch):
+        j1.ensure_driver_instance(DummyDriver())
+    assert j1._driver_instance is None
 
     # bypass interface
-    monkeypatch.setattr("kong.drivers.DriverBase.__abstractmethods__", set())
+    monkeypatch.setattr(
+        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
+    )
 
-    class ValidDriver(kong.drivers.DriverBase):
+    class ValidDriver(kong.drivers.driver_base.DriverBase):
         def __init__(self):
             pass
 
-    with pytest.raises(AssertionError):
-        j1.driver_instance = ValidDriver()
-    assert not isinstance(j1.driver_instance, ValidDriver)
+    with pytest.raises(DriverMismatch):
+        j1.ensure_driver_instance(ValidDriver())
+    assert j1._driver_instance is None
 
     j2 = Job.create(
         batch_job_id=42, folder=state.cwd, command="sleep 2", driver=ValidDriver
     )
 
     valid_driver = ValidDriver()
-    j2.driver_instance = valid_driver
+    j2.ensure_driver_instance(valid_driver)
     assert j2.driver_instance == valid_driver
 
-    with pytest.raises(AssertionError):
-        j2.driver_instance = driver
+    j2.ensure_driver_instance(driver)  # nothing happens
     assert not isinstance(j2.driver_instance, LocalDriver)
 
 

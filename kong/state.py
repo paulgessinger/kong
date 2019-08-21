@@ -1,9 +1,10 @@
 import os
-from typing import List, Callable, Any, Union, Optional, Tuple
+from typing import List, Callable, Any, Union, Optional, Tuple, cast, Iterable
 
 import peewee as pw
 
-from kong.drivers import DriverBase, DriverMismatch
+from .drivers import DriverMismatch
+from .drivers.driver_base import DriverBase
 from . import config, drivers
 from .db import database
 from . import model
@@ -30,9 +31,9 @@ class State:
     def __init__(self, config: config.Config, cwd: Folder) -> None:
         self.config = config
         self.cwd = cwd
-        self.default_driver: drivers.Driver = getattr(
-            drivers, self.config.default_driver
-        )(self.config)
+        self.default_driver: DriverBase = getattr(drivers, self.config.default_driver)(
+            self.config
+        )
 
     @classmethod
     def get_instance(cls) -> "State":
@@ -64,13 +65,14 @@ class State:
         jobs = folder.jobs
 
         if refresh == True and len(jobs) > 0:
+            first_job: Job = jobs[0]
             # try bulk refresh first
-            jobs[0].ensure_driver_instance(self.config)
-            driver: DriverBase = jobs[0].driver_instance
+            first_job.ensure_driver_instance(self.config)
+            driver: DriverBase = first_job.driver_instance
 
             try:
                 logger.debug("Attempting bulk mode sync using %s", driver.__class__)
-                driver.bulk_sync_status(jobs)
+                driver.bulk_sync_status(cast(Iterable[Job], jobs))
             except DriverMismatch:
                 # fall back to slow mode
                 logger.debug("Bulk mode sync failed, falling back to slow loop mode")
@@ -128,7 +130,7 @@ class State:
 
             if confirm():
                 # need driver instance
-                job.driver_instance = self.config
+                job.ensure_driver_instance(self.config)
                 job.delete_instance()
                 return True
 

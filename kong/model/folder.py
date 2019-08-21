@@ -1,11 +1,14 @@
 import os
 import datetime
-from typing import Any, cast, Optional, ClassVar, TYPE_CHECKING, List
+from typing import Any, cast, Optional, TYPE_CHECKING, List
 
 import peewee as pw
 
 from ..logger import logger
 from . import BaseModel
+
+if TYPE_CHECKING:
+    from .job import Job
 
 
 class Folder(BaseModel):
@@ -14,6 +17,7 @@ class Folder(BaseModel):
         parent: "Folder"
         children: List["Folder"]
         name: str
+        jobs: List[Job]
     else:
         folder_id = pw.AutoField()
         name = pw.CharField()

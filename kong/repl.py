@@ -9,7 +9,7 @@ from typing import Any, Callable, List, Tuple, Optional
 import click
 import peewee as pw
 
-from kong.drivers import DriverBase
+from .drivers.driver_base import DriverBase
 from kong.state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -145,8 +145,8 @@ class Repl(cmd.Cmd):
         "Show the current location"
         click.echo(self.state.cwd.path)
 
-    def do_create_job(self, args: str):
-        argv = shlex.split(args)
+    def do_create_job(self, arg: str) -> None:
+        argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("--cores", "-c", type=int, default=1)
         p.add_argument("command", nargs=argparse.REMAINDER)
@@ -168,8 +168,8 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def do_submit_job(self, args: str):
-        argv = shlex.split(args)
+    def do_submit_job(self, arg: str) -> None:
+        argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
 
@@ -182,8 +182,8 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def do_kill_job(self, args: str):
-        argv = shlex.split(args)
+    def do_kill_job(self, arg: str) -> None:
+        argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
 
@@ -196,8 +196,8 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def do_resubmit_job(self, args: str):
-        argv = shlex.split(args)
+    def do_resubmit_job(self, arg: str) -> None:
+        argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
 
@@ -210,8 +210,8 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def do_status(self, args: str):
-        argv = shlex.split(args)
+    def do_status(self, arg: str) -> None:
+        argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
 

@@ -76,7 +76,7 @@ def test_create_job(driver, tree, state):
     assert j1.batch_job_id != j2.batch_job_id
 
 
-class ValidDriver(kong.drivers.DriverBase):
+class ValidDriver(kong.drivers.driver_base.DriverBase):
     def __init__(self):
         pass
 
@@ -84,7 +84,9 @@ class ValidDriver(kong.drivers.DriverBase):
 def test_driver_mismatch(driver, state, monkeypatch):
     root = Folder.get_root()
 
-    monkeypatch.setattr("kong.drivers.DriverBase.__abstractmethods__", set())
+    monkeypatch.setattr(
+        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
+    )
 
     j1 = Job.create(folder=root, command="sleep 1", driver=ValidDriver)
     assert j1.driver == ValidDriver
@@ -369,7 +371,7 @@ def test_bulk_sync(driver, state):
     jobs = []
     for i in range(15):
         job = driver.create_job(
-            folder=root, command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i}'"
+            folder=root, command=f"sleep {0.3 + random.random()*0.2} ; echo 'JOB{i}'"
         )
         job.submit()
         jobs.append(job)
@@ -379,7 +381,7 @@ def test_bulk_sync(driver, state):
     for i in range(15):
         job = driver.create_job(
             folder=root,
-            command=f"sleep {0.2 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
+            command=f"sleep {0.3 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
         )
         job.submit()
         jobs.append(job)

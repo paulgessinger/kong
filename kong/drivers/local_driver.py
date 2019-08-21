@@ -27,7 +27,8 @@ import psutil
 from ..model import Folder, Job
 from ..logger import logger
 from ..config import Config
-from . import DriverBase, DriverMismatch, InvalidJobStatus
+from . import DriverMismatch, InvalidJobStatus
+from .driver_base import DriverBase
 
 jobscript_tpl = """
 #!/usr/bin/env bash
@@ -57,7 +58,7 @@ echo $? > {exit_status_file}
 """.strip()
 
 
-def checked_job(f: Any):
+def checked_job(f: Any) -> Any:
     @functools.wraps(f)
     def wrapper(self: Any, job: Job, *args: Any, **kwargs: Any) -> Any:
         self._check_driver(job)
@@ -274,9 +275,9 @@ class LocalDriver(DriverBase):
         job.save()
         logger.debug("Submitted job as %s", job)
 
-    @checked_job
+    @checked_job  # type: ignore
     @contextmanager  # type: ignore
-    def stdout(self, job: Job) -> ContextManager[None]:
+    def stdout(self, job: Job) -> ContextManager[IO[str]]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
             raise InvalidJobStatus("Cannot get stdout for job in status %s", job.status)
@@ -284,9 +285,9 @@ class LocalDriver(DriverBase):
         with open(job.data["stdout"], "r") as fh:
             yield fh
 
-    @checked_job
+    @checked_job  # type: ignore
     @contextmanager  # type: ignore
-    def stderr(self, job: Job) -> ContextManager[None]:
+    def stderr(self, job: Job) -> ContextManager[IO[str]]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
             raise InvalidJobStatus("Cannot get stdout for job in status %s", job.status)

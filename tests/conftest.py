@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 from kong.db import database
 from kong import model
-from kong.model import Folder
+from kong.model import Folder, Job
 import kong.setup
 import kong
 
