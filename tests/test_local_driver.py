@@ -17,7 +17,13 @@ def state(app_env, db, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(
             "click.prompt",
-            Mock(side_effect=["LocalDriver", os.path.join(app_dir, "joblog")]),
+            Mock(
+                side_effect=[
+                    "LocalDriver",
+                    os.path.join(app_dir, "joblog"),
+                    os.path.join(app_dir, "joboutput"),
+                ]
+            ),
         )
         kong.setup.setup(None)
     return kong.get_instance()
@@ -44,16 +50,12 @@ def test_create_job(driver, tree, state):
     assert tree.jobs[0] == j1
     assert j1.status == Job.Status.CREATED
 
-    assert os.path.exists(
-        os.path.join(config.jobdir, j1.batch_job_id)
-    ), "Does not create job directory"
+    assert os.path.exists(j1.data["log_dir"]), "Does not create job directory"
 
-    assert os.path.exists(
-        os.path.join(config.jobdir, j1.batch_job_id, "output")
-    ), "Does not create job output directory"
+    assert os.path.exists(j1.data["output_dir"]), "Does not create job output directory"
 
     assert os.path.isfile(
-        os.path.join(config.jobdir, j1.batch_job_id, "jobscript.sh")
+        os.path.join(j1.data["log_dir"], "jobscript.sh")
     ), "Does not create job script"
 
     f2 = tree.subfolder(("f2"))
@@ -63,14 +65,10 @@ def test_create_job(driver, tree, state):
     assert len(f2.jobs) == 1
     assert f2.jobs[0] == j2
     assert j2.status == Job.Status.CREATED
-    assert os.path.exists(
-        os.path.join(config.jobdir, j2.batch_job_id)
-    ), "Does not create job directory"
-    assert os.path.exists(
-        os.path.join(config.jobdir, j2.batch_job_id, "output")
-    ), "Does not create job output directory"
+    assert os.path.exists(j2.data["log_dir"]), "Does not create job directory"
+    assert os.path.exists(j2.data["output_dir"]), "Does not create job output directory"
     assert os.path.isfile(
-        os.path.join(config.jobdir, j2.batch_job_id, "jobscript.sh")
+        os.path.join(j2.data["log_dir"], "jobscript.sh")
     ), "Does not create job script"
 
     print(j2.data)
@@ -100,32 +98,41 @@ def test_driver_mismatch(driver, state, monkeypatch):
         j2.ensure_driver_instance(driver)
 
 
-def test_job_rm_deletes_jobdir(driver, state):
+def test_job_rm_cleans_up(driver, state):
     j1 = driver.create_job(command="sleep 1", folder=state.cwd)
     assert j1 is not None
-    assert os.path.exists(
-        os.path.join(state.config.jobdir, j1.batch_job_id)
-    ), "Does not create job directory"
+    assert os.path.exists(j1.data["log_dir"]), "Does not create job directory"
+    assert os.path.exists(j1.data["output_dir"]), "Does not create output directory"
+    assert os.path.exists(j1.data["scratch_dir"]), "Does not create scratch directory"
     j1.delete_instance()
     assert not os.path.exists(
-        os.path.join(state.config.jobdir, j1.batch_job_id)
+        j1.data["log_dir"]
     ), "Driver does not cleanup job directory"
+    assert not os.path.exists(
+        j1.data["output_dir"]
+    ), "Driver does not cleanup output directory"
+    assert not os.path.exists(
+        j1.data["scratch_dir"]
+    ), "Does not cleanup scratch directory"
 
 
 def test_job_cleanup_status(driver, state):
     j1 = driver.create_job(command="sleep 1", folder=state.cwd)
     assert j1 is not None
-    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+    assert os.path.exists(j1.data["log_dir"])
+    assert os.path.exists(j1.data["output_dir"])
     j1.status = Job.Status.RUNNING
     j1.save()
     with pytest.raises(AssertionError):
         driver.cleanup(j1)
-    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+    assert os.path.exists(j1.data["log_dir"])
+    assert os.path.exists(j1.data["output_dir"])
     j1.status = Job.Status.SUBMITTED
     j1.save()
     with pytest.raises(AssertionError):
         driver.cleanup(j1)
-    assert os.path.exists(os.path.join(state.config.jobdir, j1.batch_job_id))
+    assert os.path.exists(j1.data["log_dir"])
+    assert os.path.exists(j1.data["output_dir"])
 
     for status in [
         Job.Status.CREATED,
@@ -137,9 +144,11 @@ def test_job_cleanup_status(driver, state):
         assert j is not None
         j.status = status
         j.save()
-        assert os.path.exists(os.path.join(state.config.jobdir, j.batch_job_id))
+        assert os.path.exists(j.data["log_dir"])
+        assert os.path.exists(j.data["output_dir"])
         driver.cleanup(j)
-        assert not os.path.exists(os.path.join(state.config.jobdir, j.batch_job_id))
+        assert not os.path.exists(j.data["log_dir"])
+        assert not os.path.exists(j.data["output_dir"])
 
 
 def test_job_env_is_valid(driver, state):
@@ -158,14 +167,32 @@ def test_job_env_is_valid(driver, state):
         return j1, env
 
     job, env = run_get_env()
+    output_dir = os.path.join(state.config.joboutputdir, str(job.job_id))
+    log_dir = os.path.join(state.config.jobdir, str(job.job_id))
+
     assert env["KONG_JOB_NPROC"] == "1"
+    assert env["KONG_JOB_SCRATCHDIR"] != ""
+    assert os.path.exists(env["KONG_JOB_SCRATCHDIR"])
     assert env["KONG_JOB_ID"] == str(job.job_id)
-    assert env["KONG_JOB_OUTPUT_DIR"] == job.data["output_dir"]
+    assert (
+        env["KONG_JOB_OUTPUT_DIR"] == output_dir
+        and job.data["output_dir"] == output_dir
+    )
+    assert env["KONG_JOB_LOG_DIR"] == log_dir and job.data["log_dir"] == log_dir
 
     job, env = run_get_env(cores=8)
+    output_dir = os.path.join(state.config.joboutputdir, str(job.job_id))
+    log_dir = os.path.join(state.config.jobdir, str(job.job_id))
+
     assert env["KONG_JOB_NPROC"] == "8"
+    assert env["KONG_JOB_SCRATCHDIR"] != ""
+    assert os.path.exists(env["KONG_JOB_SCRATCHDIR"])
     assert env["KONG_JOB_ID"] == str(job.job_id)
-    assert env["KONG_JOB_OUTPUT_DIR"] == job.data["output_dir"]
+    assert (
+        env["KONG_JOB_OUTPUT_DIR"] == output_dir
+        and job.data["output_dir"] == output_dir
+    )
+    assert env["KONG_JOB_LOG_DIR"] == log_dir and job.data["log_dir"] == log_dir
 
 
 def test_run_job(driver, state, db):

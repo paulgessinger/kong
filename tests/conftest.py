@@ -117,7 +117,13 @@ def state(app_env, db, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(
             "click.prompt",
-            Mock(side_effect=["LocalDriver", os.path.join(app_dir, "joblog")]),
+            Mock(
+                side_effect=[
+                    "LocalDriver",
+                    os.path.join(app_dir, "joblog"),
+                    os.path.join(app_dir, "joboutput"),
+                ]
+            ),
         )
         kong.setup.setup(None)
     cfg = kong.config.Config()

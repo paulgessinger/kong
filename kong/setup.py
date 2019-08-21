@@ -31,13 +31,23 @@ def setup(cfg: Optional[config.Config]) -> None:
 
     data["jobdir"] = os.path.expanduser(
         click.prompt(
-            "Where is a good place to put job files?",
+            "Where is a good place to put job (e.g. log) files?",
             default=data.get("jobdir", os.path.join(config.APP_DIR, "jobdir")),
         )
     )
 
     if not os.path.exists(data["jobdir"]):
         os.makedirs(data["jobdir"])
+
+    data["joboutputdir"] = os.path.expanduser(
+        click.prompt(
+            "Where is a good place to put job output files?",
+            default=data.get("joboutputdir", os.path.join(config.APP_DIR, "joboutput")),
+        )
+    )
+
+    if not os.path.exists(data["joboutputdir"]):
+        os.makedirs(data["joboutputdir"])
 
     data["history_length"] = data.get("history_length", 1000)
 

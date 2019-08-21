@@ -1,5 +1,6 @@
 import functools
 import shutil
+import tempfile
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime, timedelta
@@ -43,7 +44,9 @@ trap sig_handler INT HUP TERM QUIT
 
 export KONG_JOB_ID={internal_job_id}
 export KONG_JOB_OUTPUT_DIR={output_dir}
+export KONG_JOB_LOG_DIR={log_dir}
 export KONG_JOB_NPROC={nproc}
+export KONG_JOB_SCRATCHDIR={scratch_dir}
 
 touch $stdout
 touch $stderr
@@ -83,42 +86,41 @@ class LocalDriver(DriverBase):
         assert len(args) == 0 and len(kwargs) == 0, "No extra arguments allowed"
         batch_job_id = str(uuid.uuid1())
 
-        # create folder structure
-        jobdir = os.path.abspath(os.path.join(self.config.jobdir, batch_job_id))
-        os.makedirs(jobdir)
-
-        # in job dir, create output dir
-        output_dir = os.path.abspath(os.path.join(jobdir, "output"))
-        os.makedirs(output_dir)
-
-        stdout = os.path.abspath(
-            os.path.join(self.config.jobdir, batch_job_id, "stdout.txt")
-        )
-        stderr = os.path.abspath(
-            os.path.join(self.config.jobdir, batch_job_id, "stderr.txt")
-        )
-        exit_status_file = os.path.abspath(
-            os.path.join(self.config.jobdir, batch_job_id, "exit_status.txt")
-        )
-        scriptpath = os.path.join(jobdir, "jobscript.sh")
-
-        data = dict(
-            stdout=stdout,
-            stderr=stderr,
-            exit_status_file=exit_status_file,
-            jobscript=scriptpath,
-            output_dir=output_dir,
-            jobdir=jobdir,
-        )
-
         job: Job = Job.create(
             folder=folder,
             batch_job_id=batch_job_id,
             command=command,
             driver=self.__class__,
             cores=cores,
-            data=data,
         )
+
+        # in job dir, create output dir
+        output_dir = os.path.abspath(
+            os.path.join(self.config.joboutputdir, f"{job.job_id}")
+        )
+        os.makedirs(output_dir)
+
+        log_dir = os.path.abspath(os.path.join(self.config.jobdir, f"{job.job_id}"))
+        os.makedirs(log_dir)
+
+        stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
+        stderr = os.path.abspath(os.path.join(log_dir, "stderr.txt"))
+        exit_status_file = os.path.abspath(os.path.join(log_dir, "exit_status.txt"))
+
+        scriptpath = os.path.join(log_dir, "jobscript.sh")
+
+        scratch_dir = tempfile.mkdtemp(prefix=f"kong_job_{job.job_id}")
+
+        job.data = dict(
+            stdout=stdout,
+            stderr=stderr,
+            exit_status_file=exit_status_file,
+            jobscript=scriptpath,
+            output_dir=output_dir,
+            log_dir=log_dir,
+            scratch_dir=scratch_dir,
+        )
+        job.save()
 
         values = dict(
             command=command,
@@ -126,8 +128,10 @@ class LocalDriver(DriverBase):
             stderr=stderr,
             internal_job_id=job.job_id,
             output_dir=output_dir,
+            log_dir=log_dir,
             exit_status_file=exit_status_file,
             nproc=cores,
+            scratch_dir=scratch_dir,
         )
         logger.debug("Creating job with values: %s", str(values))
 
@@ -148,9 +152,11 @@ class LocalDriver(DriverBase):
         ), f"Cannot clean up job {job} in {job.status}, please kill first"
 
         logger.debug("Removing job output directory for job %s", job)
-        jobdir = job.data["jobdir"]
-        if os.path.exists(jobdir):
-            shutil.rmtree(jobdir)
+
+        for name in ["log_dir", "output_dir", "scratch_dir"]:
+            path = job.data[name]
+            if os.path.exists(path):
+                shutil.rmtree(path)
 
     def _check_driver(self, job: Job) -> None:
         # check if we're the right driver for this
