@@ -341,6 +341,7 @@ class LocalDriver(DriverBase):
             path = job.data[name]
             if os.path.exists(path):
                 os.remove(path)
+            assert not os.path.exists(path)
 
         job.status = Job.Status.CREATED
         job.save()
