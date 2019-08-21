@@ -19,6 +19,7 @@ from typing import (
 import peewee as pw
 from playhouse.sqlite_ext import JSONField  # type: ignore
 
+from kong.db import AutoIncrementField
 from ..drivers import DriverMismatch
 from ..drivers.driver_base import DriverBase
 from ..config import Config
@@ -96,7 +97,7 @@ class Job(BaseModel):
         data: Dict[str, Any]
         status: Status
     else:
-        job_id = pw.AutoField()
+        job_id = AutoIncrementField(column_name="rowid")
         batch_job_id = pw.CharField(
             index=True, null=True
         )  # can be null, some drivers only know after submission
@@ -133,12 +134,9 @@ class Job(BaseModel):
         assert len(self.command) > 0, "Command must be longer than 0"
         super().save(*args, **kwargs)
 
-    def delete_instance(self, **kwargs: Any) -> None:
-        assert (
-            self._driver_instance is not None
-        ), f"Cannot delete job {self} without driver instance, cleanup would be skipped"
-        self._driver_instance.cleanup(self)
-        return super().delete_instance(**kwargs)
+    @with_driver
+    def remove(self, driver: DriverBase) -> None:
+        driver.remove(self)
 
     @property
     def log_dir(self) -> str:

@@ -228,7 +228,7 @@ def test_rm(state, repl, db, capsys, monkeypatch):
 
 def test_rm_job(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()
-    j1 = state.create_job(command="sleep 1")
+    j1 = state.default_driver.create_job(command="sleep 1", folder=root)
     assert len(root.jobs) == 1 and root.jobs[0] == j1
     assert Job.get_or_none(job_id=j1.job_id) is not None
 
@@ -245,6 +245,7 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
     # works in other cwd too
     alpha = root.add_folder("alpha")
     j2 = state.default_driver.create_job(command="sleep 1", folder=alpha)
+    assert j1.job_id != j2.job_id
     assert Job.get_or_none(job_id=j2.job_id) is not None
     assert len(alpha.jobs) == 1 and alpha.jobs[0] == j2
     assert state.cwd == root

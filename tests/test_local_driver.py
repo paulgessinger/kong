@@ -106,7 +106,9 @@ def test_job_rm_cleans_up(driver, state):
     assert os.path.exists(j1.data["log_dir"]), "Does not create job directory"
     assert os.path.exists(j1.data["output_dir"]), "Does not create output directory"
     assert os.path.exists(j1.data["scratch_dir"]), "Does not create scratch directory"
-    j1.delete_instance()
+
+    driver.remove(j1)
+
     assert not os.path.exists(
         j1.data["log_dir"]
     ), "Driver does not cleanup job directory"

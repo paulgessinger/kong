@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, List
 
 if not TYPE_CHECKING:
-    from playhouse.sqlite_ext import *
+    from playhouse.sqlite_ext import SqliteExtDatabase, AutoIncrementField
 else:  # pragma: no cover
 
     class SqliteExtDatabase:

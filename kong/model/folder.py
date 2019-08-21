@@ -5,6 +5,7 @@ from typing import Any, cast, Optional, TYPE_CHECKING, List
 import peewee as pw
 
 from ..logger import logger
+from ..db import AutoIncrementField
 from . import BaseModel
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ class Folder(BaseModel):
         name: str
         jobs: List[Job]
     else:
-        folder_id = pw.AutoField()
+        folder_id = AutoIncrementField()
         name = pw.CharField()
         parent = pw.ForeignKeyField("self", null=True, backref="children")
         created_at = pw.DateTimeField(default=datetime.datetime.now)

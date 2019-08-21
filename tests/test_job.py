@@ -6,7 +6,7 @@ from kong import config
 from kong.drivers import LocalDriver
 import kong.drivers
 from kong.drivers import DriverMismatch
-from kong.model import Job
+from kong.model import Job, Folder
 import peewee as pw
 
 
@@ -81,18 +81,22 @@ def test_set_driver(state, monkeypatch):
     assert not isinstance(j2.driver_instance, LocalDriver)
 
 
-def test_rm(tree):
+def test_rm(tree, state):
     root = tree
 
     j1 = Job.create(folder=tree, command="sleep 1", driver=LocalDriver)
 
-    pseudo_driver = Mock()
+    class PseudoDriver(LocalDriver):
+        pass
+
+    pseudo_driver = PseudoDriver(state.config)
     pseudo_driver.cleanup = Mock()
     j1._driver_instance = pseudo_driver
 
     assert j1.folder == root
     assert len(root.jobs) == 1 and root.jobs[0] == j1
-    j1.delete_instance()
+    j1.remove()
+    root = Folder.get_root()
     assert len(root.jobs) == 0
 
     pseudo_driver.cleanup.assert_called_once_with(j1)

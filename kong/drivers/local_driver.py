@@ -99,10 +99,10 @@ class LocalDriver(DriverBase):
         output_dir = os.path.abspath(
             os.path.join(self.config.joboutputdir, f"{job.job_id}")
         )
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         log_dir = os.path.abspath(os.path.join(self.config.jobdir, f"{job.job_id}"))
-        os.makedirs(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
         stderr = os.path.abspath(os.path.join(log_dir, "stderr.txt"))
@@ -158,6 +158,11 @@ class LocalDriver(DriverBase):
             path = job.data[name]
             if os.path.exists(path):
                 shutil.rmtree(path)
+
+    def remove(self, job: Job) -> None:
+        logger.debug("Removing job %s", job)
+        self.cleanup(job)
+        job.delete_instance()
 
     def _check_driver(self, job: Job) -> None:
         # check if we're the right driver for this

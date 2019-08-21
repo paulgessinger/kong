@@ -55,3 +55,7 @@ class DriverBase(ABC):
     @abstractmethod
     def cleanup(self, job: "Job") -> None:
         raise NotImplemented()
+
+    @abstractmethod
+    def remove(self, job: "Job") -> None:
+        raise NotImplemented()

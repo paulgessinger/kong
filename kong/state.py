@@ -143,7 +143,7 @@ class State:
             if confirm():
                 # need driver instance
                 job.ensure_driver_instance(self.config)
-                job.delete_instance()
+                job.driver_instance.remove(job)
                 return True
             return False
         elif isinstance(name, Folder):
