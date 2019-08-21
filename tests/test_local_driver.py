@@ -413,6 +413,7 @@ def test_job_resubmit(driver, state):
         assert fh.read().strip() == "begin\nend"
 
     driver.resubmit(j1)
+    time.sleep(0.1)
     for path in ["exit_status_file", "stdout", "stderr"]:
         assert not os.path.exists(j1.data[path])
 
