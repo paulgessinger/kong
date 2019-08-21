@@ -230,7 +230,7 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def do_update(self, arg: str):
+    def do_update(self, arg: str) -> None:
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")

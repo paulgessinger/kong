@@ -19,7 +19,7 @@ from typing import (
 import peewee as pw
 from playhouse.sqlite_ext import JSONField  # type: ignore
 
-from kong.db import AutoIncrementField
+from ..db import AutoIncrementField
 from ..drivers import DriverMismatch
 from ..drivers.driver_base import DriverBase
 from ..config import Config

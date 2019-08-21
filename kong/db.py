@@ -17,5 +17,8 @@ else:  # pragma: no cover
         def create_tables(self, tables: List[Any]) -> None:
             ...
 
+    class AutoIncrementField:
+        ...
+
 
 database = SqliteExtDatabase(None)
