@@ -249,10 +249,14 @@ def test_run_job_already_completed(driver, state):
     j1.submit()
 
     # already waited, process is reaped
-    print(j1.data["pid"])
-    proc = psutil.Process(j1.data["pid"])
-    print(proc.status())
-    proc.wait()
+    try:
+        print(j1.data["pid"])
+        proc = psutil.Process(j1.data["pid"])
+        print(proc.status())
+        proc.wait()
+    except psutil.NoSuchProcess:
+        # weird, but ok
+        pass
 
     driver.wait(j1)
     assert j1.status == Job.Status.COMPLETED
@@ -401,7 +405,7 @@ def test_bulk_sync(driver, state):
             assert fh.read().strip() == f"JOB{i+sjobs}"
 
 
-def test_job_resubmit(driver, state):
+def test_job_resubmit(driver, state, monkeypatch):
     root = Folder.get_root()
     j1 = driver.create_job(
         command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
@@ -412,10 +416,17 @@ def test_job_resubmit(driver, state):
     with j1.stdout() as fh:
         assert fh.read().strip() == "begin\nend"
 
-    driver.resubmit(j1)
-    time.sleep(0.1)
+    # we need to prevent driver from actually calling submit
+    submit = Mock()
+    with monkeypatch.context() as m:
+        m.setattr(driver, "submit", submit)
+        driver.resubmit(j1)
+    submit.assert_called_once()
     for path in ["exit_status_file", "stdout", "stderr"]:
         assert not os.path.exists(j1.data[path])
+
+    # now actually hit submit
+    driver.submit(j1)
 
     assert j1.status == Job.Status.SUBMITTED
     j1.wait()

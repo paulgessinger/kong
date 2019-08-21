@@ -252,19 +252,6 @@ class LocalDriver(DriverBase):
         if job.status > Job.Status.CREATED:
             raise InvalidJobStatus(f"Cannot submit job in state {job.status}")
 
-        # need to make sure the output artifacts are gone, since we're reusing the same job dir
-        output_dir = job.data["output_dir"]
-        stdout = job.data["stdout"]
-        stderr = job.data["stderr"]
-        exit_status_file = job.data["exit_status_file"]
-        if os.path.exists(output_dir):
-            logger.debug("Removing %s", output_dir)
-            rmtree(output_dir)
-        for path in [stdout, stderr, exit_status_file]:
-            if os.path.exists(path):
-                logger.debug("Removing %s", path)
-                os.remove(path)
-
         cmd = ["/usr/bin/env", "bash", job.data["jobscript"]]
         logger.debug("About to submit job with command: %s", str(cmd))
 
@@ -337,6 +324,7 @@ class LocalDriver(DriverBase):
 
         self.kill(job)
 
+        # need to make sure the output artifacts are gone, since we're reusing the same job dir
         for name in ["exit_status_file", "stdout", "stderr"]:
             path = job.data[name]
             if os.path.exists(path):
