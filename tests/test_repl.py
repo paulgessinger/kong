@@ -446,7 +446,7 @@ def test_resubmit_job(repl, state, capsys):
     assert j1.status == Job.Status.SUBMITTED
 
 
-def test_status(repl, state, capsys):
+def test_status_update(repl, state, capsys):
     root = Folder.get_root()
 
     repl.onecmd("status")
@@ -459,6 +459,11 @@ def test_status(repl, state, capsys):
 
     j1 = state.create_job(command="sleep 0.2")
 
+    def update():
+        repl.onecmd(f"update {j1.job_id}")
+        out, err = capsys.readouterr()
+
+    update()
     repl.onecmd(f"status {j1.job_id}")
     out, err = capsys.readouterr()
     assert "CREATED" in out
@@ -469,10 +474,19 @@ def test_status(repl, state, capsys):
 
     repl.onecmd(f"status {j1.job_id}")
     out, err = capsys.readouterr()
+    assert "SUBMITTED" in out
+
+    update()
+    repl.onecmd(f"status {j1.job_id}")
+    out, err = capsys.readouterr()
     assert "RUNNING" in out
 
     time.sleep(0.2)
 
     repl.onecmd(f"status {j1.job_id}")
+    out, err = capsys.readouterr()
+    assert "RUNNING" in out
+
+    repl.onecmd(f"status -r {j1.job_id}")
     out, err = capsys.readouterr()
     assert "COMPLETED" in out

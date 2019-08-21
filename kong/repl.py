@@ -213,15 +213,32 @@ class Repl(cmd.Cmd):
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
+        p.add_argument("--refresh", "-r", action="store_true")
 
         try:
             args = p.parse_args(argv)
             jobs = self.state.get_jobs(args.job_id)
 
-            self.state.refresh_jobs(jobs)
+            if args.refresh:
+                self.state.refresh_jobs(jobs)
 
             for job in jobs:
                 click.echo(f"{job}")
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_update(self, arg: str):
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            jobs = self.state.get_jobs(args.job_id)
+            self.state.refresh_jobs(jobs)
 
         except SystemExit as e:
             if e.code != 0:
