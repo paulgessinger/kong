@@ -373,7 +373,7 @@ def test_bulk_sync(driver, state):
     jobs = []
     for i in range(15):
         job = driver.create_job(
-            folder=root, command=f"sleep {0.3 + random.random()*0.2} ; echo 'JOB{i}'"
+            folder=root, command=f"sleep {0.1 + random.random()*0.2} ; echo 'JOB{i}'"
         )
         job.submit()
         jobs.append(job)
@@ -383,11 +383,12 @@ def test_bulk_sync(driver, state):
     for i in range(15):
         job = driver.create_job(
             folder=root,
-            command=f"sleep {0.3 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
+            command=f"sleep {0.1 + random.random()*0.2} ; echo 'JOB{i+sjobs}' 1>&2 ; exit 1",
         )
         job.submit()
         jobs.append(job)
 
+    time.sleep(0.4)
     driver.bulk_sync_status(jobs)
 
     for i, job in enumerate(jobs[:15]):
@@ -412,7 +413,7 @@ def test_job_resubmit(driver, state):
         assert fh.read().strip() == "begin\nend"
 
     driver.resubmit(j1)
-    for path in ["output_dir", "exit_status_file", "stdout", "stderr"]:
+    for path in ["exit_status_file", "stdout", "stderr"]:
         assert not os.path.exists(j1.data[path])
 
     assert j1.status == Job.Status.SUBMITTED

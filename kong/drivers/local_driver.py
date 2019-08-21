@@ -336,6 +336,12 @@ class LocalDriver(DriverBase):
             )
 
         self.kill(job)
+
+        for name in ["exit_status_file", "stdout", "stderr"]:
+            path = job.data[name]
+            if os.path.exists(path):
+                os.remove(path)
+
         job.status = Job.Status.CREATED
         job.save()
         self.submit(job)
