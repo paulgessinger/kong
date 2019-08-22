@@ -340,6 +340,60 @@ def test_run_kill(driver, state):
     assert j2.status == Job.Status.FAILED  # shouldn't change after waiting
 
 
+def test_bulk_submit(driver, state):
+    root = Folder.get_root()
+
+    jobs = [
+        driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB{i}'")
+        for i in range(15)
+    ]
+
+    for job in jobs:
+        assert job.status == Job.Status.CREATED
+
+    driver.bulk_submit(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.SUBMITTED
+
+    driver.wait(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.COMPLETED
+
+
+def test_bulk_create(driver, state):
+    root = Folder.get_root()
+
+    jobs = driver.bulk_create_jobs(
+        [dict(folder=root, command=f"sleep 0.1; echo 'JOB{i}'") for i in range(15)]
+    )
+
+    for job in jobs:
+        assert job.status == Job.Status.CREATED
+
+
+def test_bulk_kill(driver, state):
+    root = Folder.get_root()
+
+    jobs = driver.bulk_create_jobs(
+        [dict(folder=root, command=f"sleep 0.1; echo 'JOB{i}'") for i in range(15)]
+    )
+
+    for job in jobs:
+        assert job.status == Job.Status.CREATED
+
+    driver.bulk_submit(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.SUBMITTED
+
+    driver.bulk_kill(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.FAILED
+
+
 def test_bulk_wait(driver, state):
     root = Folder.get_root()
 

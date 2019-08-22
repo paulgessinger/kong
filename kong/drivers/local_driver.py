@@ -1,34 +1,18 @@
-import functools
 import shutil
 import tempfile
-from concurrent import futures
-from concurrent.futures import ThreadPoolExecutor, Future
-from datetime import datetime, timedelta
 import os
-import time
-from contextlib import contextmanager, _GeneratorContextManager
-from shutil import rmtree
+from contextlib import contextmanager
 from subprocess import Popen
-from typing import (
-    Any,
-    Optional,
-    IO,
-    Iterator,
-    ContextManager,
-    Union,
-    List,
-    Generator,
-    Iterable,
-)
+from typing import Any, Optional, IO, ContextManager, Union, List, Iterable, Dict
 import uuid
 
 import psutil
 
+from ..db import database
 from ..model import Folder, Job
 from ..logger import logger
-from ..config import Config
-from . import DriverMismatch, InvalidJobStatus
-from .driver_base import DriverBase
+from . import InvalidJobStatus
+from .driver_base import DriverBase, checked_job
 
 jobscript_tpl = """
 #!/usr/bin/env bash
@@ -58,29 +42,7 @@ echo $? > {exit_status_file}
 """.strip()
 
 
-def checked_job(f: Any) -> Any:
-    @functools.wraps(f)
-    def wrapper(self: Any, job: Job, *args: Any, **kwargs: Any) -> Any:
-        self._check_driver(job)
-        return f(self, job, *args, **kwargs)
-
-    return wrapper
-
-
 class LocalDriver(DriverBase):
-    config: Config
-
-    def __init__(self, config: Optional[Config]) -> None:
-        if config is None:
-            logger.debug("Attempt to default-construct configuration object")
-            self.config = Config()
-        else:
-            logger.debug("Taking explicit confit")
-            self.config = config
-
-        logger.debug("Opening jobdir filesystem at %s", self.config.jobdir)
-        assert os.path.exists(self.config.jobdir)
-
     def create_job(
         self, folder: Folder, command: str, cores: int = 1, *args: Any, **kwargs: Any
     ) -> Job:
@@ -144,7 +106,11 @@ class LocalDriver(DriverBase):
         job._driver_instance = self
         return job
 
-    def cleanup(self, job: Job) -> None:
+    def bulk_create_jobs(self, jobs: Iterable[Dict[str, Any]]) -> List["Job"]:
+        # right now, implemented as loop, potential to optimize
+        return [self.create_job(**kwargs) for kwargs in jobs]
+
+    def cleanup(self, job: Job) -> Job:
         assert job.status in (
             Job.Status.CREATED,
             Job.Status.FAILED,
@@ -158,28 +124,22 @@ class LocalDriver(DriverBase):
             path = job.data[name]
             if os.path.exists(path):
                 shutil.rmtree(path)
+        return job
 
     def remove(self, job: Job) -> None:
         logger.debug("Removing job %s", job)
         self.cleanup(job)
         job.delete_instance()
 
-    def _check_driver(self, job: Job) -> None:
-        # check if we're the right driver for this
-        if not isinstance(self, job.driver):
-            raise DriverMismatch(
-                f"Job {job} is has driver {job.driver}, not {self.__class__}"
-            )
-
     @checked_job
-    def sync_status(self, job: Job) -> None:
+    def sync_status(self, job: Job, save: bool = True) -> Job:
         if job.status not in (Job.Status.RUNNING, Job.Status.SUBMITTED):
             logger.debug(
                 "Job %s is neither RUNNING nor SUBMITTED (%s), so no status changes without intervention",
                 job,
                 job.status,
             )
-            return
+            return job
 
         logger.debug("Job %s in status %s, checking for updates", job, job.status)
         exit_status_file = job.data["exit_status_file"]
@@ -216,29 +176,37 @@ class LocalDriver(DriverBase):
                     check_exit_code()
                 else:
                     job.status = Job.Status.RUNNING
-                job.save()
             else:
                 logger.debug("Job %s is not running, exit code should be set", job)
                 check_exit_code()
+            if save:
                 job.save()
 
         except psutil.NoSuchProcess:
             logger.debug("Job %s with pid %d doesn't exist, check exit code", job, pid)
             check_exit_code()
-            job.save()
+            if save:
+                job.save()
+        return job
 
-    def bulk_sync_status(self, jobs: Iterable[Job]) -> None:
+    def bulk_sync_status(self, jobs: Iterable[Job]) -> Iterable[Job]:
         # simply implemented as loop over single sync status for local driver
-        for job in jobs:
-            self.sync_status(job)
+        def sync() -> Iterable[Job]:
+            for job in jobs:
+                self.sync_status(job, save=False)
+                yield job
+
+        with database.atomic():
+            Job.bulk_update(sync(), fields=[Job.status], batch_size=self.batch_size)
+
+        return jobs
 
     @checked_job
-    def kill(self, job: Job) -> None:
+    def kill(self, job: Job, save: bool = True) -> None:
         self.sync_status(job)
         if job.status == Job.Status.CREATED:
             logger.debug("Job %s in %s, simply setting to failed", job, job.status)
             job.status = Job.Status.FAILED
-            job.save()
         elif job.status in (Job.Status.RUNNING, Job.Status.SUBMITTED):
             logger.debug(
                 "Job %s in %s, killing pid %d", job, job.status, job.data["pid"]
@@ -247,12 +215,35 @@ class LocalDriver(DriverBase):
             proc.kill()
             proc.wait()
             job.status = Job.Status.FAILED
-            job.save()
         else:
             logger.debug("Job %s in %s, do nothing")
+        if save:
+            job.save()
+
+    def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable[Job]:
+        def k() -> Iterable[Job]:
+            for job in jobs:
+                self.kill(job, save=False)
+                yield job
+
+        with database.atomic():
+            Job.bulk_update(k(), fields=[Job.status], batch_size=self.batch_size)
+
+        return jobs
+
+    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+        def sub() -> Iterable[Job]:
+            for job in jobs:
+                self.submit(job, save=False)
+                yield job
+
+        with database.atomic():
+            Job.bulk_update(
+                sub(), fields=[Job.status, Job.data], batch_size=self.batch_size
+            )
 
     @checked_job
-    def submit(self, job: Job) -> None:
+    def submit(self, job: Job, save: bool = True) -> None:
         self.sync_status(job)
         if job.status > Job.Status.CREATED:
             raise InvalidJobStatus(f"Cannot submit job in state {job.status}")
@@ -264,7 +255,8 @@ class LocalDriver(DriverBase):
 
         job.data["pid"] = proc.pid
         job.status = Job.Status.SUBMITTED
-        job.save()
+        if save:
+            job.save()
         logger.debug("Submitted job as %s", job)
 
     @checked_job  # type: ignore
@@ -315,7 +307,7 @@ class LocalDriver(DriverBase):
             self._wait_single(job, timeout=timeout)
 
     @checked_job
-    def resubmit(self, job: Job) -> None:
+    def resubmit(self, job: Job) -> Job:
         self.sync_status(job)
         if job.status not in (
             Job.Status.COMPLETED,
@@ -337,12 +329,14 @@ class LocalDriver(DriverBase):
                 os.remove(path)
             assert not os.path.exists(path)
 
-        scratch_dir = job.data["scratch_dir"]
-        if os.path.exists(scratch_dir):
-            logger.debug("Removing %s", scratch_dir)
-            shutil.rmtree(scratch_dir)
-            os.makedirs(scratch_dir)
+        for d in ["scratch_dir", "output_dir"]:
+            path = job.data[d]
+            if os.path.exists(path):
+                logger.debug("Removing %s", path)
+                shutil.rmtree(path)
+                os.makedirs(path)
 
         job.status = Job.Status.CREATED
         job.save()
         self.submit(job)
+        return job

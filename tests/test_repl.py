@@ -42,6 +42,10 @@ def test_ls(tree, state, repl, capsys, sample_jobs):
         == "alpha\nbeta\ngamma\n" + "\n".join([str(j) for j in state.cwd.jobs]) + "\n"
     )
 
+    repl.onecmd("ls --nope")
+    out, err = capsys.readouterr()
+    assert "usage" in out
+
 
 def test_ls_refresh(repl, state, capsys, sample_jobs):
     repl.do_ls(".")
@@ -408,6 +412,10 @@ def test_submit_job(repl, state, capsys):
     time.sleep(0.3)
     assert j1.get_status() == Job.Status.COMPLETED
 
+    repl.onecmd("submit_job --nope")
+    out, err = capsys.readouterr()
+    assert "usage" in out
+
 
 def test_kill_job(repl, state, capsys):
     root = Folder.get_root()
@@ -424,6 +432,10 @@ def test_kill_job(repl, state, capsys):
     repl.do_kill_job(str(j1.job_id))
 
     assert j1.get_status() == Job.Status.FAILED
+
+    repl.onecmd("kill_job --nope")
+    out, err = capsys.readouterr()
+    assert "usage" in out
 
 
 def test_resubmit_job(repl, state, capsys):
@@ -445,6 +457,10 @@ def test_resubmit_job(repl, state, capsys):
     repl.do_resubmit_job(str(j1.job_id))
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
+
+    repl.onecmd("resubmit_job --nope")
+    out, err = capsys.readouterr()
+    assert "usage" in out
 
 
 def test_status_update(repl, state, capsys):
@@ -491,3 +507,7 @@ def test_status_update(repl, state, capsys):
     repl.onecmd(f"status -r {j1.job_id}")
     out, err = capsys.readouterr()
     assert "COMPLETED" in out
+
+    repl.onecmd("update --nope")
+    out, err = capsys.readouterr()
+    assert "usage" in out

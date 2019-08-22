@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
@@ -17,7 +18,7 @@ from typing import (
 )
 
 import peewee as pw
-from playhouse.sqlite_ext import JSONField  # type: ignore
+
 
 from ..db import AutoIncrementField
 from ..drivers import DriverMismatch
@@ -51,6 +52,22 @@ def with_driver(f: Any) -> Any:
         return f(self, self._driver_instance, *args, **kwargs)
 
     return wrapper
+
+
+import sqlite3
+
+if sqlite3.version_info < (3, 9, 0):  # type: ignore
+
+    class JSONField(pw.CharField):
+        def db_value(self, value: Dict) -> str:
+            return json.dumps(value)
+
+        def python_value(self, value: str) -> Dict:
+            return cast(Dict, json.loads(value))
+
+
+else:
+    from playhouse.sqlite_ext import JSONField  # type: ignore
 
 
 class DriverField(pw.CharField):

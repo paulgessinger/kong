@@ -51,6 +51,8 @@ def setup(cfg: Optional[config.Config]) -> None:
 
     data["history_length"] = data.get("history_length", 1000)
 
+    data = config.config_schema.validate(data)
+
     logger.debug("Config: %s", data)
     with open(config.CONFIG_FILE, "w") as f:
         yaml.dump(data, f)

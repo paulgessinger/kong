@@ -1,61 +1,112 @@
-from typing import List, Any, Union, Optional, ContextManager, Iterable, TYPE_CHECKING
+import functools
+import os
+from typing import (
+    List,
+    Any,
+    Union,
+    Optional,
+    ContextManager,
+    Iterable,
+    TYPE_CHECKING,
+    Dict,
+)
 from abc import *
 
+from kong.drivers import DriverMismatch
+from ..logger import logger
+from ..config import Config
 
 if TYPE_CHECKING:
-    from ..config import Config
     from ..model import Job, Folder
 
 
-class DriverBase(ABC):
-    @abstractmethod
+def checked_job(f: Any) -> Any:
+    @functools.wraps(f)
+    def wrapper(self: Any, job: "Job", *args: Any, **kwargs: Any) -> Any:
+        self._check_driver(job)
+        return f(self, job, *args, **kwargs)
+
+    return wrapper
+
+
+class DriverBase(ABC):  # pragma: no-cover
+    config: Config
+
+    batch_size: int = 50
+
     def __init__(self, config: "Config") -> None:
-        raise NotImplemented()
+        if config is None:
+            logger.debug("Attempt to default-construct configuration object")
+            self.config = Config()
+        else:
+            logger.debug("Taking explicit confit")
+            self.config = config
+
+        logger.debug("Checking jobdir filesystem at %s", self.config.jobdir)
+        assert os.path.exists(self.config.jobdir)
+
+    @classmethod
+    def _check_driver(cls, job: "Job") -> None:
+        # check if we're the right driver for this
+        if cls != job.driver:
+            raise DriverMismatch(f"Job {job} is has driver {job.driver}, not {cls}")
 
     @abstractmethod
     def create_job(
-        self, folder: "Folder", command: str, cores: int, *args: Any, **kwargs: Any
+        self, folder: "Folder", command: str, cores: int  # , *args: Any, **kwargs: Any
     ) -> "Job":
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @abstractmethod
-    def sync_status(self, job: "Job") -> None:
-        raise NotImplemented()
+    def bulk_create_jobs(self, jobs: Iterable[Dict[str, Any]]) -> List["Job"]:
+        raise NotImplementedError()
 
     @abstractmethod
-    def bulk_sync_status(self, jobs: Iterable["Job"]) -> None:
-        raise NotImplemented()
+    def sync_status(self, job: "Job") -> "Job":
+        raise NotImplementedError()
 
     @abstractmethod
-    def kill(self, job: "Job") -> None:
-        raise NotImplemented()
+    def bulk_sync_status(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def kill(self, job: "Job") -> "Job":
+        raise NotImplementedError()
+
+    @abstractmethod
+    def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+        raise NotImplementedError()
 
     @abstractmethod
     def wait(
         self, job: Union["Job", List["Job"]], timeout: Optional[int] = None
     ) -> None:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @abstractmethod
     def submit(self, job: "Job") -> None:
-        raise NotImplemented()
+        raise NotImplementedError()
+
+    @abstractmethod
+    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+        raise NotImplementedError()
 
     @abstractmethod
     def stdout(self, job: "Job") -> ContextManager[None]:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @abstractmethod
     def stderr(self, job: "Job") -> ContextManager[None]:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @abstractmethod
-    def resubmit(self, job: "Job") -> None:
-        raise NotImplemented()
+    def resubmit(self, job: "Job") -> "Job":
+        raise NotImplementedError()
 
     @abstractmethod
-    def cleanup(self, job: "Job") -> None:
-        raise NotImplemented()
+    def cleanup(self, job: "Job") -> "Job":
+        raise NotImplementedError()
 
     @abstractmethod
     def remove(self, job: "Job") -> None:
-        raise NotImplemented()
+        raise NotImplementedError()

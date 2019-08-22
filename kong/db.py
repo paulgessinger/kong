@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, ContextManager
 
 if not TYPE_CHECKING:
     from playhouse.sqlite_ext import SqliteExtDatabase, AutoIncrementField
@@ -15,6 +15,9 @@ else:  # pragma: no cover
             ...
 
         def create_tables(self, tables: List[Any]) -> None:
+            ...
+
+        def atomic(self) -> ContextManager[None]:
             ...
 
     class AutoIncrementField:
