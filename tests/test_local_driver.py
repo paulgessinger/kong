@@ -174,8 +174,8 @@ def test_job_env_is_valid(driver, state):
         return j1, env
 
     job, env = run_get_env()
-    output_dir = os.path.join(state.config.joboutputdir, str(job.job_id))
-    log_dir = os.path.join(state.config.jobdir, str(job.job_id))
+    output_dir = os.path.join(state.config.joboutputdir, f"{job.job_id:>06d}")
+    log_dir = os.path.join(state.config.jobdir, f"{job.job_id:>06d}")
 
     assert env["KONG_JOB_NPROC"] == "1"
     assert env["KONG_JOB_SCRATCHDIR"] != ""
@@ -188,8 +188,8 @@ def test_job_env_is_valid(driver, state):
     assert env["KONG_JOB_LOG_DIR"] == log_dir and job.data["log_dir"] == log_dir
 
     job, env = run_get_env(cores=8)
-    output_dir = os.path.join(state.config.joboutputdir, str(job.job_id))
-    log_dir = os.path.join(state.config.jobdir, str(job.job_id))
+    output_dir = os.path.join(state.config.joboutputdir, f"{job.job_id:>06d}")
+    log_dir = os.path.join(state.config.jobdir, f"{job.job_id:>06d}")
 
     assert env["KONG_JOB_NPROC"] == "8"
     assert env["KONG_JOB_SCRATCHDIR"] != ""

@@ -60,11 +60,13 @@ class LocalDriver(DriverBase):
 
         # in job dir, create output dir
         output_dir = os.path.abspath(
-            os.path.join(self.config.joboutputdir, f"{job.job_id}")
+            os.path.join(self.config.joboutputdir, f"{job.job_id:>06d}")
         )
         os.makedirs(output_dir, exist_ok=True)
 
-        log_dir = os.path.abspath(os.path.join(self.config.jobdir, f"{job.job_id}"))
+        log_dir = os.path.abspath(
+            os.path.join(self.config.jobdir, f"{job.job_id:>06d}")
+        )
         os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
