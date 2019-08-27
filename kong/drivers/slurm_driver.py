@@ -171,8 +171,8 @@ config_schema = sc.Schema(
 class SlurmDriver(DriverBase):
     slurm: SlurmInterface
 
-    def __init__(self, config: Config, slurm: SlurmInterface = ShellSlurmInterface()):
-        self.slurm = slurm
+    def __init__(self, config: Config, slurm: Optional[SlurmInterface] = None):
+        self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
         assert "slurm_driver" in self.config.data
         self.slurm_config = config_schema.validate(self.config.slurm_driver)
