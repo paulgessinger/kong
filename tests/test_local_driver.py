@@ -6,7 +6,8 @@ import psutil
 import pytest
 from unittest.mock import Mock
 
-from kong.drivers import LocalDriver, DriverMismatch
+from kong.drivers import DriverMismatch
+from kong.drivers.local_driver import LocalDriver
 import kong
 from kong.model import Folder, Job
 
@@ -19,7 +20,7 @@ def state(app_env, db, monkeypatch):
             "click.prompt",
             Mock(
                 side_effect=[
-                    "LocalDriver",
+                    "kong.drivers.local_driver.LocalDriver",
                     os.path.join(app_dir, "joblog"),
                     os.path.join(app_dir, "joboutput"),
                 ]

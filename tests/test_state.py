@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import peewee as pw
 
 import kong
-from kong.drivers import LocalDriver
+from kong.drivers.local_driver import LocalDriver
 from kong.model import Folder, Job
 import kong.drivers
 from kong.state import DoesNotExist
@@ -20,7 +20,7 @@ def cfg(app_env, monkeypatch):
             "click.prompt",
             Mock(
                 side_effect=[
-                    "LocalDriver",
+                    "kong.drivers.local_driver.LocalDriver",
                     os.path.join(app_dir, "joblog"),
                     os.path.join(app_dir, "joboutput"),
                 ]

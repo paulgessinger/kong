@@ -15,7 +15,7 @@ from typing import (
 import peewee as pw
 from contextlib import contextmanager
 
-from .drivers import DriverMismatch
+from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config, drivers
 from .db import database
@@ -43,7 +43,7 @@ class State:
     def __init__(self, config: config.Config, cwd: Folder) -> None:
         self.config = config
         self.cwd = cwd
-        self.default_driver: DriverBase = getattr(drivers, self.config.default_driver)(
+        self.default_driver: DriverBase = get_driver(self.config.default_driver)(
             self.config
         )
 

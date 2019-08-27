@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from kong import config
-from kong.drivers import LocalDriver
+from kong.drivers.local_driver import LocalDriver
 import kong.drivers
 from kong.drivers import DriverMismatch
 from kong.model import Job, Folder

@@ -1,5 +1,7 @@
 from typing import List, Any, Union, Optional, ContextManager, Iterable
 
+from ..logger import logger
+
 __all__: List[str] = ["LocalDriver"]
 
 
@@ -11,4 +13,15 @@ class DriverMismatch(BaseException):
     pass
 
 
-from .local_driver import LocalDriver
+def get_driver(value: str) -> type:
+    logger.debug("Attempting loading driver %s", value)
+    import importlib
+
+    components = value.split(".")
+    module_name = ".".join(components[:-1])
+    class_name = components[-1]
+
+    print(class_name, module_name)
+    module = importlib.import_module(module_name)
+    class_: type = getattr(module, class_name)
+    return class_

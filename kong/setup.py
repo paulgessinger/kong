@@ -7,6 +7,7 @@ import click
 from . import config
 from .logger import logger
 from . import drivers
+from .drivers import get_driver
 
 
 def setup(cfg: Optional[config.Config]) -> None:
@@ -20,14 +21,17 @@ def setup(cfg: Optional[config.Config]) -> None:
     else:
         data = dict(cfg.data)
 
-    available_drivers = [d for d in drivers.__all__]
-
     data["default_driver"] = click.prompt(
-        f"Which batch system driver shall we use by default? ({', '.join(available_drivers)})",
-        default=data.get("default_driver", "LocalDriver"),
+        f"Which batch system driver shall we use by default?",
+        default=data.get("default_driver", "kong.drivers.local_driver.LocalDriver"),
     )
 
-    assert data["default_driver"] in available_drivers, "Please select a valid driver"
+    try:
+        assert issubclass(
+            get_driver(data["default_driver"]), drivers.driver_base.DriverBase
+        ), "Please provide a valid driver"
+    except:
+        raise ValueError(f"{data['default_driver']} is not a valid driver")
 
     data["jobdir"] = os.path.expanduser(
         click.prompt(
