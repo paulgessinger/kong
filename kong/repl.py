@@ -31,6 +31,16 @@ def parse(f: Any) -> Callable[[str], Any]:
     return wrapper
 
 
+color_dict = {
+    Job.Status.UNKOWN: "red",
+    Job.Status.CREATED: "white",
+    Job.Status.SUBMITTED: "yellow",
+    Job.Status.RUNNING: "blue",
+    Job.Status.FAILED: "red",
+    Job.Status.COMPLETED: "green",
+}
+
+
 class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
@@ -84,117 +94,122 @@ class Repl(cmd.Cmd):
             )
             width, height = shutil.get_terminal_size((80, 40))
 
-            folder_name_length = 0
             if len(folders) > 0:
-                folder_name_length = max([len(f.name) for f in folders])
+                folder_name_length = 0
+                if len(folders) > 0:
+                    folder_name_length = max([len(f.name) for f in folders])
 
-            headers = ("name", "job counts")
+                headers = ("name", "job counts")
 
-            folder_name_length = max(folder_name_length, len(headers[0]))
+                folder_name_length = max(folder_name_length, len(headers[0]))
 
-            click.echo(
-                headers[0].ljust(folder_name_length)
-                + " "
-                + headers[1].rjust(width - folder_name_length - 1)
-            )
-
-            click.echo(
-                "-" * folder_name_length + " " + "-" * (width - folder_name_length - 1)
-            )
-
-            color_dict = {
-                Job.Status.UNKOWN: "red",
-                Job.Status.CREATED: "black",
-                Job.Status.SUBMITTED: "yellow",
-                Job.Status.RUNNING: "blue",
-                Job.Status.FAILED: "red",
-                Job.Status.COMPLETED: "green",
-            }
-
-            for folder in folders:
-                folder_jobs = folder.jobs_recursive()
-                # accumulate counts
-                # @TODO: SLOW! Optimize to query
-                counts = {
-                    Job.Status.UNKOWN: 0,
-                    Job.Status.CREATED: 0,
-                    Job.Status.SUBMITTED: 0,
-                    Job.Status.RUNNING: 0,
-                    Job.Status.FAILED: 0,
-                    Job.Status.COMPLETED: 0,
-                }
-                for job in folder_jobs:
-                    counts[job.status] += 1
-
-                output = ""
-                for (k, c), l in zip(counts.items(), "UCSRFC"):
-                    output += style(f" {c:> 6d}{l}", fg=color_dict[k])
-                output = folder.name.ljust(folder_name_length) + rjust(
-                    output, width - folder_name_length
+                click.echo(
+                    headers[0].ljust(folder_name_length)
+                    + " "
+                    + headers[1].rjust(width - folder_name_length - 1)
                 )
 
-                click.echo(output)
+                click.echo(
+                    "-" * folder_name_length
+                    + " "
+                    + "-" * (width - folder_name_length - 1)
+                )
 
-            click.echo("")
+                for folder in folders:
+                    folder_jobs = folder.jobs_recursive()
+                    # accumulate counts
+                    # @TODO: SLOW! Optimize to query
+                    counts = {
+                        Job.Status.UNKOWN: 0,
+                        Job.Status.CREATED: 0,
+                        Job.Status.SUBMITTED: 0,
+                        Job.Status.RUNNING: 0,
+                        Job.Status.FAILED: 0,
+                        Job.Status.COMPLETED: 0,
+                    }
+                    for job in folder_jobs:
+                        counts[job.status] += 1
 
-            headers_jobs = ("job id", "batch job id", "created", "updated", "status")
+                    output = ""
+                    for (k, c), l in zip(counts.items(), "UCSRFC"):
+                        output += style(f" {c:> 6d}{l}", fg=color_dict[k])
+                    output = folder.name.ljust(folder_name_length) + rjust(
+                        output, width - folder_name_length
+                    )
 
-            name_length = 0
+                    click.echo(output)
+
+                click.echo("")
+
             if len(jobs) > 0:
-                name_length = max(name_length, max([len(str(j.job_id)) for j in jobs]))
-            name_length = max(name_length, len(headers_jobs[0]))
-
-            status_len = len("SUBMITTED")
-            status_len = max(status_len, len(headers_jobs[2]))
-
-            def dtfmt(dt: datetime.datetime) -> str:
-                return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-            datetime_len = len(dtfmt(jobs[0].updated_at))
-
-            bjobid_len = (
-                width - name_length - status_len - 2 * datetime_len - len(headers)
-            )
-            bjobid_len = max(bjobid_len, len(headers[1]))
-
-            click.echo(
-                headers_jobs[0].rjust(name_length)
-                + " "
-                + headers_jobs[1].rjust(bjobid_len)
-                + " "
-                + headers_jobs[2].ljust(datetime_len)
-                + " "
-                + headers_jobs[3].ljust(datetime_len)
-                + " "
-                + headers_jobs[4].ljust(status_len)
-            )
-            click.echo(
-                "-" * name_length
-                + " "
-                + "-" * bjobid_len
-                + " "
-                + "-" * datetime_len
-                + " "
-                + "-" * datetime_len
-                + " "
-                + "-" * status_len
-            )
-
-            for job in jobs:
-                job_id = str(job.job_id).rjust(name_length)
-                batch_job_id = job.batch_job_id.rjust(bjobid_len)
-                _, status_name = str(job.status).split(".", 1)
-                color = color_dict[job.status]
-
-                click.secho(
-                    f"{job_id} {batch_job_id} {dtfmt(job.created_at)} {dtfmt(job.updated_at)} {status_name}",
-                    fg=color,
+                headers_jobs = (
+                    "job id",
+                    "batch job id",
+                    "created",
+                    "updated",
+                    "status",
                 )
 
-            # for folder in folders:
-            #     click.echo(folder.name)
-            # for job in jobs:
-            #     click.echo(str(job))
+                name_length = 0
+                if len(jobs) > 0:
+                    name_length = max(
+                        name_length, max([len(str(j.job_id)) for j in jobs])
+                    )
+                name_length = max(name_length, len(headers_jobs[0]))
+
+                status_len = len("SUBMITTED")
+                status_len = max(status_len, len(headers_jobs[-1]))
+
+                def dtfmt(dt: datetime.datetime) -> str:
+                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                datetime_len = len(dtfmt(jobs[0].updated_at))
+
+                bjobid_len = (
+                    width
+                    - name_length
+                    - status_len
+                    - 2 * datetime_len
+                    - len(headers_jobs)
+                )
+                bjobid_len = max(bjobid_len, len(headers_jobs[1]))
+
+                click.echo(
+                    headers_jobs[0].rjust(name_length)
+                    + " "
+                    + headers_jobs[1].rjust(bjobid_len)
+                    + " "
+                    + headers_jobs[2].ljust(datetime_len)
+                    + " "
+                    + headers_jobs[3].ljust(datetime_len)
+                    + " "
+                    + headers_jobs[4].ljust(status_len)
+                )
+                click.echo(
+                    "-" * name_length
+                    + " "
+                    + "-" * bjobid_len
+                    + " "
+                    + "-" * datetime_len
+                    + " "
+                    + "-" * datetime_len
+                    + " "
+                    + "-" * status_len
+                )
+
+                for job in jobs:
+                    job_id = str(job.job_id).rjust(name_length)
+                    if job.batch_job_id is None:
+                        batch_job_id = " " * bjobid_len
+                    else:
+                        batch_job_id = job.batch_job_id.rjust(bjobid_len)
+                    _, status_name = str(job.status).split(".", 1)
+                    color = color_dict[job.status]
+
+                    click.secho(
+                        f"{job_id} {batch_job_id} {dtfmt(job.created_at)} {dtfmt(job.updated_at)} {status_name}",
+                        fg=color,
+                    )
 
         except SystemExit as e:
             if e.code != 0:
@@ -267,15 +282,20 @@ class Repl(cmd.Cmd):
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job")
+        p.add_argument("--refresh", "-r", action="store_true")
 
         try:
             args = p.parse_args(argv)
             jobs = self.state.get_jobs(args.job)
             assert len(jobs) == 1
+            if args.refresh:
+                self.state.refresh_jobs(jobs)
             job = jobs[0]
+            job.reload()
 
             click.echo(job)
             for field in (
+                "batch_job_id",
                 "driver",
                 "folder",
                 "command",
@@ -284,10 +304,13 @@ class Repl(cmd.Cmd):
                 "created_at",
                 "updated_at",
             ):
-                click.echo(f"{field}: {str(getattr(job, field))}")
+                fg: Optional[str] = None
+                if field == "status":
+                    fg = color_dict[job.status]
+                click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
             click.echo("data:")
             for k, v in job.data.items():
-                click.echo(f"{k}: {v}")
+                click.secho(f"{k}: {v}")
 
         except SystemExit as e:
             if e.code != 0:
