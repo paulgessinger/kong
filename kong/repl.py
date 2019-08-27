@@ -137,17 +137,17 @@ class Repl(cmd.Cmd):
 
             click.echo("")
 
-            headers = ("job id", "batch job id", "created", "updated", "status")
+            headers_jobs = ("job id", "batch job id", "created", "updated", "status")
 
             name_length = 0
             if len(jobs) > 0:
                 name_length = max(name_length, max([len(str(j.job_id)) for j in jobs]))
-            name_length = max(name_length, len(headers[0]))
+            name_length = max(name_length, len(headers_jobs[0]))
 
             status_len = len("SUBMITTED")
-            status_len = max(status_len, len(headers[2]))
+            status_len = max(status_len, len(headers_jobs[2]))
 
-            def dtfmt(dt: datetime):
+            def dtfmt(dt: datetime.datetime) -> str:
                 return dt.strftime("%Y-%m-%d %H:%M:%S")
 
             datetime_len = len(dtfmt(jobs[0].updated_at))
@@ -158,15 +158,15 @@ class Repl(cmd.Cmd):
             bjobid_len = max(bjobid_len, len(headers[1]))
 
             click.echo(
-                headers[0].rjust(name_length)
+                headers_jobs[0].rjust(name_length)
                 + " "
-                + headers[1].rjust(bjobid_len)
+                + headers_jobs[1].rjust(bjobid_len)
                 + " "
-                + headers[2].ljust(datetime_len)
+                + headers_jobs[2].ljust(datetime_len)
                 + " "
-                + headers[3].ljust(datetime_len)
+                + headers_jobs[3].ljust(datetime_len)
                 + " "
-                + headers[4].ljust(status_len)
+                + headers_jobs[4].ljust(status_len)
             )
             click.echo(
                 "-" * name_length
@@ -253,7 +253,7 @@ class Repl(cmd.Cmd):
             names = []
             for item in items:
                 if isinstance(item, Job):
-                    names.append(item.job_id)
+                    names.append(str(item.job_id))
                 else:
                     names.append(item.name)
 

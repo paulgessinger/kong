@@ -97,7 +97,7 @@ class Folder(BaseModel):
     def subfolder(self, name: str) -> Optional["Folder"]:
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
 
-    def jobs_recursive(self):
+    def jobs_recursive(self) -> List["Job"]:
         # @TODO: Optimize, hierarchical expression?
         jobs: List[Job] = list(self.jobs)
         for child in self.children:

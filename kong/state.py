@@ -47,7 +47,7 @@ class State:
             self.config
         )
 
-    @contextmanager
+    @contextmanager  # type: ignore
     def pushd(self, folder: Union["Folder", str]) -> ContextManager[None]:
         prev = self.cwd
 
@@ -132,7 +132,7 @@ class State:
         else:
             raise TypeError(f"{target} is not str or Folder")
 
-    def _mv_folder(self, source: Folder, dest: Union[str, Folder]):
+    def _mv_folder(self, source: Folder, dest: Union[str, Folder]) -> None:
         if isinstance(dest, Folder):
             # requested action: move source INTO dest
             source.parent = dest
@@ -159,7 +159,7 @@ class State:
         else:
             raise TypeError(f"{dest} is neither string nor Folder")
 
-    def _mv_folders(self, folders: List[Folder], dest: Union[str, Folder]):
+    def _mv_folders(self, folders: List[Folder], dest: Union[str, Folder]) -> None:
         dest_folder: Folder
         if isinstance(dest, Folder):
             dest_folder = dest
@@ -172,10 +172,12 @@ class State:
 
         with database.atomic():
             Folder.update(parent=dest_folder, updated_at=datetime.datetime.now()).where(
-                Folder.folder_id << [f.folder_id for f in folders if f != dest_folder]
+                Folder.folder_id  # type: ignore
+                << [f.folder_id for f in folders if f != dest_folder]  # type: ignore
             ).execute()
 
-    def _mv_jobs(self, jobs: List[Job], dest: Union[str, Folder]):
+    def _mv_jobs(self, jobs: List[Job], dest: Union[str, Folder]) -> None:
+        dest_folder: Optional[Folder]
         if isinstance(dest, Folder):
             dest_folder = dest
         elif isinstance(dest, str):
@@ -185,9 +187,11 @@ class State:
         else:
             raise TypeError(f"{dest} is neither string nor Folder")
 
+        assert dest_folder is not None
+
         with database.atomic():
             Job.update(folder=dest_folder, updated_at=datetime.datetime.now()).where(
-                Job.job_id << [j.job_id for j in jobs]
+                Job.job_id << [j.job_id for j in jobs]  # type: ignore
             ).execute()
 
     def mv(
@@ -223,7 +227,7 @@ class State:
                 self._mv_jobs(jobs, dest)
                 self._mv_folders(folders, dest)
 
-                return list(folders) + list(jobs)
+                return list(folders) + list(jobs)  # type: ignore
 
         elif isinstance(source, Job):
             # is a job
@@ -363,7 +367,7 @@ class State:
     def get_jobs(self, name: JobSpec) -> List[Job]:
         return self._extract_jobs(name)
 
-    def get_folders(self, pattern: str) -> List[Job]:
+    def get_folders(self, pattern: str) -> List[Folder]:
         head, tail = os.path.split(pattern)
         if tail == "*":
             folder: Optional[Folder] = None
