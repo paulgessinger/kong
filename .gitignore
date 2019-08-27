@@ -2,3 +2,5 @@
 *.egg-info
 htmlcov
 .coverage
+.mypy_cache
+venv
