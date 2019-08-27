@@ -140,6 +140,93 @@ def test_cd(state):
     state.cd("/more")
     assert state.cwd == more
 
+    state.cd(root)
+    assert state.cwd == root
+
+    state.cd(more)
+    assert state.cwd == more
+
+
+def test_mv_folder(state, db):
+    root = Folder.get_root()
+
+    f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
+
+    assert len(root.children) == 5
+
+    # actual move
+    state.mv("f1", f2)
+    assert len(root.children) == 4
+    assert len(f2.children) == 1 and f2.children[0] == f1
+    f1.reload()
+    assert f1.parent == f2
+
+    # rename f3 -> f3x
+    state.mv(f3, "f3x")
+    assert len(root.children) == 4
+    assert f3.name == "f3x"
+
+    # another move
+    state.mv(f3, "f4")
+    assert len(f4.children) == 1 and f4.children[0] == f3
+    assert f3.parent == f4
+    assert f3.name == "f3x"
+
+    # move rename at the same time
+    state.cd("f2")
+    state.mv(f5, "../f4/f5x")
+    assert len(f4.children) == 2
+    assert f5.name == "f5x"
+    assert f5.parent == f4
+
+    # try move to nonexistant
+    state.cd("/")
+    with pytest.raises(ValueError):
+        state.mv(f1, "/nope/blub")
+
+    # try to move nonexistant
+    with pytest.raises(ValueError):
+        state.mv("../nope", f1)
+
+
+def test_mv_job(state, db):
+    root = Folder.get_root()
+
+    f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
+
+    assert len(root.children) == 2
+
+    j1, j2, j3, j4, j5 = [state.create_job(command="sleep 1") for _ in range(5)]
+    assert len(root.jobs) == 5
+
+    state.mv(j1, "f1")
+    assert j1.folder == f1
+    assert len(f1.jobs) == 1
+    assert len(root.jobs) == 4
+
+    state.mv(str(j2.job_id), f2)
+    j2.reload()
+    assert j2.folder == f2
+    assert len(f2.jobs) == 1
+    assert len(root.jobs) == 3
+
+    state.cd(f2)
+    state.mv(j3, ".")
+    assert j3.folder == f2
+
+    state.mv(j2, "..")
+    assert j2.folder == root
+
+    state.mv(f"../{j4.job_id}", "../f1")
+    j4.reload()
+    assert j4.folder == f1
+
+    state.cd(root)
+
+    # renaming does not work
+    with pytest.raises(ValueError):
+        state.mv(f"{j5.job_id}", "42")
+
 
 def test_mkdir(state, db):
     root = Folder.get_root()

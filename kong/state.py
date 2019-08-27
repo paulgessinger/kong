@@ -84,15 +84,84 @@ class State:
 
         return folder.children, jobs
 
-    def cd(self, name: str = ".") -> None:
-        if name == "":
-            folder = Folder.get_root()
+    def cd(self, target: Union[str, Folder] = ".") -> None:
+        if isinstance(target, str):
+            if target == "":
+                folder = Folder.get_root()
+            else:
+                _folder = Folder.find_by_path(self.cwd, target)
+                if _folder is None:
+                    raise pw.DoesNotExist()
+                folder = _folder
+            self.cwd = folder
+        elif isinstance(target, Folder):
+            self.cwd = target
         else:
-            _folder = Folder.find_by_path(self.cwd, name)
-            if _folder is None:
-                raise pw.DoesNotExist()
-            folder = _folder
-        self.cwd = folder
+            raise TypeError(f"{target} is not str or Folder")
+
+    def _mv_folder(self, source: Folder, dest: Union[str, Folder]):
+        if isinstance(dest, Folder):
+            # requested action: move source INTO dest
+            source.parent = dest
+            source.save()
+        elif isinstance(dest, str):
+            dest_folder = Folder.find_by_path(self.cwd, dest)
+            if dest_folder is not None:
+                # dest exists!
+                # requested action: move source INTO dest
+                source.parent = dest_folder
+                source.save()
+            else:
+                # dest does not exist
+                # requested action: RENAME source to dest and potentially move
+                # head is new parent folder, tail is new name
+                head, tail = os.path.split(dest)
+                source.name = tail
+                dest_folder = Folder.find_by_path(self.cwd, head)
+                if dest_folder is None:
+                    raise ValueError(f"Target folder {head} does not exist")
+
+                source.parent = dest_folder
+                source.save()
+        else:
+            raise TypeError(f"{dest} is neither string nor Folder")
+
+    def _mv_job(self, source: Job, dest: Union[str, Folder]):
+        if isinstance(dest, Folder):
+            source.folder = dest
+            source.save()
+        elif isinstance(dest, str):
+            dest_folder = Folder.find_by_path(self.cwd, dest)
+            if dest_folder is None:
+                raise ValueError(f"{dest} does not exists, and jobs cannot be renamed")
+            source.folder = dest_folder
+            source.save()
+        else:
+            raise TypeError(f"{dest} is neither string nor Folder")
+
+    def mv(self, source: Union[str, Job, Folder], dest: Union[str, Folder]):
+        # source might be: a job or a folder
+        if isinstance(source, Folder):
+            self._mv_folder(source, dest)
+        elif isinstance(source, str):
+            source_folder = Folder.find_by_path(self.cwd, source)
+            if source_folder is not None:
+                self._mv_folder(source_folder, dest)
+            else:
+                # must be job
+                try:
+                    jobs = self.get_jobs(source)
+                    if len(jobs) != 1:
+                        raise RuntimeError()
+                    self._mv_job(jobs[0], dest)
+                except RuntimeError:
+                    raise ValueError(f"{source} is not a Folder or Job")
+
+        elif isinstance(source, Job):
+            # is a job
+            self._mv_job(source, dest)
+        else:
+            raise TypeError(f"{source} is not a Folder or a Job")
 
     def mkdir(self, path: str) -> None:
         head, tail = os.path.split(path)

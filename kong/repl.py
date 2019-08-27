@@ -9,8 +9,7 @@ from typing import Any, Callable, List, Tuple, Optional
 import click
 import peewee as pw
 
-from .drivers.driver_base import DriverBase
-from kong.state import DoesNotExist
+from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
 from .model import *
@@ -121,6 +120,21 @@ class Repl(cmd.Cmd):
         args = shlex.split(line)
         path = args[1]
         return self.complete_path(path)
+
+    def do_mv(self, arg: str) -> None:
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("src")
+        p.add_argument("dest")
+
+        try:
+            args = p.parse_args(argv)
+            self.state.mv(args.src, args.dest)
+            click.secho(f"Moved {args.src} -> {args.dest}")
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
 
     @parse
     def do_rm(self, name: str) -> None:

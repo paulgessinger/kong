@@ -8,7 +8,6 @@ import peewee as pw
 
 from kong.model import Folder, Job
 from kong.repl import Repl
-import kong.setup
 import kong
 
 import logging
@@ -24,11 +23,13 @@ def repl(state):
 def test_ls(tree, state, repl, capsys, sample_jobs):
     repl.do_ls(".")
     out, err = capsys.readouterr()
-    assert out == "f1\nf2\nf3\n" + "\n".join([str(j) for j in state.cwd.jobs]) + "\n"
+    assert all(f.name in out for f in state.cwd.children)
+    assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
     repl.do_ls("")
     out, err = capsys.readouterr()
-    assert out == "f1\nf2\nf3\n" + "\n".join([str(j) for j in state.cwd.jobs]) + "\n"
+    assert all(f.name in out for f in state.cwd.children)
+    assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
     repl.do_ls("/nope")
     out, err = capsys.readouterr()
@@ -37,10 +38,8 @@ def test_ls(tree, state, repl, capsys, sample_jobs):
     state.cwd = Folder.find_by_path(state.cwd, "/f2")
     repl.do_ls(".")
     out, err = capsys.readouterr()
-    assert (
-        out
-        == "alpha\nbeta\ngamma\n" + "\n".join([str(j) for j in state.cwd.jobs]) + "\n"
-    )
+    assert all(f.name in out for f in state.cwd.children)
+    assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
     repl.onecmd("ls --nope")
     out, err = capsys.readouterr()
@@ -199,6 +198,105 @@ def test_cd(state, repl, db, capsys):
     repl.do_cd("/more")
     out, err = capsys.readouterr()
     assert state.cwd == more
+
+
+def test_mv_folder(state, repl, capsys):
+    root = Folder.get_root()
+
+    f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
+
+    assert len(root.children) == 5
+
+    # actual move
+    repl.onecmd("mv f1 f2")
+    assert len(root.children) == 4
+    assert len(f2.children) == 1 and f2.children[0] == f1
+    f1.reload()
+    assert f1.parent == f2
+    out, err = capsys.readouterr()
+
+    # rename f3 -> f3x
+    repl.onecmd("mv f3 f3x")
+    out, err = capsys.readouterr()
+    f3.reload()
+    assert len(root.children) == 4
+    assert f3.name == "f3x"
+
+    # another move
+    repl.onecmd("mv f3x f4")
+    assert len(f4.children) == 1 and f4.children[0] == f3
+    f3.reload()
+    assert f3.parent == f4
+    assert f3.name == "f3x"
+    out, err = capsys.readouterr()
+
+    # move rename at the same time
+    repl.onecmd("cd f2")
+    repl.onecmd("mv ../f5 ../f4/f5x")
+    out, err = capsys.readouterr()
+    f5.reload()
+    assert len(f4.children) == 2
+    assert f5.name == "f5x"
+    assert f5.parent == f4
+
+    # try move to nonexistant
+    repl.onecmd("cd /")
+    repl.onecmd("mv f2/f1 /nope/blub")
+    out, err = capsys.readouterr()
+    assert "/nope" in out and "not exist" in out
+
+    # try to move nonexistant
+    repl.onecmd("mv ../nope f1")
+    out, err = capsys.readouterr()
+    assert "../nope" in out and "not a" in out
+
+
+def test_mv_job(state, repl, capsys):
+    root = Folder.get_root()
+
+    f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
+
+    assert len(root.children) == 2
+
+    j1, j2, j3, j4, j5 = [state.create_job(command="sleep 1") for _ in range(5)]
+    assert len(root.jobs) == 5
+
+    repl.onecmd(f"mv {j1.job_id} f1")
+    j1.reload()
+    assert j1.folder == f1
+    assert len(f1.jobs) == 1
+    assert len(root.jobs) == 4
+    out, err = capsys.readouterr()
+
+    repl.onecmd(f"mv {j2.job_id} f2")
+    j2.reload()
+    assert j2.folder == f2
+    assert len(f2.jobs) == 1
+    assert len(root.jobs) == 3
+    out, err = capsys.readouterr()
+
+    state.cd(f2)
+    repl.onecmd(f"mv {j3.job_id} .")
+    j3.reload()
+    assert j3.folder == f2
+    out, err = capsys.readouterr()
+
+    repl.onecmd(f"mv {j2.job_id} ..")
+    j2.reload()
+    assert j2.folder == root
+    out, err = capsys.readouterr()
+
+    repl.onecmd(f"mv ../{j4.job_id} ../f1")
+    j4.reload()
+    assert j4.folder == f1
+    out, err = capsys.readouterr()
+
+    state.cd(root)
+
+    # renaming does not work
+    repl.onecmd(f"mv {j5.job_id} 42")
+    out, err = capsys.readouterr()
+    assert "42" in out and "not exist" in out
 
 
 def test_rm(state, repl, db, capsys, monkeypatch):
