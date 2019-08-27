@@ -1,7 +1,18 @@
 import os
-from typing import List, Callable, Any, Union, Optional, Tuple, cast, Iterable
+from typing import (
+    List,
+    Callable,
+    Any,
+    Union,
+    Optional,
+    Tuple,
+    cast,
+    Iterable,
+    ContextManager,
+)
 
 import peewee as pw
+from contextlib import contextmanager
 
 from .drivers import DriverMismatch
 from .drivers.driver_base import DriverBase
@@ -34,6 +45,15 @@ class State:
         self.default_driver: DriverBase = getattr(drivers, self.config.default_driver)(
             self.config
         )
+
+    @contextmanager
+    def pushd(self, folder: "Folder") -> ContextManager[None]:
+        prev = self.cwd
+        self.cwd = folder
+        try:
+            yield
+        finally:
+            self.cwd = prev
 
     @classmethod
     def get_instance(cls) -> "State":
@@ -126,40 +146,72 @@ class State:
         else:
             raise TypeError(f"{dest} is neither string nor Folder")
 
-    def _mv_job(self, source: Job, dest: Union[str, Folder]):
+    def _mv_folders(self, folders: List[Folder], dest: Union[str, Folder]):
+        dest_folder: Folder
         if isinstance(dest, Folder):
-            source.folder = dest
-            source.save()
+            dest_folder = dest
+        elif isinstance(dest, str):
+            folder = Folder.find_by_path(self.cwd, dest)
+            assert folder is not None
+            dest_folder = folder
+        else:
+            raise TypeError(f"{dest} is neither string nor Folder")
+
+        with database.atomic():
+            Folder.update(parent=dest_folder).where(
+                Folder.folder_id << [f.folder_id for f in folders if f != dest_folder]
+            ).execute()
+
+    def _mv_jobs(self, jobs: List[Job], dest: Union[str, Folder]):
+        if isinstance(dest, Folder):
+            dest_folder = dest
         elif isinstance(dest, str):
             dest_folder = Folder.find_by_path(self.cwd, dest)
             if dest_folder is None:
                 raise ValueError(f"{dest} does not exists, and jobs cannot be renamed")
-            source.folder = dest_folder
-            source.save()
         else:
             raise TypeError(f"{dest} is neither string nor Folder")
 
-    def mv(self, source: Union[str, Job, Folder], dest: Union[str, Folder]):
+        with database.atomic():
+            Job.update(folder=dest_folder).where(
+                Job.job_id << [j.job_id for j in jobs]
+            ).execute()
+
+    def mv(
+        self, source: Union[str, Job, Folder], dest: Union[str, Folder]
+    ) -> List[Union[Job, Folder]]:
         # source might be: a job or a folder
         if isinstance(source, Folder):
             self._mv_folder(source, dest)
+            return [source]
         elif isinstance(source, str):
             source_folder = Folder.find_by_path(self.cwd, source)
             if source_folder is not None:
                 self._mv_folder(source_folder, dest)
+                return [source_folder]
             else:
-                # must be job
+                # either job(s) or possibly a list of folders (*)
+                jobs: List[Job] = []
                 try:
                     jobs = self.get_jobs(source)
-                    if len(jobs) != 1:
-                        raise RuntimeError()
-                    self._mv_job(jobs[0], dest)
+                    self._mv_jobs(jobs, dest)
                 except RuntimeError:
                     raise ValueError(f"{source} is not a Folder or Job")
 
+                folders: List[Folder] = []
+
+                try:
+                    folders = self.get_folders(source)
+                    self._mv_folders(folders, dest)
+                except ValueError:
+                    pass
+
+                return list(folders) + list(jobs)
+
         elif isinstance(source, Job):
             # is a job
-            self._mv_job(source, dest)
+            self._mv_jobs([source], dest)
+            return [source]
         else:
             raise TypeError(f"{source} is not a Folder or a Job")
 
@@ -292,3 +344,18 @@ class State:
 
     def get_jobs(self, name: JobSpec) -> List[Job]:
         return self._extract_jobs(name)
+
+    def get_folders(self, pattern: str) -> List[Job]:
+        head, tail = os.path.split(pattern)
+        if tail == "*":
+            folder: Optional[Folder] = None
+            if head == "":
+                folder = Folder.get_root()
+            else:
+                folder = Folder.find_by_path(self.cwd, head)
+
+            if folder is None:
+                raise ValueError(f"No folder {head} found")
+            return folder.children
+        else:
+            raise ValueError(f"Invalid pattern {pattern}")

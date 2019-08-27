@@ -200,6 +200,7 @@ def test_mv_job(state, db):
     assert len(root.jobs) == 5
 
     state.mv(j1, "f1")
+    j1.reload()
     assert j1.folder == f1
     assert len(f1.jobs) == 1
     assert len(root.jobs) == 4
@@ -212,9 +213,11 @@ def test_mv_job(state, db):
 
     state.cd(f2)
     state.mv(j3, ".")
+    j3.reload()
     assert j3.folder == f2
 
     state.mv(j2, "..")
+    j2.reload()
     assert j2.folder == root
 
     state.mv(f"../{j4.job_id}", "../f1")
@@ -226,6 +229,109 @@ def test_mv_job(state, db):
     # renaming does not work
     with pytest.raises(ValueError):
         state.mv(f"{j5.job_id}", "42")
+
+
+def test_mv_bulk_job(state):
+    root = Folder.get_root()
+
+    f1, f2, f3 = [root.add_folder(n) for n in ("f1", "f2", "f3")]
+    assert len(root.children) == 3
+
+    state.cwd = f1
+    j1, j2, j3, j4, j5 = [state.create_job(command="sleep 1") for _ in range(5)]
+    assert len(f1.jobs) == 5
+
+    state.cwd = root
+
+    state.mv("f1/*", f3)
+    assert len(f1.jobs) == 0 and len(f3.jobs) == 5
+    assert len(root.children) == 3
+    for j in (j1, j2, j3, j4, j5):
+        j.reload()
+        assert j.folder == f3
+
+    state.cwd = f2
+    state.mv("../f3/*", ".")
+    assert len(f3.jobs) == 0 and len(f2.jobs) == 5
+    for j in (j1, j2, j3, j4, j5):
+        j.reload()
+        assert j.folder == f2
+
+
+def test_mv_bulk_both(state):
+    root = Folder.get_root()
+    f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
+    f3 = f1.add_folder("f3")
+
+    with state.pushd(f1):
+        j1 = state.create_job(command="sleep 1")
+
+    state.mv("f1/*", "f2")
+    j1.reload()
+    assert j1.folder == f2
+    f3.reload()
+    assert f3.parent == f2
+
+    f3.parent = root
+    f3.save()
+    j1.folder = root
+    j1.save()
+
+    # attempt to move all in root to f2. this will fail for f2, but only for f2
+    state.mv("*", "f2")
+    for o in (f1, f2, f3, j1):
+        o.reload()
+    assert f1.parent == f2
+    assert f2.parent == root
+    assert f3.parent == f2
+    assert j1.folder == f2
+
+
+def test_cwd_context_manager(state):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    assert state.cwd == root
+
+    with state.pushd(f1):
+        assert state.cwd == f1
+    assert state.cwd == root
+
+
+def test_mv_bulk_folder(state):
+    root = Folder.get_root()
+
+    r1, r2 = [root.add_folder(n) for n in ("r1", "r2")]
+
+    folders = [r1.add_folder(f"f{n}") for n in range(5)]
+    assert len(r1.children) == len(folders)
+    assert len(r2.children) == 0
+
+    state.mv("r1/*", "r2")
+    assert len(r1.children) == 0
+    assert len(r2.children) == len(folders)
+    for f in folders:
+        f.reload()
+        assert f.parent == r2
+
+    state.cwd = r1
+    state.mv("../r2/*", ".")
+    assert len(r1.children) == len(folders)
+    assert len(r2.children) == 0
+    for f in folders:
+        f.reload()
+        assert f.parent == r1
+
+
+def test_get_folders(state):
+    root = Folder.get_root()
+
+    folders = [root.add_folder(f"f{n}") for n in range(10)]
+
+    globbed = state.get_folders("*")
+
+    assert len(globbed) == len(folders)
+    for a, b in zip(globbed, folders):
+        assert a == b
 
 
 def test_mkdir(state, db):

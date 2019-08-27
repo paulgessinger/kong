@@ -4,7 +4,8 @@ import shlex
 import cmd
 import readline
 import os
-from typing import Any, Callable, List, Tuple, Optional
+from typing import Any, Callable, List, Tuple, Optional, Union
+import shutil
 
 import click
 import peewee as pw
@@ -71,10 +72,58 @@ class Repl(cmd.Cmd):
         try:
             args = p.parse_args(argv)
             folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
+            width, height = shutil.get_terminal_size((80, 40))
+
+            headers = ("job id", "batch job id", "status")
+
+            name_length = 0
+            if len(folders) > 0:
+                name_length = max([len(f.name) for f in folders])
+            if len(jobs) > 0:
+                name_length = max(name_length, max([len(str(j.job_id)) for j in jobs]))
+            name_length = max(name_length, len(headers[0]))
+
+            status_len = len("SUBMITTED")
+            status_len = max(status_len, len(headers[2]))
+
+            bjobid_len = width - name_length - status_len - 2
+            bjobid_len = max(bjobid_len, len(headers[1]))
+
+            click.echo(
+                headers[0].rjust(name_length)
+                + " "
+                + headers[1].rjust(bjobid_len)
+                + " "
+                + headers[2].ljust(status_len)
+            )
+            click.echo(
+                "-" * name_length + " " + "-" * bjobid_len + " " + "-" * status_len
+            )
+
             for folder in folders:
                 click.echo(folder.name)
+
+            color_dict = {
+                Job.Status.UNKOWN: "red",
+                Job.Status.CREATED: "black",
+                Job.Status.SUBMITTED: "yellow",
+                Job.Status.RUNNING: "blue",
+                Job.Status.FAILED: "red",
+                Job.Status.COMPLETED: "green",
+            }
+
             for job in jobs:
-                click.echo(str(job))
+                job_id = str(job.job_id).rjust(name_length)
+                batch_job_id = job.batch_job_id.rjust(bjobid_len)
+                _, status_name = str(job.status).split(".", 1)
+                color = color_dict[job.status]
+
+                click.secho(f"{job_id} {batch_job_id} {status_name}", fg=color)
+
+            # for folder in folders:
+            #     click.echo(folder.name)
+            # for job in jobs:
+            #     click.echo(str(job))
 
         except SystemExit as e:
             if e.code != 0:
@@ -129,8 +178,15 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
-            self.state.mv(args.src, args.dest)
-            click.secho(f"Moved {args.src} -> {args.dest}")
+            items: List[Union[Job, Folder]] = self.state.mv(args.src, args.dest)
+            names = []
+            for item in items:
+                if isinstance(item, Job):
+                    names.append(item.job_id)
+                else:
+                    names.append(item.name)
+
+            # click.secho(f"Moved {', '.join(names)} -> {args.dest}")
         except SystemExit as e:
             if e.code != 0:
                 click.secho("Error parsing arguments", fg="red")

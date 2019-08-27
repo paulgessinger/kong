@@ -299,6 +299,55 @@ def test_mv_job(state, repl, capsys):
     assert "42" in out and "not exist" in out
 
 
+def test_mv_bulk_job(state, repl):
+    root = Folder.get_root()
+
+    f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
+    assert len(root.children) == 2
+
+    j1, j2, j3, j4, j5 = [state.create_job(command="sleep 1") for _ in range(5)]
+    assert len(root.jobs) == 5
+
+    repl.onecmd("mv * f1")
+    assert len(root.jobs) == 0 and len(f1.jobs) == 5
+    assert len(root.children) == 1  # Didn't move the folders
+    for j in (j1, j2, j3, j4, j5):
+        j.reload()
+        assert j.folder == f1
+
+    state.cwd = f2
+    repl.onecmd("mv ../f1/* .")
+    assert len(f1.jobs) == 0 and len(f2.jobs) == 5
+    for j in (j1, j2, j3, j4, j5):
+        j.reload()
+        assert j.folder == f2
+
+
+def test_mv_bulk_folder(state, repl):
+    root = Folder.get_root()
+
+    r1, r2 = [root.add_folder(n) for n in ("r1", "r2")]
+
+    folders = [r1.add_folder(f"f{n}") for n in range(5)]
+    assert len(r1.children) == len(folders)
+    assert len(r2.children) == 0
+
+    repl.onecmd("mv r1/* r2")
+    assert len(r1.children) == 0
+    assert len(r2.children) == len(folders)
+    for f in folders:
+        f.reload()
+        assert f.parent == r2
+
+    state.cwd = r1
+    repl.onecmd("mv ../r2/* .")
+    assert len(r1.children) == len(folders)
+    assert len(r2.children) == 0
+    for f in folders:
+        f.reload()
+        assert f.parent == r1
+
+
 def test_rm(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()
 

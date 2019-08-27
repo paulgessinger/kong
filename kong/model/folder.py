@@ -40,6 +40,11 @@ class Folder(BaseModel):
             ), f"Invalid folder name '{self.name}'"
             assert self.parent is not None, "Need to specify a parent folder"
         self._ignore_save_assert = False
+
+        # can never be its own parent
+        if self.parent == self:
+            raise pw.IntegrityError("Folder can not be its own parent")
+
         return super().save(*args, **kwargs)
 
     @property

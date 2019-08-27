@@ -37,6 +37,18 @@ def test_create(db):
     assert len(root.children) == 2
 
 
+def test_cannot_be_own_parent(db):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    assert f1.parent == root
+
+    with pytest.raises(pw.IntegrityError):
+        f1.parent = f1
+        f1.save()
+    f1.reload()
+    assert f1.parent == root
+
+
 def test_create_name_unique(db):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
