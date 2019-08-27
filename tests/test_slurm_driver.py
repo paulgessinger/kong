@@ -14,6 +14,7 @@ from kong.drivers.slurm_driver import (
     config_schema,
 )
 from kong.model import Job, Folder
+from kong.util import is_executable
 
 
 @pytest.fixture
@@ -74,7 +75,7 @@ def test_sacct_parse(driver, monkeypatch, state):
             jobs="",
             brief=True,
             noheader=True,
-            parseable2=True,
+            parsable2=True,
             starttime=ANY,
             _iter=True,
         )
@@ -136,6 +137,7 @@ def test_create_job(driver, state):
     assert os.path.exists(j1.data["output_dir"])
     assert os.path.exists(j1.data["jobscript"])
     assert os.path.exists(j1.data["batchfile"])
+    assert is_executable(j1.data["jobscript"])
 
 
 def test_submit_job(driver, state, monkeypatch):
@@ -350,7 +352,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         jobs=",".join([j.batch_job_id for j in jobs]),
         brief=True,
         noheader=True,
-        parseable2=True,
+        parsable2=True,
         starttime=ANY,
         _iter=True,
     )
@@ -371,7 +373,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         jobs=",".join([j.batch_job_id for j in jobs]),
         brief=True,
         noheader=True,
-        parseable2=True,
+        parsable2=True,
         starttime=ANY,
         _iter=True,
     )

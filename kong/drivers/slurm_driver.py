@@ -22,11 +22,12 @@ from typing import (
 import sh
 import schema as sc
 
-from kong.drivers import InvalidJobStatus
+from ..drivers import InvalidJobStatus
 from ..logger import logger
 from ..db import database
 from ..model import Job, Folder
 from ..config import Config
+from ..util import make_executable
 from .driver_base import DriverBase, checked_job
 
 
@@ -105,7 +106,7 @@ class ShellSlurmInterface(SlurmInterface):
             jobs=job_ids,
             brief=True,
             noheader=True,
-            parseable2=True,
+            parsable2=True,
             starttime=starttime,
             _iter=True,
         ):
@@ -170,7 +171,7 @@ config_schema = sc.Schema(
 class SlurmDriver(DriverBase):
     slurm: SlurmInterface
 
-    def __init__(self, config: Config, slurm: SlurmInterface):
+    def __init__(self, config: Config, slurm: SlurmInterface = ShellSlurmInterface()):
         self.slurm = slurm
         super().__init__(config)
         assert "slurm_driver" in self.config.data
@@ -198,7 +199,7 @@ class SlurmDriver(DriverBase):
         )
 
         if name is None:
-            name = f"job_{job.job_id}"
+            name = f"kong_job_{job.job_id}"
 
         # in job dir, create output dir
         output_dir = os.path.abspath(
@@ -254,6 +255,8 @@ class SlurmDriver(DriverBase):
 
         with open(jobscript, "w") as fh:
             fh.write(jobscript_content)
+
+        make_executable(jobscript)
 
         return job
 
@@ -345,6 +348,8 @@ class SlurmDriver(DriverBase):
 
     @checked_job
     def submit(self, job: "Job", save: bool = True) -> None:
+        if job.status != Job.Status.CREATED:
+            raise ValueError(f"Cannot submit job {job} in status {job.status}")
         job.batch_job_id = str(self.slurm.sbatch(job))
         job.status = Job.Status.SUBMITTED
         if save:
@@ -404,6 +409,10 @@ class SlurmDriver(DriverBase):
                 logger.debug("Removing %s", path)
                 shutil.rmtree(path)
                 os.makedirs(path)
+
+        # reset to created
+        job.status = Job.Status.CREATED
+        job.save()
 
         self.submit(job)  # this will reset the status
         return job
