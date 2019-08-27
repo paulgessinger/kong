@@ -1,3 +1,4 @@
+import datetime
 import shutil
 import tempfile
 import os
@@ -191,13 +192,18 @@ class LocalDriver(DriverBase):
 
     def bulk_sync_status(self, jobs: Iterable[Job]) -> Iterable[Job]:
         # simply implemented as loop over single sync status for local driver
+        now = datetime.datetime.now()
+
         def sync() -> Iterable[Job]:
             for job in jobs:
                 self.sync_status(job, save=False)
+                job.updated_at = now
                 yield job
 
         with database.atomic():
-            Job.bulk_update(sync(), fields=[Job.status], batch_size=self.batch_size)
+            Job.bulk_update(
+                sync(), fields=[Job.status, Job.updated_at], batch_size=self.batch_size
+            )
 
         return jobs
 
@@ -221,25 +227,35 @@ class LocalDriver(DriverBase):
             job.save()
 
     def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable[Job]:
+        now = datetime.datetime.now()
+
         def k() -> Iterable[Job]:
             for job in jobs:
                 self.kill(job, save=False)
-                yield job
-
-        with database.atomic():
-            Job.bulk_update(k(), fields=[Job.status], batch_size=self.batch_size)
-
-        return jobs
-
-    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
-        def sub() -> Iterable[Job]:
-            for job in jobs:
-                self.submit(job, save=False)
+                job.updated_at = now
                 yield job
 
         with database.atomic():
             Job.bulk_update(
-                sub(), fields=[Job.status, Job.data], batch_size=self.batch_size
+                k(), fields=[Job.status, Job.updated_at], batch_size=self.batch_size
+            )
+
+        return jobs
+
+    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+        now = datetime.datetime.now()
+
+        def sub() -> Iterable[Job]:
+            for job in jobs:
+                self.submit(job, save=False)
+                job.updated_at = now
+                yield job
+
+        with database.atomic():
+            Job.bulk_update(
+                sub(),
+                fields=[Job.status, Job.data, Job.updated_at],
+                batch_size=self.batch_size,
             )
 
     @checked_job

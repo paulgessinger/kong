@@ -1,3 +1,4 @@
+import datetime
 import json
 from contextlib import contextmanager
 from enum import IntFlag
@@ -113,6 +114,8 @@ class Job(BaseModel):
         command: str
         data: Dict[str, Any]
         status: Status
+        created_at: datetime.datetime
+        updated_at: datetime.datetime
     else:
         job_id = AutoIncrementField(column_name="rowid")
         batch_job_id = pw.CharField(
@@ -125,6 +128,9 @@ class Job(BaseModel):
         data = JSONField(default={})
         cores = pw.IntegerField(null=False, default=1)
         status = EnumField(choices=Status, null=False, default=Status.CREATED)
+
+        created_at = pw.DateTimeField(default=datetime.datetime.now)
+        updated_at = pw.DateTimeField()
 
     _driver_instance: Optional[DriverBase] = None
 
@@ -149,6 +155,7 @@ class Job(BaseModel):
         # assert self.driver in drivers.__all__, f"{self.driver} is not a valid driver"
         assert self.command is not None, "Need to specify a command"
         assert len(self.command) > 0, "Command must be longer than 0"
+        self.updated_at = datetime.datetime.now()
         super().save(*args, **kwargs)
 
     @with_driver

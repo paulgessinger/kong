@@ -185,7 +185,7 @@ def test_mv_folder(state, db):
         state.mv(f1, "/nope/blub")
 
     # try to move nonexistant
-    with pytest.raises(ValueError):
+    with pytest.raises(DoesNotExist):
         state.mv("../nope", f1)
 
 
@@ -293,6 +293,10 @@ def test_cwd_context_manager(state):
     assert state.cwd == root
 
     with state.pushd(f1):
+        assert state.cwd == f1
+    assert state.cwd == root
+
+    with state.pushd("f1"):
         assert state.cwd == f1
     assert state.cwd == root
 

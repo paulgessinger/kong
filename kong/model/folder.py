@@ -24,7 +24,7 @@ class Folder(BaseModel):
         name = pw.CharField()
         parent = pw.ForeignKeyField("self", null=True, backref="children")
         created_at = pw.DateTimeField(default=datetime.datetime.now)
-        updated_at = pw.TimestampField()
+        updated_at = pw.DateTimeField()
 
     _ignore_save_assert = False
 
@@ -44,6 +44,8 @@ class Folder(BaseModel):
         # can never be its own parent
         if self.parent == self:
             raise pw.IntegrityError("Folder can not be its own parent")
+
+        self.updated_at = datetime.datetime.now()
 
         return super().save(*args, **kwargs)
 
@@ -94,3 +96,10 @@ class Folder(BaseModel):
 
     def subfolder(self, name: str) -> Optional["Folder"]:
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
+
+    def jobs_recursive(self):
+        # @TODO: Optimize, hierarchical expression?
+        jobs: List[Job] = list(self.jobs)
+        for child in self.children:
+            jobs += child.jobs_recursive()
+        return jobs

@@ -248,7 +248,7 @@ def test_mv_folder(state, repl, capsys):
     # try to move nonexistant
     repl.onecmd("mv ../nope f1")
     out, err = capsys.readouterr()
-    assert "../nope" in out and "not a" in out
+    assert "../nope" in out and "No such" in out
 
 
 def test_mv_job(state, repl, capsys):

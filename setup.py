@@ -23,7 +23,7 @@ setup(
         "schema",
     ],
     tests_require=tests_require,
-    extras_require={"dev": dev_requires, "test": tests_require},
+    extras_require={"dev": dev_requires, "test": tests_require, "ipython": ["ipython"]},
     entry_points={"console_scripts": ["kong=kong.cli:main"]},
     packages=["kong"],
 )

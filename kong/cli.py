@@ -24,6 +24,7 @@ version = pkg_resources.require(config.APP_NAME)[0].version
 @click.option("-v", "--verbose", "verbosity", count=True)
 @click.pass_context
 def main(ctx: Any, show_version: bool, verbosity: int) -> None:
+    level = logging.WARNING
     if verbosity == 0:
         level = logging.WARNING
     elif verbosity == 1:
@@ -35,8 +36,6 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
         fmt="%(asctime)s %(levelname)s %(name)s %(filename)s:%(funcName)s %(message)s",
         level=level,
     )
-
-    logger.setLevel(level)
 
     if show_version:
         click.echo(f"{config.APP_NAME} version: {version}")
@@ -74,3 +73,12 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
 @click.pass_obj
 def setup_command(state: State) -> None:
     setup.setup(state.config)
+
+
+@main.command()
+@click.pass_obj
+def interactive(state: State) -> None:
+    logger.debug("Launching IPython session")
+    import IPython
+
+    IPython.embed()

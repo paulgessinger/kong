@@ -1,3 +1,4 @@
+import datetime
 import os
 from typing import (
     List,
@@ -47,9 +48,18 @@ class State:
         )
 
     @contextmanager
-    def pushd(self, folder: "Folder") -> ContextManager[None]:
+    def pushd(self, folder: Union["Folder", str]) -> ContextManager[None]:
         prev = self.cwd
-        self.cwd = folder
+
+        if isinstance(folder, Folder):
+            self.cwd = folder
+        elif isinstance(folder, str):
+            _folder = Folder.find_by_path(self.cwd, folder)
+            assert _folder is not None
+            self.cwd = _folder
+        else:
+            raise TypeError("Argument is neither Folder nor str")
+
         try:
             yield
         finally:
@@ -89,7 +99,7 @@ class State:
                 job.get_status()
 
     def ls(
-        self, path: str = ".", refresh: bool = False
+        self, path: str = ".", refresh: bool = False, recursive: bool = False
     ) -> Tuple[List["Folder"], List["Job"]]:
         "List the current directory content"
         logger.debug("%s", list(self.cwd.children))
@@ -100,9 +110,12 @@ class State:
         jobs = folder.jobs
 
         if refresh == True and len(jobs) > 0:
-            self.refresh_jobs(jobs)
+            if recursive == True:
+                self.refresh_jobs(folder.jobs_recursive())
+            else:
+                self.refresh_jobs(jobs)
 
-        return folder.children, jobs
+        return list(folder.children), list(jobs)
 
     def cd(self, target: Union[str, Folder] = ".") -> None:
         if isinstance(target, str):
@@ -158,7 +171,7 @@ class State:
             raise TypeError(f"{dest} is neither string nor Folder")
 
         with database.atomic():
-            Folder.update(parent=dest_folder).where(
+            Folder.update(parent=dest_folder, updated_at=datetime.datetime.now()).where(
                 Folder.folder_id << [f.folder_id for f in folders if f != dest_folder]
             ).execute()
 
@@ -173,7 +186,7 @@ class State:
             raise TypeError(f"{dest} is neither string nor Folder")
 
         with database.atomic():
-            Job.update(folder=dest_folder).where(
+            Job.update(folder=dest_folder, updated_at=datetime.datetime.now()).where(
                 Job.job_id << [j.job_id for j in jobs]
             ).execute()
 
@@ -192,19 +205,23 @@ class State:
             else:
                 # either job(s) or possibly a list of folders (*)
                 jobs: List[Job] = []
-                try:
-                    jobs = self.get_jobs(source)
-                    self._mv_jobs(jobs, dest)
-                except RuntimeError:
-                    raise ValueError(f"{source} is not a Folder or Job")
-
                 folders: List[Folder] = []
 
                 try:
-                    folders = self.get_folders(source)
-                    self._mv_folders(folders, dest)
+                    jobs = self.get_jobs(source)
                 except ValueError:
                     pass
+
+                try:
+                    folders = self.get_folders(source)
+                except ValueError:
+                    pass
+
+                if len(folders) == 0 and len(jobs) == 0:
+                    raise DoesNotExist(f"No such folder or job: {source}")
+
+                self._mv_jobs(jobs, dest)
+                self._mv_folders(folders, dest)
 
                 return list(folders) + list(jobs)
 
@@ -226,42 +243,43 @@ class State:
         Folder.create(name=tail, parent=location)
 
     def rm(
-        self, name: Union[str, Job, Folder], confirm: Callable[[], bool] = lambda: True
+        self,
+        name: Union[str, Job, Folder],
+        confirm: Callable[[str], bool] = lambda _: True,
     ) -> bool:
         if isinstance(name, str):
             # string name, could be both
             if name == "/":
                 raise CannotRemoveRoot()
 
-            # try to find folder first
-            folder = Folder.find_by_path(self.cwd, name)
-            if folder is not None:
-                if confirm():
+            folders: List[Folder] = []
+            jobs: List[Job] = []
+
+            try:
+                folders = self.get_folders(name)
+            except ValueError:
+                pass
+            try:
+                jobs = self.get_jobs(name)
+            except ValueError:
+                pass
+
+            if len(folders) == 0 and len(jobs) == 0:
+                raise DoesNotExist(f"No such folder or job: {name}")
+
+            if confirm(f"Remove {len(folders)} folders and {len(jobs)} jobs?"):
+                for folder in folders:
                     folder.delete_instance(recursive=True, delete_nullable=True)
-                    return True
-                return False
-
-            # is not a folder, let's look for a job
-            if not name.isdigit():
-                # not a job, done
-                raise DoesNotExist(f"Object {name} in {self.cwd.path} does not exist")
-
-            # should be unique, shouldn't matter where we are
-            job = Job.get_or_none(job_id=int(name))
-            if job is None:
-                raise DoesNotExist(f"Object {name} in {self.cwd.path} does not exist")
-
-            if confirm():
-                # need driver instance
-                job.ensure_driver_instance(self.config)
-                job.delete_instance()
+                for job in jobs:
+                    job.ensure_driver_instance(self.config)
+                    job.remove()
                 return True
 
             return False
         elif isinstance(name, Job):
             job = name
 
-            if confirm():
+            if confirm(f"Delete job {job}?"):
                 # need driver instance
                 job.ensure_driver_instance(self.config)
                 job.driver_instance.remove(job)
@@ -269,7 +287,7 @@ class State:
             return False
         elif isinstance(name, Folder):
             folder = name
-            if confirm():
+            if confirm(f"Delete folder {folder}?"):
                 folder.delete_instance(recursive=True, delete_nullable=True)
                 return True
             return False
@@ -316,7 +334,7 @@ class State:
                     assert folder is not None
                     jobs = list(folder.jobs)
                 else:
-                    raise RuntimeError(f"{name} jobspec is not understood")
+                    raise ValueError(f"{name} jobspec is not understood")
         elif isinstance(name, Job):
             jobs = [name]
         else:
@@ -358,4 +376,7 @@ class State:
                 raise ValueError(f"No folder {head} found")
             return folder.children
         else:
-            raise ValueError(f"Invalid pattern {pattern}")
+            folder = Folder.find_by_path(self.cwd, pattern)
+            if folder is None:
+                raise ValueError(f"No folder {pattern} found")
+            return [folder]

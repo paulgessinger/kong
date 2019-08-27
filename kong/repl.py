@@ -1,5 +1,7 @@
 import argparse
+import datetime
 import functools
+import logging
 import shlex
 import cmd
 import readline
@@ -9,7 +11,9 @@ import shutil
 
 import click
 import peewee as pw
+from click import style
 
+from .util import rjust
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -36,14 +40,15 @@ class Repl(cmd.Cmd):
         super().__init__()
 
     def precmd(self, line: str) -> str:
-        logger.debug("called '%s'", line)
+        if line != "":
+            logger.debug("called '%s'", line)
         return line
 
     def onecmd(self, *args: str) -> bool:
         try:
             return super().onecmd(*args)
-        except Exception as e:
-            logger.error("Exception occured", exc_info=True)
+        except (BaseException, Exception) as e:
+            logger.debug("Exception occured", exc_info=True)
             click.secho(f"{e}", fg="red")
         return False
 
@@ -68,40 +73,34 @@ class Repl(cmd.Cmd):
         p = argparse.ArgumentParser()
         p.add_argument("dir", default=".", nargs="?")
         p.add_argument("--refresh", "-r", action="store_true")
+        p.add_argument("--recursive", "-R", action="store_true")
 
         try:
             args = p.parse_args(argv)
-            folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
+            folders, jobs = self.state.ls(
+                args.dir,
+                refresh=args.refresh or args.recursive,
+                recursive=args.recursive,
+            )
             width, height = shutil.get_terminal_size((80, 40))
 
-            headers = ("job id", "batch job id", "status")
-
-            name_length = 0
+            folder_name_length = 0
             if len(folders) > 0:
-                name_length = max([len(f.name) for f in folders])
-            if len(jobs) > 0:
-                name_length = max(name_length, max([len(str(j.job_id)) for j in jobs]))
-            name_length = max(name_length, len(headers[0]))
+                folder_name_length = max([len(f.name) for f in folders])
 
-            status_len = len("SUBMITTED")
-            status_len = max(status_len, len(headers[2]))
+            headers = ("name", "job counts")
 
-            bjobid_len = width - name_length - status_len - 2
-            bjobid_len = max(bjobid_len, len(headers[1]))
+            folder_name_length = max(folder_name_length, len(headers[0]))
 
             click.echo(
-                headers[0].rjust(name_length)
+                headers[0].ljust(folder_name_length)
                 + " "
-                + headers[1].rjust(bjobid_len)
-                + " "
-                + headers[2].ljust(status_len)
-            )
-            click.echo(
-                "-" * name_length + " " + "-" * bjobid_len + " " + "-" * status_len
+                + headers[1].rjust(width - folder_name_length - 1)
             )
 
-            for folder in folders:
-                click.echo(folder.name)
+            click.echo(
+                "-" * folder_name_length + " " + "-" * (width - folder_name_length - 1)
+            )
 
             color_dict = {
                 Job.Status.UNKOWN: "red",
@@ -112,13 +111,85 @@ class Repl(cmd.Cmd):
                 Job.Status.COMPLETED: "green",
             }
 
+            for folder in folders:
+                folder_jobs = folder.jobs_recursive()
+                # accumulate counts
+                # @TODO: SLOW! Optimize to query
+                counts = {
+                    Job.Status.UNKOWN: 0,
+                    Job.Status.CREATED: 0,
+                    Job.Status.SUBMITTED: 0,
+                    Job.Status.RUNNING: 0,
+                    Job.Status.FAILED: 0,
+                    Job.Status.COMPLETED: 0,
+                }
+                for job in folder_jobs:
+                    counts[job.status] += 1
+
+                output = ""
+                for (k, c), l in zip(counts.items(), "UCSRFC"):
+                    output += style(f" {c:> 6d}{l}", fg=color_dict[k])
+                output = folder.name.ljust(folder_name_length) + rjust(
+                    output, width - folder_name_length
+                )
+
+                click.echo(output)
+
+            click.echo("")
+
+            headers = ("job id", "batch job id", "created", "updated", "status")
+
+            name_length = 0
+            if len(jobs) > 0:
+                name_length = max(name_length, max([len(str(j.job_id)) for j in jobs]))
+            name_length = max(name_length, len(headers[0]))
+
+            status_len = len("SUBMITTED")
+            status_len = max(status_len, len(headers[2]))
+
+            def dtfmt(dt: datetime):
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+            datetime_len = len(dtfmt(jobs[0].updated_at))
+
+            bjobid_len = (
+                width - name_length - status_len - 2 * datetime_len - len(headers)
+            )
+            bjobid_len = max(bjobid_len, len(headers[1]))
+
+            click.echo(
+                headers[0].rjust(name_length)
+                + " "
+                + headers[1].rjust(bjobid_len)
+                + " "
+                + headers[2].ljust(datetime_len)
+                + " "
+                + headers[3].ljust(datetime_len)
+                + " "
+                + headers[4].ljust(status_len)
+            )
+            click.echo(
+                "-" * name_length
+                + " "
+                + "-" * bjobid_len
+                + " "
+                + "-" * datetime_len
+                + " "
+                + "-" * datetime_len
+                + " "
+                + "-" * status_len
+            )
+
             for job in jobs:
                 job_id = str(job.job_id).rjust(name_length)
                 batch_job_id = job.batch_job_id.rjust(bjobid_len)
                 _, status_name = str(job.status).split(".", 1)
                 color = color_dict[job.status]
 
-                click.secho(f"{job_id} {batch_job_id} {status_name}", fg=color)
+                click.secho(
+                    f"{job_id} {batch_job_id} {dtfmt(job.created_at)} {dtfmt(job.updated_at)} {status_name}",
+                    fg=color,
+                )
 
             # for folder in folders:
             #     click.echo(folder.name)
@@ -186,7 +257,38 @@ class Repl(cmd.Cmd):
                 else:
                     names.append(item.name)
 
-            # click.secho(f"Moved {', '.join(names)} -> {args.dest}")
+            click.secho(f"Moved {', '.join(names)} -> {args.dest}")
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_info(self, arg: str) -> None:
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("job")
+
+        try:
+            args = p.parse_args(argv)
+            jobs = self.state.get_jobs(args.job)
+            assert len(jobs) == 1
+            job = jobs[0]
+
+            click.echo(job)
+            for field in (
+                "driver",
+                "folder",
+                "command",
+                "cores",
+                "status",
+                "created_at",
+                "updated_at",
+            ):
+                click.echo(f"{field}: {str(getattr(job, field))}")
+            click.echo("data:")
+            for k, v in job.data.items():
+                click.echo(f"{k}: {v}")
+
         except SystemExit as e:
             if e.code != 0:
                 click.secho("Error parsing arguments", fg="red")
@@ -195,9 +297,7 @@ class Repl(cmd.Cmd):
     @parse
     def do_rm(self, name: str) -> None:
         try:
-            if self.state.rm(
-                name, lambda: click.confirm(f"Sure you want to delete {name}?")
-            ):
+            if self.state.rm(name, lambda s: click.confirm(s)):
                 click.echo(f"{name} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")
@@ -250,6 +350,13 @@ class Repl(cmd.Cmd):
             if e.code != 0:
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
+
+    def complete_submit_job(
+        self, text: str, line: str, begidx: int, endidx: int
+    ) -> List[str]:
+        args = shlex.split(line)
+        path = args[1]
+        return self.complete_path(path)
 
     def do_kill_job(self, arg: str) -> None:
         argv = shlex.split(arg)

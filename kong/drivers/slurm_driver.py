@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 import shutil
@@ -276,6 +277,8 @@ class SlurmDriver(DriverBase):
         for job in jobs:
             self._check_driver(job)
 
+        now = datetime.datetime.now()
+
         def proc() -> Iterable[Job]:
             for item in self.slurm.sacct(jobs):
                 job = Job.get_or_none(batch_job_id=item.job_id)
@@ -287,11 +290,14 @@ class SlurmDriver(DriverBase):
                     continue
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
+                job.updated_at = now
                 yield job
 
         with database.atomic():
             Job.bulk_update(
-                proc(), fields=[Job.data, Job.status], batch_size=self.batch_size
+                proc(),
+                fields=[Job.data, Job.status, Job.updated_at],
+                batch_size=self.batch_size,
             )
         # reload updated jobs
         ids = [j.job_id for j in jobs]
@@ -312,15 +318,21 @@ class SlurmDriver(DriverBase):
             job.save()
 
     def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+        now = datetime.datetime.now()
         jobs = self.bulk_sync_status(jobs)
 
         def delete() -> Iterable["Job"]:
             for job in jobs:
                 self.kill(job, save=False)
+                job.updated_at = now
                 yield job
 
         with database.atomic():
-            Job.bulk_update(delete(), fields=[Job.status], batch_size=self.batch_size)
+            Job.bulk_update(
+                delete(),
+                fields=[Job.status, Job.updated_at],
+                batch_size=self.batch_size,
+            )
 
         return jobs
 
@@ -337,14 +349,19 @@ class SlurmDriver(DriverBase):
             job.save()
 
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+        now = datetime.datetime.now()
+
         def sub() -> Iterable[Job]:
             for job in jobs:
                 self.submit(job, save=False)
+                job.updated_at = now
                 yield job
 
         with database.atomic():
             Job.bulk_update(
-                sub(), fields=[Job.batch_job_id, Job.status], batch_size=self.batch_size
+                sub(),
+                fields=[Job.batch_job_id, Job.status, Job.updated_at],
+                batch_size=self.batch_size,
             )
 
     @checked_job  # type: ignore

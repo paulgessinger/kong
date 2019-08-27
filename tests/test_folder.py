@@ -173,3 +173,18 @@ def test_fancy_operator(db):
     assert root / "f1" / "f2" == f2
     assert root / "f1" / "f2" / "f3" == f3
     assert root / "f1" / "f2" / "f4" == f4
+
+
+def test_jobs_recursive(db, state):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    f2 = f1.add_folder("f2")
+
+    with state.pushd(f1):
+        j1 = state.create_job(command="sleep 1")
+    with state.pushd(f2):
+        j2 = state.create_job(command="sleep 1")
+
+    jobs = root.jobs_recursive()
+    assert len(jobs) == 2
+    assert all(a == b for a, b in zip(jobs, [j1, j2]))
