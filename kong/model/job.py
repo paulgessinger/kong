@@ -116,6 +116,8 @@ class Job(BaseModel):
         status: Status
         created_at: datetime.datetime
         updated_at: datetime.datetime
+        cores: int
+        memory: int
     else:
         job_id = AutoIncrementField(column_name="rowid")
         batch_job_id = pw.CharField(
@@ -127,6 +129,7 @@ class Job(BaseModel):
         command = pw.CharField(null=False)  # should allow arbitrary length in sqlite
         data = JSONField(default={})
         cores = pw.IntegerField(null=False, default=1)
+        memory = pw.IntegerField(null=False, default=1000)  # memory in Megabytes
         status = EnumField(choices=Status, null=False, default=Status.CREATED)
 
         created_at = pw.DateTimeField(default=datetime.datetime.now)

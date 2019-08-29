@@ -133,7 +133,7 @@ def test_mkdir(state, repl, db, capsys):
         # cannot create again
         repl.do_mkdir("alpha")
         out, err = capsys.readouterr()
-        assert "alpha" in out and "already exists" in out
+        assert "alpha" in out
 
         # cannot create in nonexistant
         repl.do_mkdir("omega/game")
@@ -564,7 +564,7 @@ def test_submit_job(repl, state, capsys):
     assert "usage" in out
 
 
-def test_kill_job(repl, state, capsys):
+def test_kill_job(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
     repl.do_create_job("sleep 1")
     j1 = root.jobs[-1]
@@ -576,6 +576,7 @@ def test_kill_job(repl, state, capsys):
     time.sleep(0.1)
     assert j1.get_status() == Job.Status.RUNNING
 
+    monkeypatch.setattr("click.confirm", Mock(return_value=True))
     repl.do_kill_job(str(j1.job_id))
 
     assert j1.get_status() == Job.Status.FAILED
@@ -585,7 +586,7 @@ def test_kill_job(repl, state, capsys):
     assert "usage" in out
 
 
-def test_resubmit_job(repl, state, capsys):
+def test_resubmit_job(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
     repl.do_create_job("sleep 1")
     j1 = root.jobs[-1]
@@ -597,6 +598,7 @@ def test_resubmit_job(repl, state, capsys):
     time.sleep(0.1)
     assert j1.get_status() == Job.Status.RUNNING
 
+    monkeypatch.setattr("click.confirm", Mock(return_value=True))
     repl.do_kill_job(str(j1.job_id))
 
     assert j1.get_status() == Job.Status.FAILED

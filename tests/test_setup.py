@@ -66,7 +66,9 @@ def test_setup(app_env, monkeypatch):
 
     with open(config_path) as f:
         data = yaml.safe_load(f)
-    assert data["default_driver"] == "kong.drivers.local_driver.LocalDriver"  # still the same
+    assert (
+        data["default_driver"] == "kong.drivers.local_driver.LocalDriver"
+    )  # still the same
     assert data["jobdir"] == os.path.join(tmp_path, "jobs_new")  # this has changed
     assert data["joboutputdir"] == os.path.join(
         tmp_path, "joboutput_new"
@@ -81,4 +83,6 @@ def test_setup_invalid_driver(app_env, monkeypatch):
         m.setattr("click.prompt", prompt)
         with pytest.raises(ValueError):
             kong.setup.setup(None)
-        prompt.assert_has_calls([call(mock.ANY, default="kong.drivers.local_driver.LocalDriver")])
+        prompt.assert_has_calls(
+            [call(mock.ANY, default="kong.drivers.local_driver.LocalDriver")]
+        )

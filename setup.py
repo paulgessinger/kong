@@ -21,6 +21,8 @@ setup(
         "humanfriendly",
         "psutil",
         "schema",
+        "beautifultable",
+        "tqdm",
     ],
     tests_require=tests_require,
     extras_require={"dev": dev_requires, "test": tests_require, "ipython": ["ipython"]},

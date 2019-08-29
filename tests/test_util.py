@@ -1,6 +1,9 @@
-import click
+from datetime import timedelta
 
-from kong.util import strip_colors, ljust, rjust
+import click
+import pytest
+
+from kong.util import strip_colors, ljust, rjust, format_timedelta, parse_timedelta
 
 
 def test_strip_colors():
@@ -22,3 +25,35 @@ def test_rjust():
     assert rjust(s, 30) == s.rjust(30)
     s_style = click.style(s, fg="red")
     assert rjust(s_style, 30)[: (30 - len(s))] == " " * (30 - len(s))
+
+
+def test_format_timedelta():
+    fmt = format_timedelta
+    assert fmt(timedelta(seconds=30)) == "00:00:30"
+    assert fmt(timedelta(minutes=42)) == "00:42:00"
+    assert fmt(timedelta(minutes=42, seconds=14)) == "00:42:14"
+    assert fmt(timedelta(hours=8)) == "08:00:00"
+    assert fmt(timedelta(hours=99)) == "99:00:00"
+    assert fmt(timedelta(days=3)) == f"{3*24}:00:00"
+    with pytest.raises(ValueError):
+        fmt(timedelta(days=5))
+    assert fmt(timedelta(hours=99, minutes=59, seconds=59)) == "99:59:59"
+    with pytest.raises(ValueError):
+        fmt(timedelta(hours=100))
+    assert fmt(timedelta(hours=8, minutes=6)) == "08:06:00"
+    assert fmt(timedelta(hours=8, minutes=6, seconds=23)) == "08:06:23"
+
+
+def test_parse_timedelta():
+    ptd = parse_timedelta
+    assert ptd("00:00:30") == timedelta(seconds=30)
+    assert ptd("00:42:00") == timedelta(minutes=42)
+    assert ptd("00:42:14") == timedelta(minutes=42, seconds=14)
+    assert ptd("08:00:00") == timedelta(hours=8)
+    assert ptd("99:00:00") == timedelta(hours=99)
+    assert ptd(f"{3 * 24}:00:00") == timedelta(days=3)
+    with pytest.raises(ValueError):
+        ptd("100:00:00")
+    assert ptd("99:59:59") == timedelta(hours=99, minutes=59, seconds=59)
+    assert ptd("08:06:00") == timedelta(hours=8, minutes=6)
+    assert ptd("08:06:23") == timedelta(hours=8, minutes=6, seconds=23)

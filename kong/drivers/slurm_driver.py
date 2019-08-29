@@ -27,7 +27,7 @@ from ..logger import logger
 from ..db import database
 from ..model import Job, Folder
 from ..config import Config
-from ..util import make_executable
+from ..util import make_executable, rmtree, format_timedelta, parse_timedelta
 from .driver_base import DriverBase, checked_job
 
 
@@ -99,17 +99,21 @@ class ShellSlurmInterface(SlurmInterface):
         self._scancel = sh.Command("scancel")
 
     def sacct(self, jobs: Iterable["Job"]) -> Iterator[SlurmAccountingItem]:
-        job_ids = ",".join([str(j.batch_job_id) for j in jobs])
+
         starttime = date.today() - timedelta(days=7)
+
+        args = dict(
+            brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
+        )
+
+        if len(jobs) > 0:
+            job_ids = ",".join(
+                [str(j.batch_job_id) for j in jobs if j.batch_job_id is not None]
+            )
+            args["jobs"] = job_ids
+
         assert self._sacct is not None
-        for line in self._sacct(
-            jobs=job_ids,
-            brief=True,
-            noheader=True,
-            parsable2=True,
-            starttime=starttime,
-            _iter=True,
-        ):
+        for line in self._sacct(**args):
             job_id, status, exit = line.split("|", 3)
             if not job_id.isdigit():
                 continue
@@ -140,23 +144,26 @@ export KONG_JOB_SCRATCHDIR=/localscratch/${{SLURM_JOB_ID}}/
 
 mkdir -p $KONG_JOB_SCRATCHDIR
 
-{command}
+stdout={stdout}
+
+({command}) > $stdout 2>&1
 """.strip()
 
 batchfile_tpl = """
 #!/bin/bash
 #SBATCH -J {name}
-#SBATCH -o {stdout} 
+#SBATCH -o {slurm_out} 
 #SBATCH -p {queue}                
               
 #SBATCH -n {ntasks}                    
 #SBATCH -N {nnodes}                    
 #SBATCH -c {cores} 
+#SBATCH --mem {memory}M 
 #SBATCH -t {walltime}             
 
 #SBATCH -A {account}             
 
-srun {jobscript}
+srun --export=NONE {jobscript}
 """.strip()
 
 config_schema = sc.Schema(
@@ -182,9 +189,12 @@ class SlurmDriver(DriverBase):
         folder: "Folder",
         command: str,
         cores: int = 1,
+        memory: int = 1000,
+        nnodes: int = 1,
+        ntasks: int = 1,
         queue: Optional[str] = None,
         name: Optional[str] = None,
-        walltime: timedelta = timedelta(minutes=30),
+        walltime: Union[timedelta, str] = timedelta(minutes=30),
     ) -> "Job":
 
         if queue is None:
@@ -196,6 +206,7 @@ class SlurmDriver(DriverBase):
             command=command,
             driver=self.__class__,
             cores=cores,
+            memory=memory,
         )
 
         if name is None:
@@ -213,19 +224,31 @@ class SlurmDriver(DriverBase):
         os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
+        slurm_out = os.path.abspath(os.path.join(log_dir, "slurm_out.txt"))
 
         batchfile = os.path.join(log_dir, "batchfile.sh")
         jobscript = os.path.join(log_dir, "jobscript.sh")
 
+        if isinstance(walltime, str):
+            norm_walltime = format_timedelta(parse_timedelta(walltime))
+        elif isinstance(walltime, timedelta):
+            norm_walltime = format_timedelta(walltime)
+        else:
+            raise ValueError("Walltime must be timedelta or string")
+
         job.data = dict(
             stdout=stdout,
+            slurm_out=slurm_out,
             jobscript=jobscript,
             batchfile=batchfile,
             output_dir=output_dir,
             log_dir=log_dir,
             name=name,
             queue=queue,
+            nnodes=nnodes,
+            ntasks=ntasks,
             exit_code=0,
+            walltime=norm_walltime,
         )
         job.save()
 
@@ -234,46 +257,35 @@ class SlurmDriver(DriverBase):
             jobscript=jobscript,
             command=command,
             stdout=stdout,
+            slurm_out=slurm_out,
             internal_job_id=job.job_id,
             log_dir=log_dir,
             output_dir=output_dir,
             cores=cores,
-            nnodes=1,
-            ntasks=1,
-            ncores=1,
+            nnodes=nnodes,
+            ntasks=ntasks,
+            memory=memory,
             account=self.config.slurm_driver["account"],
             name=name,
             queue=queue,
-            walltime=self.format_timedelta(walltime),
+            walltime=norm_walltime,
         )
 
         batchfile_content = batchfile_tpl.format(**values)
-        jobscript_content = jobscript_tpl.format(**values)
 
         with open(batchfile, "w") as fh:
             fh.write(batchfile_content)
 
-        with open(jobscript, "w") as fh:
+        jobscript_content = jobscript_tpl.format(**values)
+        with open(job.data["jobscript"], "w") as fh:
             fh.write(jobscript_content)
 
-        make_executable(jobscript)
+        make_executable(job.data["jobscript"])
 
         return job
 
     def bulk_create_jobs(self, jobs: Iterable[Dict[str, Any]]) -> List["Job"]:
         return [self.create_job(**kwargs) for kwargs in jobs]
-
-    @staticmethod
-    def format_timedelta(delta: timedelta) -> str:
-        if delta >= timedelta(hours=100):
-            raise ValueError(f"{delta} is too large to format")
-
-        days = delta.days
-        hours, rem = divmod(delta.seconds, 3600)
-        minutes, seconds = divmod(rem, 60)
-
-        total_hours = days * 24 + hours
-        return f"{total_hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def sync_status(self, job: "Job") -> Job:
         return self.bulk_sync_status([job])[0]
@@ -352,6 +364,7 @@ class SlurmDriver(DriverBase):
             raise ValueError(f"Cannot submit job {job} in status {job.status}")
         job.batch_job_id = str(self.slurm.sbatch(job))
         job.status = Job.Status.SUBMITTED
+
         if save:
             job.save()
 
@@ -407,7 +420,7 @@ class SlurmDriver(DriverBase):
             path = job.data[d]
             if os.path.exists(path):
                 logger.debug("Removing %s", path)
-                shutil.rmtree(path)
+                rmtree(path)
                 os.makedirs(path)
 
         # reset to created
@@ -426,7 +439,8 @@ class SlurmDriver(DriverBase):
         for d in ["log_dir", "output_dir"]:
             path = job.data[d]
             if os.path.exists(path):
-                shutil.rmtree(path)
+                logger.debug("Path %s exists, attempting to delete", path)
+                rmtree(path)
         return job
 
     def remove(self, job: "Job") -> None:

@@ -72,12 +72,7 @@ def test_sacct_parse(driver, monkeypatch, state):
         res = list(driver.slurm.sacct([]))
 
         mock.assert_called_once_with(
-            jobs="",
-            brief=True,
-            noheader=True,
-            parsable2=True,
-            starttime=ANY,
-            _iter=True,
+            brief=True, noheader=True, parsable2=True, starttime=ANY, _iter=True
         )
 
         ref = [
@@ -138,6 +133,12 @@ def test_create_job(driver, state):
     assert os.path.exists(j1.data["jobscript"])
     assert os.path.exists(j1.data["batchfile"])
     assert is_executable(j1.data["jobscript"])
+
+    j2 = driver.create_job(command="sleep 1", walltime="03:00:00", folder=root)
+    assert j2.data["walltime"] == "03:00:00"
+
+    with pytest.raises(ValueError):
+        driver.create_job(command="sleep 1", walltime="100:00:00", folder=root)
 
 
 def test_submit_job(driver, state, monkeypatch):
@@ -477,23 +478,6 @@ def test_wait(driver, state):
 
     with pytest.raises(NotImplementedError):
         driver.wait(jobs)
-
-
-def test_format_timedelta():
-    fmt = SlurmDriver.format_timedelta
-    assert fmt(timedelta(seconds=30)) == "00:00:30"
-    assert fmt(timedelta(minutes=42)) == "00:42:00"
-    assert fmt(timedelta(minutes=42, seconds=14)) == "00:42:14"
-    assert fmt(timedelta(hours=8)) == "08:00:00"
-    assert fmt(timedelta(hours=99)) == "99:00:00"
-    assert fmt(timedelta(days=3)) == f"{3*24}:00:00"
-    with pytest.raises(ValueError):
-        fmt(timedelta(days=5))
-    assert fmt(timedelta(hours=99, minutes=59, seconds=59)) == "99:59:59"
-    with pytest.raises(ValueError):
-        fmt(timedelta(hours=100))
-    assert fmt(timedelta(hours=8, minutes=6)) == "08:06:00"
-    assert fmt(timedelta(hours=8, minutes=6, seconds=23)) == "08:06:23"
 
 
 def test_config_schema():

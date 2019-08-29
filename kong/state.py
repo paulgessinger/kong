@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 from typing import (
     List,
     Callable,
@@ -10,11 +11,14 @@ from typing import (
     cast,
     Iterable,
     ContextManager,
+    Sequence,
+    Generator,
 )
 
 import peewee as pw
 from contextlib import contextmanager
 
+from .util import Progress
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config, drivers
@@ -83,20 +87,21 @@ class State:
 
         return cls(cfg, cwd)
 
-    def refresh_jobs(self, jobs: List[Job]) -> None:
+    def refresh_jobs(self, jobs: List[Job]) -> Sequence[Job]:
         first_job: Job = jobs[0]
         # try bulk refresh first
         first_job.ensure_driver_instance(self.config)
         driver: DriverBase = first_job.driver_instance
         try:
             logger.debug("Attempting bulk mode sync using %s", driver.__class__)
-            driver.bulk_sync_status(cast(Iterable[Job], jobs))
+            jobs = driver.bulk_sync_status(cast(Iterable[Job], jobs))
         except DriverMismatch:
             # fall back to slow mode
             logger.debug("Bulk mode sync failed, falling back to slow loop mode")
             for job in jobs:
                 job.ensure_driver_instance(self.config)
                 job.get_status()
+        return jobs
 
     def ls(
         self, path: str = ".", refresh: bool = False, recursive: bool = False
@@ -111,9 +116,9 @@ class State:
 
         if refresh == True and len(jobs) > 0:
             if recursive == True:
-                self.refresh_jobs(folder.jobs_recursive())
+                jobs = self.refresh_jobs(folder.jobs_recursive())
             else:
-                self.refresh_jobs(jobs)
+                jobs = self.refresh_jobs(jobs)
 
         return list(folder.children), list(jobs)
 
@@ -236,7 +241,13 @@ class State:
         else:
             raise TypeError(f"{source} is not a Folder or a Job")
 
-    def mkdir(self, path: str) -> None:
+    def mkdir(self, path: str, exist_ok: bool = False) -> None:
+        if Folder.find_by_path(self.cwd, path) is not None:
+            if not exist_ok:
+                raise CannotCreateError(f"Cannot create folder at {path}")
+            else:
+                return
+
         head, tail = os.path.split(path)
 
         location = Folder.find_by_path(self.cwd, head)
@@ -325,6 +336,9 @@ class State:
             else:
                 head, tail = os.path.split(name)
                 logger.debug("Getting job: head: %s, tail: %s", head, tail)
+
+                r_m = re.match(r"(\d+)\.\.(\d+)", tail)
+
                 if tail.isdigit():
                     # single job id, just get that
                     j = Job.get_or_none(int(tail))
@@ -337,6 +351,25 @@ class State:
                     folder = Folder.find_by_path(self.cwd, head)
                     assert folder is not None
                     jobs = list(folder.jobs)
+                elif r_m is not None:
+                    start = int(r_m.group(1))
+                    end = int(r_m.group(2))
+
+                    if start > end:
+                        raise ValueError(f"Illegal job range: {tail}")
+
+                    r = list(range(start, end + 1))
+
+                    folder = Folder.find_by_path(self.cwd, head)
+                    assert folder is not None
+
+                    jobs = []
+                    for job in folder.jobs:
+                        if job.job_id < start or job.job_id > end:
+                            continue
+                        if job.job_id in r:
+                            jobs.append(job)
+                    return jobs
                 else:
                     raise ValueError(f"{name} jobspec is not understood")
         elif isinstance(name, Job):
@@ -346,21 +379,32 @@ class State:
 
         return jobs
 
-    def submit_job(self, name: JobSpec) -> None:
+    def submit_job(self, name: JobSpec, iter: bool = False) -> None:
         jobs = self._extract_jobs(name)
-        for job in jobs:
+
+        for job in Progress(jobs, desc="Submitting jobs"):
             job.ensure_driver_instance(self.config)
             job.submit()
 
-    def kill_job(self, name: JobSpec) -> None:
+    def kill_job(
+        self, name: JobSpec, confirm: Callable[[str], bool] = lambda _: True
+    ) -> None:
         jobs = self._extract_jobs(name)
-        for job in jobs:
+        if not confirm(f"Kill {len(jobs)}?"):
+            return
+        for job in Progress(jobs, desc="Killing jobs"):
             job.ensure_driver_instance(self.config)
             job.kill()
 
-    def resubmit_job(self, name: JobSpec) -> None:
+    def resubmit_job(
+        self, name: JobSpec, confirm: Callable[[str], bool] = lambda _: True
+    ) -> None:
         jobs = self._extract_jobs(name)
-        for job in jobs:
+
+        if not confirm(f"Resubmit {len(jobs)} jobs?"):
+            return
+
+        for job in Progress(jobs, desc="Resubmitting jobs"):
             job.ensure_driver_instance(self.config)
             job.resubmit()
 

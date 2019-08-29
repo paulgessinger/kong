@@ -9,7 +9,7 @@ import kong
 from kong.drivers.local_driver import LocalDriver
 from kong.model import Folder, Job
 import kong.drivers
-from kong.state import DoesNotExist
+from kong.state import DoesNotExist, CannotCreateError
 
 
 @pytest.fixture
@@ -364,7 +364,7 @@ def test_mkdir(state, db):
             assert root.subfolder("nope") is not None
 
         # cannot create again
-        with pytest.raises(pw.IntegrityError):
+        with pytest.raises(kong.state.CannotCreateError):
             state.mkdir("alpha")
 
         # cannot create in nonexistant
@@ -376,6 +376,18 @@ def test_mkdir(state, db):
         state.mkdir("../../gamma")
         gamma = cwd.subfolder("gamma")
         assert gamma is not None
+
+
+def test_mkdir_existing(state, db):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    assert len(root.children) == 1
+
+    with pytest.raises(CannotCreateError):
+        state.mkdir("f1")
+    assert len(root.children) == 1
+    state.mkdir("f1", exist_ok=True)  # silently noop
+    assert len(root.children) == 1
 
 
 def test_rm_folder(state, db):
@@ -474,6 +486,27 @@ def test_get_jobs(state):
     assert all(a == b for a, b in zip(state.get_jobs("*"), [j2, j3]))
     state.cwd = root
     assert all(a == b for a, b in zip(state.get_jobs("f2/*"), [j2, j3]))
+
+
+def test_get_jobs_range(state):
+    root = Folder.get_root()
+
+    f1, f2, f3, f4, f5 = [state.create_job(command="sleep 1") for _ in range(5)]
+
+    jobs = state.get_jobs("2..4")
+    assert len(jobs) == 3
+    assert set([f2, f3, f4]) == set(jobs)
+
+    jobs = state.get_jobs("1..2")
+    assert len(jobs) == 2
+    assert set([f1, f2]) == set(jobs)
+
+    jobs = state.get_jobs("2..5")
+    assert len(jobs) == 4
+    assert set([f2, f3, f4, f5]) == set(jobs)
+
+    with pytest.raises(ValueError):
+        state.get_jobs("4..2")
 
 
 def test_run_job(state, db):

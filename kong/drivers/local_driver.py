@@ -9,6 +9,7 @@ import uuid
 
 import psutil
 
+from ..util import rmtree
 from ..db import database
 from ..model import Folder, Job
 from ..logger import logger
@@ -126,7 +127,7 @@ class LocalDriver(DriverBase):
         for name in ["log_dir", "output_dir", "scratch_dir"]:
             path = job.data[name]
             if os.path.exists(path):
-                shutil.rmtree(path)
+                rmtree(path)
         return job
 
     def remove(self, job: Job) -> None:
@@ -351,7 +352,7 @@ class LocalDriver(DriverBase):
             path = job.data[d]
             if os.path.exists(path):
                 logger.debug("Removing %s", path)
-                shutil.rmtree(path)
+                rmtree(path)
                 os.makedirs(path)
 
         job.status = Job.Status.CREATED

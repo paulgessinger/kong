@@ -6,12 +6,14 @@ import shlex
 import cmd
 import readline
 import os
+import sys
 from typing import Any, Callable, List, Tuple, Optional, Union
 import shutil
 
 import click
 import peewee as pw
 from click import style
+from beautifultable import BeautifulTable
 
 from .util import rjust
 from .state import DoesNotExist
@@ -87,12 +89,13 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
-            folders, jobs = self.state.ls(
-                args.dir,
-                refresh=args.refresh or args.recursive,
-                recursive=args.recursive,
-            )
+            folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
             width, height = shutil.get_terminal_size((80, 40))
+
+            if args.recursive:
+                # refresh folder jobs
+                for folder in folders:
+                    self.state.refresh_jobs(folder.jobs_recursive())
 
             if len(folders) > 0:
                 folder_name_length = 0
@@ -142,6 +145,7 @@ class Repl(cmd.Cmd):
                 click.echo("")
 
             if len(jobs) > 0:
+                table = BeautifulTable()
                 headers_jobs = (
                     "job id",
                     "batch job id",
@@ -205,6 +209,8 @@ class Repl(cmd.Cmd):
                         batch_job_id = job.batch_job_id.rjust(bjobid_len)
                     _, status_name = str(job.status).split(".", 1)
                     color = color_dict[job.status]
+
+                    # table.append_row(())
 
                     click.secho(
                         f"{job_id} {batch_job_id} {dtfmt(job.created_at)} {dtfmt(job.updated_at)} {status_name}",
@@ -287,30 +293,28 @@ class Repl(cmd.Cmd):
         try:
             args = p.parse_args(argv)
             jobs = self.state.get_jobs(args.job)
-            assert len(jobs) == 1
             if args.refresh:
-                self.state.refresh_jobs(jobs)
-            job = jobs[0]
-            job.reload()
+                jobs = self.state.refresh_jobs(jobs)
 
-            click.echo(job)
-            for field in (
-                "batch_job_id",
-                "driver",
-                "folder",
-                "command",
-                "cores",
-                "status",
-                "created_at",
-                "updated_at",
-            ):
-                fg: Optional[str] = None
-                if field == "status":
-                    fg = color_dict[job.status]
-                click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
-            click.echo("data:")
-            for k, v in job.data.items():
-                click.secho(f"{k}: {v}")
+            for job in jobs:
+                click.echo(job)
+                for field in (
+                    "batch_job_id",
+                    "driver",
+                    "folder",
+                    "command",
+                    "cores",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                ):
+                    fg: Optional[str] = None
+                    if field == "status":
+                        fg = color_dict[job.status]
+                    click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
+                click.echo("data:")
+                for k, v in job.data.items():
+                    click.secho(f"{k}: {v}")
 
         except SystemExit as e:
             if e.code != 0:
@@ -388,7 +392,7 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
-            self.state.kill_job(args.job_id)
+            self.state.kill_job(args.job_id, click.confirm)
 
         except SystemExit as e:
             if e.code != 0:
@@ -402,7 +406,7 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
-            self.state.resubmit_job(args.job_id)
+            self.state.resubmit_job(args.job_id, click.confirm)
 
         except SystemExit as e:
             if e.code != 0:
@@ -439,6 +443,58 @@ class Repl(cmd.Cmd):
             args = p.parse_args(argv)
             jobs = self.state.get_jobs(args.job_id)
             self.state.refresh_jobs(jobs)
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_tail(self, arg: str) -> None:
+        from sh import tail  # type: ignore
+
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+        p.add_argument("-n", type=int, default=20)
+
+        try:
+            args = p.parse_args(argv)
+            jobs = self.state.get_jobs(args.job_id)
+            assert len(jobs) == 1
+            job = jobs[0]
+
+            if not os.path.exists(job.data["stdout"]):
+                raise ValueError(
+                    f"Job hasn't created stdout file yet {job.data['stdout']}"
+                )
+            for line in tail("-f", job.data["stdout"], n=args.n, _iter=True):
+                sys.stdout.write(line)
+
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
+
+    def do_less(self, arg: str) -> None:
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("job_id")
+
+        try:
+            args = p.parse_args(argv)
+            jobs = self.state.get_jobs(args.job_id)
+            assert len(jobs) == 1
+            job = jobs[0]
+
+            def reader():
+                with open(job.data["stdout"]) as fp:
+                    line = fp.readline()
+                    yield line
+                    while line:
+                        line = fp.readline()
+                        yield line
+
+            click.echo_via_pager(reader())
 
         except SystemExit as e:
             if e.code != 0:
