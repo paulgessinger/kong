@@ -34,7 +34,7 @@ JobSpec = Union[str, int, Job]
 Confirmation = Callable[[str], bool]
 
 
-def YES(_) -> bool:
+def YES(_: str) -> bool:
     return True
 
 
