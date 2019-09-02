@@ -1,5 +1,4 @@
 import datetime
-import shutil
 import tempfile
 import os
 from contextlib import contextmanager

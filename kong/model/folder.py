@@ -51,7 +51,7 @@ class Folder(BaseModel):
 
     @property
     def path(self) -> str:
-        if self.parent == None:
+        if self.parent is None:
             return "/"
         # this will be slow, could optimize with CTE
         return cast(str, os.path.join(self.parent.path, self.name))
@@ -66,7 +66,7 @@ class Folder(BaseModel):
 
     @staticmethod
     def find_by_path(cwd: "Folder", path: str) -> Optional["Folder"]:
-        if cwd == None:
+        if cwd is None:
             return None
         if path == "/":
             return Folder.get_root()
@@ -78,7 +78,7 @@ class Folder(BaseModel):
             return cwd.parent
         if path == "" or path == ".":
             return cwd
-        if not "/" in path:
+        if "/" not in path:
             return cwd.subfolder(path)
         head, tail = path.split(os.sep, 1)
         logger.debug("Resolve path %s in %s: %s, %s", path, cwd.path, head, tail)

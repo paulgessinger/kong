@@ -11,7 +11,7 @@ from typing import (
     Dict,
     Collection,
 )
-from abc import *
+from abc import abstractmethod, ABC
 
 from kong.drivers import DriverMismatch
 from ..logger import logger

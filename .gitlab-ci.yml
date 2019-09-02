@@ -7,6 +7,7 @@ stages:
         - pip install -e ".[test]"
     script:
         - mypy kong
+        - flake8 kong
         - pytest --cov=kong --log-level DEBUG
         - coverage html
     artifacts:

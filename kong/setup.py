@@ -30,7 +30,7 @@ def setup(cfg: Optional[config.Config]) -> None:
         assert issubclass(
             get_driver(data["default_driver"]), drivers.driver_base.DriverBase
         ), "Please provide a valid driver"
-    except:
+    except Exception:
         raise ValueError(f"{data['default_driver']} is not a valid driver")
 
     data["jobdir"] = os.path.expanduser(

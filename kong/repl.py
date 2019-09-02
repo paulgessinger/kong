@@ -1,13 +1,12 @@
 import argparse
 import datetime
 import functools
-import logging
 import shlex
 import cmd
 import readline
 import os
 import sys
-from typing import Any, Callable, List, Tuple, Optional, Union, Iterable
+from typing import Any, Callable, List, Optional, Union, Iterable
 import shutil
 
 import click
@@ -18,7 +17,7 @@ from .util import rjust, shorten_path
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
-from .model import *
+from .model import Job, Folder
 from . import state
 
 history_file = os.path.join(APP_DIR, "history")

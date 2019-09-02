@@ -3,7 +3,7 @@ import typing
 
 import click
 import yaml
-from schema import *
+from schema import And, Optional, Schema
 
 APP_NAME = "kong"
 APP_DIR = click.get_app_dir(APP_NAME, force_posix=True)

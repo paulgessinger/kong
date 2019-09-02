@@ -2,19 +2,7 @@ import datetime
 from fnmatch import fnmatch
 import os
 import re
-from typing import (
-    List,
-    Callable,
-    Any,
-    Union,
-    Optional,
-    Tuple,
-    cast,
-    Iterable,
-    ContextManager,
-    Sequence,
-    Generator,
-)
+from typing import List, Callable, Any, Union, Optional, Tuple, ContextManager, Sequence
 
 import peewee as pw
 from contextlib import contextmanager
@@ -22,7 +10,7 @@ from contextlib import contextmanager
 from .util import Progress
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
-from . import config, drivers
+from . import config
 from .db import database
 from . import model
 from .model import Folder, Job
@@ -44,7 +32,10 @@ class DoesNotExist(RuntimeError):
 JobSpec = Union[str, int, Job]
 
 Confirmation = Callable[[str], bool]
-YES = lambda _: True
+
+
+def YES(_) -> bool:
+    return True
 
 
 class State:
@@ -118,8 +109,8 @@ class State:
 
         jobs = folder.jobs
 
-        if refresh == True and len(jobs) > 0:
-            if recursive == True:
+        if refresh and len(jobs) > 0:
+            if recursive:
                 jobs = list(self.refresh_jobs(folder.jobs_recursive()))
             else:
                 jobs = list(self.refresh_jobs(jobs))

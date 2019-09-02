@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 from typing import Any
 
@@ -10,9 +9,7 @@ from . import config
 from . import setup
 from .state import State
 from .logger import logger
-from .db import database
 from .repl import Repl
-from .model import *
 
 import pkg_resources  # part of setuptools
 

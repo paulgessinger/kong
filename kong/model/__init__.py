@@ -1,3 +1,4 @@
+# flake8: noqa
 import peewee as pw
 
 from .. import db

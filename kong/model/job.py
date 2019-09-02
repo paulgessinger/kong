@@ -11,12 +11,11 @@ from typing import (
     cast,
     TYPE_CHECKING,
     Optional,
-    Callable,
     ContextManager,
     IO,
     Type,
-    TypeVar,
 )
+import sqlite3
 
 import peewee as pw
 
@@ -26,9 +25,7 @@ from ..drivers import DriverMismatch
 from ..drivers.driver_base import DriverBase
 from ..config import Config
 from ..model.folder import Folder
-from ..logger import logger
 from . import BaseModel
-from .. import drivers
 
 
 class EnumField(pw.IntegerField):
@@ -54,8 +51,6 @@ def with_driver(f: Any) -> Any:
 
     return wrapper
 
-
-import sqlite3
 
 if sqlite3.version_info < (3, 9, 0):  # type: ignore
 
@@ -190,7 +185,7 @@ class Job(BaseModel):
         driver.kill(self)
 
     @with_driver
-    def get_status(self, driver: DriverBase) -> Status:
+    def get_status(self, driver: DriverBase) -> Status:  # noqa: F821
         self.reload()
         driver.sync_status(self)
         return self.status

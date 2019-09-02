@@ -1,8 +1,7 @@
 import datetime
 import os
 import re
-import shutil
-from abc import *
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import date, timedelta
 from typing import (
@@ -165,7 +164,7 @@ batchfile_tpl = """
 #SBATCH -A {account}             
 
 srun --export=NONE {jobscript}
-""".strip()
+""".strip()  # noqa: W291, W293
 
 config_schema = sc.Schema(
     {

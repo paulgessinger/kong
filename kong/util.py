@@ -4,7 +4,7 @@ import os
 import shutil
 import stat
 from datetime import timedelta
-from typing import Optional, ContextManager, Any, TypeVar, Iterable, Iterator
+from typing import Optional, Any, TypeVar, Iterable, Iterator
 import sys
 import contextlib
 
@@ -21,13 +21,13 @@ def strip_colors(string: str) -> str:
 
 
 def ljust(string: str, width: int, fillchar: str = " ") -> str:
-    l = len(strip_colors(string))
-    return string + (width - l) * fillchar
+    length = len(strip_colors(string))
+    return string + (width - length) * fillchar
 
 
 def rjust(string: str, width: int, fillchar: str = " ") -> str:
-    l = len(strip_colors(string))
-    return (width - l) * fillchar + string
+    length = len(strip_colors(string))
+    return (width - length) * fillchar + string
 
 
 def make_executable(path: str) -> None:
@@ -76,7 +76,7 @@ def Spinner(
     text: str, persist: bool = True, *args: Any, **kwargs: Any
 ) -> Iterator[None]:
     stream = kwargs.get("stream", sys.stdout)
-    if not "spinner" in kwargs:
+    if "spinner" not in kwargs:
         kwargs["spinner"] = "bouncingBar"
     if stream.isatty() and Halo is not None:
         spinner = Halo(text, *args, **kwargs)  # type: ignore
@@ -85,7 +85,7 @@ def Spinner(
             yield
             if persist:
                 spinner.succeed()
-        except:
+        except Exception:
             if persist:
                 spinner.fail()
             raise
