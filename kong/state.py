@@ -1,4 +1,5 @@
 import datetime
+from fnmatch import fnmatch
 import os
 import re
 from typing import (
@@ -41,6 +42,9 @@ class DoesNotExist(RuntimeError):
 
 
 JobSpec = Union[str, int, Job]
+
+Confirmation = Callable[[str], bool]
+YES = lambda _: True
 
 
 class State:
@@ -94,7 +98,7 @@ class State:
         driver: DriverBase = first_job.driver_instance
         try:
             logger.debug("Attempting bulk mode sync using %s", driver.__class__)
-            jobs = driver.bulk_sync_status(cast(Iterable[Job], jobs))
+            jobs = list(driver.bulk_sync_status(jobs))
         except DriverMismatch:
             # fall back to slow mode
             logger.debug("Bulk mode sync failed, falling back to slow loop mode")
@@ -116,11 +120,11 @@ class State:
 
         if refresh == True and len(jobs) > 0:
             if recursive == True:
-                jobs = self.refresh_jobs(folder.jobs_recursive())
+                jobs = list(self.refresh_jobs(folder.jobs_recursive()))
             else:
-                jobs = self.refresh_jobs(jobs)
+                jobs = list(self.refresh_jobs(jobs))
 
-        return list(folder.children), list(jobs)
+        return list(folder.children), jobs
 
     def cd(self, target: Union[str, Folder] = ".") -> None:
         if isinstance(target, str):
@@ -258,9 +262,7 @@ class State:
         Folder.create(name=tail, parent=location)
 
     def rm(
-        self,
-        name: Union[str, Job, Folder],
-        confirm: Callable[[str], bool] = lambda _: True,
+        self, name: Union[str, Job, Folder], confirm: Confirmation = lambda _: True
     ) -> bool:
         if isinstance(name, str):
             # string name, could be both
@@ -347,10 +349,10 @@ class State:
                     jobs = [j]
                 elif tail == "*":
                     # "glob" jobs: get folder, and select all jobs
-                    # this is not recursive right now
-                    folder = Folder.find_by_path(self.cwd, head)
-                    assert folder is not None
-                    jobs = list(folder.jobs)
+                    # this is half-recursive right now
+                    # folder = Folder.find_by_path(self.cwd, head)
+                    folders = self.get_folders(head)
+                    jobs = sum([list(f.jobs) for f in folders], [])
                 elif r_m is not None:
                     start = int(r_m.group(1))
                     end = int(r_m.group(2))
@@ -379,16 +381,27 @@ class State:
 
         return jobs
 
-    def submit_job(self, name: JobSpec, iter: bool = False) -> None:
-        jobs = self._extract_jobs(name)
+    def submit_job(
+        self, name: JobSpec, confirm: Confirmation = YES, recursive: bool = False
+    ) -> None:
+
+        jobs: List[Job]
+        if recursive and isinstance(name, str):
+            # get folders, extract jobs from thos
+            folders = self.get_folders(name)
+            logger.debug("Recursive, found %s folders", len(folders))
+            jobs = sum([f.jobs_recursive() for f in folders], [])
+        else:
+            jobs = self._extract_jobs(name)
+
+        if not confirm(f"Submit {len(jobs)} jobs?"):
+            return
 
         for job in Progress(jobs, desc="Submitting jobs"):
             job.ensure_driver_instance(self.config)
             job.submit()
 
-    def kill_job(
-        self, name: JobSpec, confirm: Callable[[str], bool] = lambda _: True
-    ) -> None:
+    def kill_job(self, name: JobSpec, confirm: Confirmation = YES) -> None:
         jobs = self._extract_jobs(name)
         if not confirm(f"Kill {len(jobs)}?"):
             return
@@ -396,9 +409,7 @@ class State:
             job.ensure_driver_instance(self.config)
             job.kill()
 
-    def resubmit_job(
-        self, name: JobSpec, confirm: Callable[[str], bool] = lambda _: True
-    ) -> None:
+    def resubmit_job(self, name: JobSpec, confirm: Confirmation = YES) -> None:
         jobs = self._extract_jobs(name)
 
         if not confirm(f"Resubmit {len(jobs)} jobs?"):
@@ -413,16 +424,22 @@ class State:
 
     def get_folders(self, pattern: str) -> List[Folder]:
         head, tail = os.path.split(pattern)
-        if tail == "*":
+        if "*" in tail:
+            logger.debug("Pattern: %s, will glob", tail)
             folder: Optional[Folder] = None
             if head == "":
-                folder = Folder.get_root()
+                folder = self.cwd
             else:
                 folder = Folder.find_by_path(self.cwd, head)
 
             if folder is None:
                 raise ValueError(f"No folder {head} found")
-            return folder.children
+
+            if tail == "*":  # no need to match, just get all
+                return folder.children
+            else:
+                folders = [f for f in folder.children if fnmatch(f.name, tail)]
+                return folders
         else:
             folder = Folder.find_by_path(self.cwd, pattern)
             if folder is None:

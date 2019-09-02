@@ -1,8 +1,15 @@
+import math
 import re
 import os
 import shutil
 import stat
 from datetime import timedelta
+from typing import Optional, ContextManager, Any, TypeVar, Iterable, Iterator
+import sys
+import contextlib
+
+from tqdm import tqdm  # type: ignore
+from halo import Halo  # type: ignore
 
 from .logger import logger
 
@@ -64,19 +71,15 @@ def parse_timedelta(string: str) -> timedelta:
     return timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
 
 
-import sys
-import contextlib
-
-from halo import Halo
-
-
 @contextlib.contextmanager
-def Spinner(text, persist=True, *args, **kwargs):
+def Spinner(
+    text: str, persist: bool = True, *args: Any, **kwargs: Any
+) -> Iterator[None]:
     stream = kwargs.get("stream", sys.stdout)
     if not "spinner" in kwargs:
         kwargs["spinner"] = "bouncingBar"
     if stream.isatty() and Halo is not None:
-        spinner = Halo(text, *args, **kwargs)
+        spinner = Halo(text, *args, **kwargs)  # type: ignore
         spinner.start()
         try:
             yield
@@ -94,11 +97,36 @@ def Spinner(text, persist=True, *args, **kwargs):
         yield
 
 
-from tqdm import tqdm
+T = TypeVar("T")
 
 
-def Progress(iter, *args, **kwargs):
+def Progress(iter: Iterable[T], *args: Any, **kwargs: Any) -> Iterable[T]:
     if sys.stdout.isatty():
-        return tqdm(iter, *args, **kwargs)
+        return tqdm(iter, *args, **kwargs)  # type: ignore
     else:
         return iter
+
+
+def shorten(string: str, length: int) -> str:
+    if length <= 4:
+        raise ValueError("Shortening to <= 4 does not make sense")
+    if length >= len(string):
+        return string
+    leftover = length - 3
+
+    left_length = max(1, math.floor(leftover / 2))
+
+    left = string[:left_length]
+    right = string[-(length - left_length - 3) :]
+
+    return f"{left}...{right}"
+
+
+def shorten_path(path: str, last_length: Optional[int] = None) -> str:
+    parts = path.split("/")
+    shortened = [s[:1] for s in parts[:-1]]
+    basename = parts[-1]
+    if last_length is not None:
+        basename = shorten(basename, last_length)
+    shortened.append(basename)
+    return "/".join(shortened)

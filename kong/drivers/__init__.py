@@ -21,7 +21,6 @@ def get_driver(value: str) -> type:
     module_name = ".".join(components[:-1])
     class_name = components[-1]
 
-    print(class_name, module_name)
     module = importlib.import_module(module_name)
     class_: type = getattr(module, class_name)
     return class_

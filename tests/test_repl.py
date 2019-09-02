@@ -541,10 +541,12 @@ def test_create_job(repl, state, tree, capsys):
     assert "usage" in out
 
 
-def test_submit_job(repl, state, capsys):
+def test_submit_job(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
     value = "VALUE VALUE VALUE"
     cmd = f"sleep 0.3; echo '{value}'"
+
+    monkeypatch.setattr("click.confirm", Mock(return_value=True))
 
     repl.do_create_job(cmd)
     j1 = root.jobs[-1]

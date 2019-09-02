@@ -9,6 +9,7 @@ from typing import (
     Iterable,
     TYPE_CHECKING,
     Dict,
+    Collection,
 )
 from abc import *
 
@@ -66,7 +67,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_sync_status(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+    def bulk_sync_status(self, jobs: Collection["Job"]) -> Iterable["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -74,7 +75,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -88,7 +89,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+    def bulk_submit(self, jobs: Collection["Job"]) -> None:
         raise NotImplementedError()
 
     @abstractmethod

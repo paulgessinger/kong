@@ -17,6 +17,7 @@ from typing import (
     IO,
     Sequence,
     cast,
+    Collection,
 )
 
 import sh
@@ -74,7 +75,7 @@ class SlurmAccountingItem:
 
 class SlurmInterface(ABC):
     @abstractmethod
-    def sacct(self, jobs: Iterable["Job"]) -> Iterator[SlurmAccountingItem]:
+    def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
         raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
@@ -98,7 +99,7 @@ class ShellSlurmInterface(SlurmInterface):
         self._sbatch = sh.Command("sbatch")
         self._scancel = sh.Command("scancel")
 
-    def sacct(self, jobs: Iterable["Job"]) -> Iterator[SlurmAccountingItem]:
+    def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
 
         starttime = date.today() - timedelta(days=7)
 
@@ -290,7 +291,7 @@ class SlurmDriver(DriverBase):
     def sync_status(self, job: "Job") -> Job:
         return self.bulk_sync_status([job])[0]
 
-    def bulk_sync_status(self, jobs: Iterable["Job"]) -> Sequence["Job"]:
+    def bulk_sync_status(self, jobs: Collection["Job"]) -> Sequence["Job"]:
         for job in jobs:
             self._check_driver(job)
 
@@ -334,7 +335,7 @@ class SlurmDriver(DriverBase):
         if save:
             job.save()
 
-    def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable["Job"]:
+    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable["Job"]:
         now = datetime.datetime.now()
         jobs = self.bulk_sync_status(jobs)
 

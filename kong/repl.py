@@ -7,15 +7,14 @@ import cmd
 import readline
 import os
 import sys
-from typing import Any, Callable, List, Tuple, Optional, Union
+from typing import Any, Callable, List, Tuple, Optional, Union, Iterable
 import shutil
 
 import click
 import peewee as pw
 from click import style
-from beautifultable import BeautifulTable
 
-from .util import rjust
+from .util import rjust, shorten_path
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -145,7 +144,6 @@ class Repl(cmd.Cmd):
                 click.echo("")
 
             if len(jobs) > 0:
-                table = BeautifulTable()
                 headers_jobs = (
                     "job id",
                     "batch job id",
@@ -255,7 +253,7 @@ class Repl(cmd.Cmd):
             self.state.cd(name)
         except pw.DoesNotExist:
             click.secho(f"Folder {name} does not exist", fg="red")
-        self.prompt = f"({APP_NAME} > {self.state.cwd.path}) "
+        self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
     def complete_cd(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
@@ -294,7 +292,7 @@ class Repl(cmd.Cmd):
             args = p.parse_args(argv)
             jobs = self.state.get_jobs(args.job)
             if args.refresh:
-                jobs = self.state.refresh_jobs(jobs)
+                jobs = list(self.state.refresh_jobs(jobs))
 
             for job in jobs:
                 click.echo(job)
@@ -368,10 +366,11 @@ class Repl(cmd.Cmd):
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
+        p.add_argument("--recursive", "-R", action="store_true")
 
         try:
             args = p.parse_args(argv)
-            self.state.submit_job(args.job_id)
+            self.state.submit_job(args.job_id, click.confirm, recursive=args.recursive)
 
         except SystemExit as e:
             if e.code != 0:
@@ -486,7 +485,7 @@ class Repl(cmd.Cmd):
             assert len(jobs) == 1
             job = jobs[0]
 
-            def reader():
+            def reader() -> Iterable[str]:
                 with open(job.data["stdout"]) as fp:
                     line = fp.readline()
                     yield line

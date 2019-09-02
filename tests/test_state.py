@@ -338,6 +338,21 @@ def test_get_folders(state):
         assert a == b
 
 
+def test_get_folders_pattern(state):
+    root = Folder.get_root()
+
+    folders_alpha = [root.add_folder(f"alpha_{n}") for n in range(10)]
+    folders_beta = [root.add_folder(f"beta_{n}") for n in range(10)]
+
+    globbed_alpha = state.get_folders("alpha_*")
+    assert len(globbed_alpha) == len(folders_alpha)
+    assert all(a == b for a, b in zip(globbed_alpha, folders_alpha))
+
+    globbed_beta = state.get_folders("beta_*")
+    assert len(globbed_beta) == len(folders_beta)
+    assert all(a == b for a, b in zip(globbed_beta, folders_beta))
+
+
 def test_mkdir(state, db):
     root = Folder.get_root()
     sub = root.add_folder("sub")
@@ -486,6 +501,31 @@ def test_get_jobs(state):
     assert all(a == b for a, b in zip(state.get_jobs("*"), [j2, j3]))
     state.cwd = root
     assert all(a == b for a, b in zip(state.get_jobs("f2/*"), [j2, j3]))
+
+
+def test_get_folders_jobs_pattern(state):
+    root = Folder.get_root()
+
+    folders_alpha = [root.add_folder(f"alpha_{n}") for n in range(10)]
+    folders_beta = [root.add_folder(f"beta_{n}") for n in range(13)]
+
+    jobs_alpha = []
+    for f in folders_alpha:
+        with state.pushd(f):
+            jobs_alpha.append(state.create_job(command="sleep 1"))
+
+    jobs_beta = []
+    for f in folders_beta:
+        with state.pushd(f):
+            jobs_beta.append(state.create_job(command="sleep 1"))
+
+    globbed_alpha = state.get_jobs("alpha_*/*")
+    assert len(globbed_alpha) == len(jobs_alpha)
+    assert all(a == b for a, b in zip(globbed_alpha, jobs_alpha))
+
+    globbed_beta = state.get_jobs("beta_*/*")
+    assert len(globbed_beta) == len(jobs_beta)
+    assert all(a == b for a, b in zip(globbed_beta, jobs_beta))
 
 
 def test_get_jobs_range(state):

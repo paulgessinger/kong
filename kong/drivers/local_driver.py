@@ -4,7 +4,17 @@ import tempfile
 import os
 from contextlib import contextmanager
 from subprocess import Popen
-from typing import Any, Optional, IO, ContextManager, Union, List, Iterable, Dict
+from typing import (
+    Any,
+    Optional,
+    IO,
+    ContextManager,
+    Union,
+    List,
+    Iterable,
+    Dict,
+    Collection,
+)
 import uuid
 
 import psutil
@@ -193,7 +203,7 @@ class LocalDriver(DriverBase):
                 job.save()
         return job
 
-    def bulk_sync_status(self, jobs: Iterable[Job]) -> Iterable[Job]:
+    def bulk_sync_status(self, jobs: Collection[Job]) -> Iterable[Job]:
         # simply implemented as loop over single sync status for local driver
         now = datetime.datetime.now()
 
@@ -229,7 +239,7 @@ class LocalDriver(DriverBase):
         if save:
             job.save()
 
-    def bulk_kill(self, jobs: Iterable["Job"]) -> Iterable[Job]:
+    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable[Job]:
         now = datetime.datetime.now()
 
         def k() -> Iterable[Job]:
@@ -245,7 +255,7 @@ class LocalDriver(DriverBase):
 
         return jobs
 
-    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+    def bulk_submit(self, jobs: Collection["Job"]) -> None:
         now = datetime.datetime.now()
 
         def sub() -> Iterable[Job]:

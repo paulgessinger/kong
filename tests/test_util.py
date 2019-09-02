@@ -3,7 +3,15 @@ from datetime import timedelta
 import click
 import pytest
 
-from kong.util import strip_colors, ljust, rjust, format_timedelta, parse_timedelta
+from kong.util import (
+    strip_colors,
+    ljust,
+    rjust,
+    format_timedelta,
+    parse_timedelta,
+    shorten,
+    shorten_path,
+)
 
 
 def test_strip_colors():
@@ -57,3 +65,27 @@ def test_parse_timedelta():
     assert ptd("99:59:59") == timedelta(hours=99, minutes=59, seconds=59)
     assert ptd("08:06:00") == timedelta(hours=8, minutes=6)
     assert ptd("08:06:23") == timedelta(hours=8, minutes=6, seconds=23)
+
+
+def test_shorten():
+    assert shorten("abcabcabcabc", 5) == "a...c"
+    assert shorten("abcabcabcabc", 6) == "a...bc"
+    assert shorten("abcabcabcabc", 7) == "ab...bc"
+    assert shorten("abcdefghijklmnopqrstuvwxyz", 8) == "ab...xyz"
+    assert shorten("abcdefghijklmnopqrstuvwxyz", 9) == "abc...xyz"
+    assert shorten("abcabcabcabc", 12) == "abcabcabcabc"
+    assert shorten("abcabcabcabc", 15) == "abcabcabcabc"
+    with pytest.raises(ValueError):
+        shorten("abcdefgh", 4)  # doesn't make sense
+
+
+def test_shorten_path():
+    assert (
+        shorten_path("/a/very/long/path/with/many/segments") == "/a/v/l/p/w/m/segments"
+    )
+    assert shorten_path("a/very/long/path/with/many/segments") == "a/v/l/p/w/m/segments"
+
+    assert (
+        shorten_path("a/very/long/path/with/many/segments_is_very_long_too", 10)
+        == "a/v/l/p/w/m/seg..._too"
+    )
