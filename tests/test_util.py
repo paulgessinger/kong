@@ -1,3 +1,5 @@
+import os
+import stat
 from datetime import timedelta
 
 import click
@@ -11,6 +13,8 @@ from kong.util import (
     parse_timedelta,
     shorten,
     shorten_path,
+    make_executable,
+    is_executable,
 )
 
 
@@ -89,3 +93,28 @@ def test_shorten_path():
         shorten_path("a/very/long/path/with/many/segments_is_very_long_too", 10)
         == "a/v/l/p/w/m/seg..._too"
     )
+
+
+def test_make_executable(tmp_path):
+    p = tmp_path.joinpath("test.sh")
+    p.write_text("hallo")
+
+    mode = os.stat(p).st_mode
+    assert (mode & stat.S_IEXEC) == 0
+
+    make_executable(p)
+    mode = os.stat(p).st_mode
+    assert (mode & stat.S_IEXEC) != 0
+
+
+def test_is_executable(tmp_path):
+    p = tmp_path.joinpath("test.sh")
+    p.write_text("hallo")
+    assert is_executable(p) == False
+
+    os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
+    assert is_executable(p) == True
+
+
+def test_rmtree():
+    pass

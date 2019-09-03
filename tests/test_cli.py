@@ -84,3 +84,11 @@ def test_repl_raises(app_env, db, cli, monkeypatch):
     result = cli.invoke(main, [])
     assert result.exit_code == 1
     assert result.exception is not None
+
+
+def test_interative(app_env, cli, monkeypatch):
+    mock = Mock()
+    monkeypatch.setattr("IPython.embed", mock)
+
+    cli.invoke(main, ["interactive"])
+    mock.assert_called_once()

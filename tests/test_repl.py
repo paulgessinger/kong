@@ -1,9 +1,10 @@
 import os
+import tempfile
 import time
 
 import pytest
 from unittest import mock
-from unittest.mock import Mock
+from unittest.mock import Mock, ANY
 import peewee as pw
 
 from kong.model import Folder, Job
@@ -20,7 +21,7 @@ def repl(state):
     return Repl(state)
 
 
-def test_ls(tree, state, repl, capsys, sample_jobs):
+def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     repl.do_ls(".")
     out, err = capsys.readouterr()
     assert all(f.name in out for f in state.cwd.children)
@@ -45,8 +46,18 @@ def test_ls(tree, state, repl, capsys, sample_jobs):
     out, err = capsys.readouterr()
     assert "usage" in out
 
+    with monkeypatch.context() as m:
 
-def test_ls_refresh(repl, state, capsys, sample_jobs):
+        job = state.create_job(command="sleep 1")
+        job.batch_job_id = None
+
+        m.setattr(state, "refresh_jobs", Mock())
+        m.setattr(state, "ls", Mock(return_value=([], [job])))
+
+        repl.onecmd("ls -R /")
+
+
+def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     repl.do_ls(".")
     out, err = capsys.readouterr()
     assert "CREATED" in out
@@ -69,12 +80,18 @@ def test_ls_refresh(repl, state, capsys, sample_jobs):
     assert "SUBMITTED" not in out
     assert "COMPLETED" in out
 
+    with monkeypatch.context() as m:
+        mock = Mock()
+        m.setattr(state, "refresh_jobs", mock)
+        repl.onecmd("ls -R /")
+        assert mock.call_count == 3  # called for each folder
+
 
 def test_complete_funcs(state, tree, repl, monkeypatch):
     cmpl = Mock()
     monkeypatch.setattr("kong.repl.Repl.complete_path", cmpl)
 
-    for c in ["ls", "mkdir", "cd", "rm"]:
+    for c in ["ls", "mkdir", "cd", "rm", "submit_job"]:
         func = getattr(repl, f"complete_{c}")
 
         func("", "ls hurz", 0, 0)
@@ -102,7 +119,7 @@ def test_complete_path(state, tree, repl):
     assert alts == ["alpha/"]
 
 
-def test_mkdir(state, repl, db, capsys):
+def test_mkdir(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()
     sub = root.add_folder("sub")
 
@@ -146,6 +163,13 @@ def test_mkdir(state, repl, db, capsys):
         out, err = capsys.readouterr()
         gamma = cwd.subfolder("gamma")
         assert gamma is not None
+
+        # force integrity error
+        with monkeypatch.context() as m:
+            m.setattr(state, "mkdir", Mock(side_effect=pw.IntegrityError))
+            repl.onecmd("mkdir hurz")
+            out, err = capsys.readouterr()
+            assert "already exists" in out
 
 
 def test_cd(state, repl, db, capsys):
@@ -346,6 +370,13 @@ def test_mv_bulk_folder(state, repl):
     for f in folders:
         f.reload()
         assert f.parent == r1
+
+
+def test_mv_error(state, repl, capsys, monkeypatch):
+    monkeypatch.setattr(state, "mv", Mock(side_effect=SystemExit))
+    repl.onecmd("mv bla blub")
+    out, err = capsys.readouterr()
+    assert "Error parsing arguments" in out
 
 
 def test_rm(state, repl, db, capsys, monkeypatch):
@@ -662,3 +693,84 @@ def test_status_update(repl, state, capsys):
     repl.onecmd("update --nope")
     out, err = capsys.readouterr()
     assert "usage" in out
+
+
+def test_info(state, repl, capsys, monkeypatch):
+    job = state.create_job(command="sleep 1")
+
+    repl.onecmd("info 1")
+    out, err = capsys.readouterr()
+    assert str(job.job_id) in out
+    assert job.batch_job_id in out
+    for k, v in job.data.items():
+        assert k in out
+        assert v in out
+
+    with monkeypatch.context() as m:
+        refresh = Mock()
+        m.setattr(state, "refresh_jobs", refresh)
+        repl.onecmd("info 1 -r")
+        out, err = capsys.readouterr()
+        refresh.assert_called_once()
+
+    with monkeypatch.context() as m:
+        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
+        repl.onecmd("info 8448")
+        out, err = capsys.readouterr()
+        assert "Error parsing arguments" in out
+
+
+def test_tail(state, repl, capsys, monkeypatch):
+    job = state.create_job(command="sleep 1")
+
+    with monkeypatch.context() as m:
+        tail = Mock(return_value=["LINENO1", "LINENO2"])
+        m.setattr("sh.tail", tail)
+        m.setattr("os.path.exists", Mock(return_value=True))
+        repl.onecmd(f"tail {job.job_id}")
+        tail.assert_called_once_with("-f", job.data["stdout"], n=ANY, _iter=True)
+        out, err = capsys.readouterr()
+        assert "LINENO1" in out
+        assert "LINENO2" in out
+
+    with monkeypatch.context() as m:
+        m.setattr("os.path.exists", Mock(return_value=False))
+        repl.onecmd(f"tail {job.job_id}")
+        out, err = capsys.readouterr()
+        assert "hasn't created stdout" in out
+
+    with monkeypatch.context() as m:
+        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
+        repl.onecmd(f"tail {job.job_id}")
+        out, err = capsys.readouterr()
+        assert "Error parsing arguments" in out
+
+
+def test_less(state, repl, capsys, monkeypatch):
+    job = state.create_job(command="sleep 1")
+
+    content = "SOMECONTENT: BLABLBALBALBALBLA\nNEWLINE"
+    with tempfile.NamedTemporaryFile("wt") as f:
+        f.write(content)
+        f.flush()
+        job.data["stdout"] = f.name
+        job.save()
+
+        lines = []
+
+        def agg(it):
+            nonlocal lines
+            lines = list(it)
+
+        with monkeypatch.context() as m:
+            pager = Mock(side_effect=agg)
+            m.setattr("click.echo_via_pager", pager)
+            repl.onecmd(f"less {job.job_id}")
+            pager.assert_called_once()
+            assert "".join(lines) == content
+
+    with monkeypatch.context() as m:
+        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
+        repl.onecmd(f"less {job.job_id}")
+        out, err = capsys.readouterr()
+        assert "Error parsing arguments" in out
