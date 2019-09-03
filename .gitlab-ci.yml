@@ -4,7 +4,7 @@ stages:
 .test:
     stage: test
     before_script:
-        - pip install -e ".[test]"
+        - pip install -e ".[test,ipython]"
     script:
         - mypy kong
         - flake8 kong
