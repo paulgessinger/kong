@@ -318,15 +318,26 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    @parse
-    def do_rm(self, name: str) -> None:
+    def do_rm(self, arg: str) -> None:
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("arg")
+        p.add_argument("--recursive", "-R", action="store_true")
+
         try:
-            if self.state.rm(name, lambda s: click.confirm(s)):
-                click.echo(f"{name} is gone")
+            args = p.parse_args(argv)
+            if self.state.rm(
+                args.arg, recursive=args.recursive, confirm=lambda s: click.confirm(s)
+            ):
+                click.echo(f"{args.arg} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")
         except DoesNotExist:
-            click.secho(f"Folder {name} does not exist", fg="red")
+            click.secho(f"Folder {args.arg} does not exist", fg="red")
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
 
     def complete_rm(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
@@ -387,10 +398,13 @@ class Repl(cmd.Cmd):
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
+        p.add_argument("--recursive", "-R", action="store_true")
 
         try:
             args = p.parse_args(argv)
-            self.state.kill_job(args.job_id, click.confirm)
+            self.state.kill_job(
+                args.job_id, recursive=args.recursive, confirm=click.confirm
+            )
 
         except SystemExit as e:
             if e.code != 0:
@@ -465,6 +479,9 @@ class Repl(cmd.Cmd):
                 raise ValueError(
                     f"Job hasn't created stdout file yet {job.data['stdout']}"
                 )
+            width, _ = shutil.get_terminal_size((80, 40))
+            hw = width // 2
+            click.echo("=" * hw + " STDOUT " + "=" * (width - hw - 8))
             for line in tail("-f", job.data["stdout"], n=args.n, _iter=True):
                 sys.stdout.write(line)
 

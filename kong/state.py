@@ -253,7 +253,10 @@ class State:
         Folder.create(name=tail, parent=location)
 
     def rm(
-        self, name: Union[str, Job, Folder], confirm: Confirmation = lambda _: True
+        self,
+        name: Union[str, Job, Folder],
+        recursive: bool = False,
+        confirm: Confirmation = lambda _: True,
     ) -> bool:
         if isinstance(name, str):
             # string name, could be both
@@ -265,10 +268,13 @@ class State:
 
             try:
                 folders = self.get_folders(name)
+                if recursive:
+                    for folder in folders:
+                        jobs += folder.jobs_recursive()
             except ValueError:
                 pass
             try:
-                jobs = self.get_jobs(name)
+                jobs += self.get_jobs(name)
             except ValueError:
                 pass
 
@@ -276,11 +282,17 @@ class State:
                 raise DoesNotExist(f"No such folder or job: {name}")
 
             if confirm(f"Remove {len(folders)} folders and {len(jobs)} jobs?"):
+
+                if len(jobs) > 0:
+                    first_job = jobs[0]
+                    first_job.ensure_driver_instance(self.config)
+                    driver = first_job.driver_instance
+
+                    driver.bulk_remove(jobs)
+
                 for folder in folders:
                     folder.delete_instance(recursive=True, delete_nullable=True)
-                for job in jobs:
-                    job.ensure_driver_instance(self.config)
-                    job.remove()
+
                 return True
 
             return False
@@ -392,8 +404,18 @@ class State:
             job.ensure_driver_instance(self.config)
             job.submit()
 
-    def kill_job(self, name: JobSpec, confirm: Confirmation = YES) -> None:
-        jobs = self._extract_jobs(name)
+    def kill_job(
+        self, name: JobSpec, recursive: bool = False, confirm: Confirmation = YES
+    ) -> None:
+        jobs: List[Job]
+        if recursive and isinstance(name, str):
+            # get folders, extract jobs from thos
+            folders = self.get_folders(name)
+            logger.debug("Recursive, found %s folders", len(folders))
+            jobs = sum([f.jobs_recursive() for f in folders], [])
+        else:
+            jobs = self._extract_jobs(name)
+
         if not confirm(f"Kill {len(jobs)}?"):
             return
         for job in Progress(jobs, desc="Killing jobs"):

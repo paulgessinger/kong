@@ -297,18 +297,21 @@ class SlurmDriver(DriverBase):
         now = datetime.datetime.now()
 
         def proc() -> Iterable[Job]:
+            job_not_found = 0
             for item in self.slurm.sacct(jobs):
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
-                    logger.warning(
-                        "Tried to fetch slurm job %d, but did not find it in database",
-                        item.job_id,
-                    )
+                    job_not_found += 1
                     continue
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
                 job.updated_at = now
                 yield job
+            if job_not_found > 0:
+                logger.warning(
+                    "Tried to fetch %d slurm jobs which where not found in the database",
+                    job_not_found,
+                )
 
         with database.atomic():
             Job.bulk_update(
@@ -443,7 +446,31 @@ class SlurmDriver(DriverBase):
                 rmtree(path)
         return job
 
+    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
+        jobs = self.bulk_sync_status(jobs)
+        # safety check
+        for job in jobs:
+            assert job.driver == self.__class__
+            if job.status in (Job.Status.SUBMITTED, Job.Status.RUNNING):
+                raise InvalidJobStatus(f"Job {job} might be running, please kill first")
+
+        logger.debug("Cleaning up %d jobs", len(jobs))
+
+        for job in jobs:
+            for d in ["log_dir", "output_dir"]:
+                path = job.data[d]
+                if os.path.exists(path):
+                    logger.debug("Path %s exists, attempting to delete", path)
+                    rmtree(path)
+        return jobs
+
     def remove(self, job: "Job") -> None:
         logger.debug("Removing job %s", job)
         job = self.cleanup(job)
         job.delete_instance()
+
+    def bulk_remove(self, jobs: Collection["Job"]) -> None:
+        logger.debug("Removing %d jobs", len(jobs))
+        jobs = self.bulk_cleanup(jobs)
+        with database.atomic():
+            Job.delete().where(Job.job_id << [j.job_id for j in jobs]).execute()
