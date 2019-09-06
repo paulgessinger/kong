@@ -8,7 +8,7 @@ from unittest.mock import Mock, ANY
 import peewee as pw
 
 from kong.model import Folder, Job
-from kong.repl import Repl
+from kong.repl import Repl, complete_path
 import kong
 
 import logging
@@ -84,38 +84,40 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
         mock = Mock()
         m.setattr(state, "refresh_jobs", mock)
         repl.onecmd("ls -R /")
-        assert mock.call_count == 3  # called for each folder
+        assert mock.call_count == 4  # called for each folder plus one preliminary time
 
 
 def test_complete_funcs(state, tree, repl, monkeypatch):
+    root = Folder.get_root()
     cmpl = Mock()
-    monkeypatch.setattr("kong.repl.Repl.complete_path", cmpl)
+    monkeypatch.setattr("kong.repl.complete_path", cmpl)
 
     for c in ["ls", "mkdir", "cd", "rm", "submit_job"]:
         func = getattr(repl, f"complete_{c}")
 
-        func("", "ls hurz", 0, 0)
-        cmpl.assert_called_once_with("hurz")
+        func("hurz", "ls hurz", 0, 0)
+        cmpl.assert_called_once_with(root, "hurz")
         cmpl.reset_mock()
 
-        func("", "ls hurz/schmurz", 0, 0)
-        cmpl.assert_called_once_with("hurz/schmurz")
+        func("hurz/schmurz", "ls hurz/schmurz", 0, 0)
+        cmpl.assert_called_once_with(root, "hurz/schmurz")
         cmpl.reset_mock()
 
 
 def test_complete_path(state, tree, repl):
-    alts = repl.complete_path("f")
+    root = Folder.get_root()
+    alts = complete_path(root, "f")
     assert alts == ["f1/", "f2/", "f3/"]
 
-    alts = repl.complete_path("f1")
+    alts = complete_path(root, "f1")
     assert alts == ["f1/"]
 
-    alts = repl.complete_path("f2/")
+    alts = complete_path(root, "f2/")
     assert alts == ["alpha/", "beta/", "gamma/"]
 
     state.cwd = Folder.find_by_path(state.cwd, "/f2")
 
-    alts = repl.complete_path("a")
+    alts = complete_path(root.subfolder("f2"), "a")
     assert alts == ["alpha/"]
 
 
@@ -170,6 +172,21 @@ def test_mkdir(state, repl, db, capsys, monkeypatch):
             repl.onecmd("mkdir hurz")
             out, err = capsys.readouterr()
             assert "already exists" in out
+
+
+def test_mkdir_create_parents(state, repl, capsys):
+    root = Folder.get_root()
+
+    repl.onecmd("mkdir /a1/b2/c3/d4")
+    out, err = capsys.readouterr()
+    assert "Cannot create folder" in out
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is None
+
+    repl.onecmd("mkdir -p /a1/b2/c3/d4")
+    assert Folder.find_by_path(state.cwd, "/a1") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is not None
 
 
 def test_cd(state, repl, db, capsys):

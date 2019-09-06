@@ -405,6 +405,25 @@ def test_mkdir_existing(state, db):
     assert len(root.children) == 1
 
 
+def test_mkdir_create_parent(state):
+    root = Folder.get_root()
+
+    with pytest.raises(CannotCreateError):
+        state.mkdir("/a1/b2/c3/d4")
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is None
+
+    state.mkdir("/a1/b2/c3/d4", create_parent=True)
+    assert Folder.find_by_path(state.cwd, "/a1") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3") is not None
+    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is not None
+
+    state.mkdir("/a1/b2/c3/d5", create_parent=True)
+
+    state.mkdir("beta", create_parent=True)
+    assert Folder.find_by_path(state.cwd, "/beta") is not None
+
+
 def test_rm_folder(state, db):
     root = Folder.get_root()
 
@@ -416,12 +435,12 @@ def test_rm_folder(state, db):
 
     root.add_folder("alpha")
     confirm = Mock(return_value=False)
-    state.rm("alpha", confirm)
+    state.rm("alpha", confirm=confirm)
     confirm.assert_called_once()
 
     assert root.subfolder("alpha") is not None
     confirm = Mock(return_value=True)
-    state.rm("alpha", confirm)
+    state.rm("alpha", confirm=confirm)
     confirm.assert_called_once()
     assert root.subfolder("alpha") is None
 

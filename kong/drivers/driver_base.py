@@ -109,5 +109,13 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
+    def bulk_cleanup(self, jobs: Collection["Job"]) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
     def remove(self, job: "Job") -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def bulk_remove(self, jobs: Collection["Job"]) -> None:
         raise NotImplementedError()

@@ -41,6 +41,51 @@ color_dict = {
 }
 
 
+def complete_path(cwd: Folder, path: str) -> List[str]:
+    logger.debug("Completion of '%s'", path)
+    if path.endswith("/"):
+        folder = Folder.find_by_path(cwd, path)
+        prefix = ""
+    else:
+        head, prefix = os.path.split(path)
+        folder = Folder.find_by_path(cwd, head)
+
+    assert folder is not None
+    options = []
+    for child in folder.children:
+        if child.name.startswith(prefix):
+            options.append(child.name + "/")
+    return options
+
+
+def add_completion(*names):
+    def decorator(cls):
+        print(cls)
+        for name in names:
+            method_name = f"complete_{name}"
+            print(method_name)
+
+            def handler(
+                self, text: str, line: str, begidx: int, endidx: int
+            ) -> List[str]:
+                print("HANDLE")
+                logger.debug(
+                    "%s: text: %s, line: %s, begidx: %d, endidx: %d",
+                    method_name,
+                    text,
+                    line,
+                    begidx,
+                    endidx,
+                )
+                return complete_path(self.state.cwd, text)
+
+            setattr(cls, method_name, handler)
+        return cls
+
+    return decorator
+
+
+@add_completion("ls", "mkdir", "rm", "cd", "submit_job", "kill_job", "info")
 class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
@@ -62,21 +107,6 @@ class Repl(cmd.Cmd):
             click.secho(f"{e}", fg="red")
         return False
 
-    def complete_path(self, path: str) -> List[str]:
-        if path.endswith("/"):
-            folder = Folder.find_by_path(self.state.cwd, path)
-            prefix = ""
-        else:
-            head, prefix = os.path.split(path)
-            folder = Folder.find_by_path(self.state.cwd, head)
-
-        assert folder is not None
-        options = []
-        for child in folder.children:
-            if child.name.startswith(prefix):
-                options.append(child.name + "/")
-        return options
-
     def do_ls(self, arg: str = "") -> None:
         "List the current directory content"
         argv = shlex.split(arg)
@@ -87,13 +117,19 @@ class Repl(cmd.Cmd):
 
         try:
             args = p.parse_args(argv)
+            logger.debug("%s", args)
             folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
             width, height = shutil.get_terminal_size((80, 40))
 
             if args.recursive:
+                # is it a folder
+                arg_folder = Folder.find_by_path(self.state.cwd, args.dir)
+                if arg_folder is not None:
+                    self.state.refresh_jobs(arg_folder.jobs_recursive())
                 # refresh folder jobs
                 for folder in folders:
                     self.state.refresh_jobs(folder.jobs_recursive())
+                folders, jobs = self.state.ls(args.dir, refresh=False)
 
             if len(folders) > 0:
                 folder_name_length = 0
@@ -221,29 +257,28 @@ class Repl(cmd.Cmd):
         except pw.DoesNotExist:
             click.secho(f"Folder {arg} does not exist", fg="red")
 
-    def complete_ls(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return self.complete_path(path)
-
-    @parse
-    def do_mkdir(self, path: str) -> None:
+    def do_mkdir(self, arg: str) -> None:
         "Create a directory at the current location"
-        try:
-            self.state.mkdir(path)
-        except state.CannotCreateError:
-            click.secho(f"Cannot create folder at '{path}'", fg="red")
-        except pw.IntegrityError:
-            click.secho(
-                f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
-            )
+        argv = shlex.split(arg)
+        p = argparse.ArgumentParser()
+        p.add_argument("path")
+        p.add_argument("--create-parent", "-p", action="store_true")
 
-    def complete_mkdir(
-        self, text: str, line: str, begidx: int, endidx: int
-    ) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return self.complete_path(path)
+        try:
+            args = p.parse_args(argv)
+            try:
+                self.state.mkdir(args.path, create_parent=args.create_parent)
+            except state.CannotCreateError:
+                click.secho(f"Cannot create folder at '{args.path}'", fg="red")
+            except pw.IntegrityError:
+                click.secho(
+                    f"Folder {args.path} in {self.state.cwd.path} already exists",
+                    fg="red",
+                )
+        except SystemExit as e:
+            if e.code != 0:
+                click.secho("Error parsing arguments", fg="red")
+                p.print_help()
 
     @parse
     def do_cd(self, name: str = "") -> None:
@@ -257,7 +292,7 @@ class Repl(cmd.Cmd):
     def complete_cd(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
         args = shlex.split(line)
         path = args[1]
-        return self.complete_path(path)
+        return complete_path(self.state.cwd, path)
 
     def do_mv(self, arg: str) -> None:
         argv = shlex.split(arg)
@@ -286,10 +321,11 @@ class Repl(cmd.Cmd):
         p = argparse.ArgumentParser()
         p.add_argument("job")
         p.add_argument("--refresh", "-r", action="store_true")
+        p.add_argument("--recursive", "-R", action="store_true")
 
         try:
             args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job)
+            jobs = self.state.get_jobs(args.job, args.recursive)
             if args.refresh:
                 jobs = list(self.state.refresh_jobs(jobs))
 
@@ -339,11 +375,6 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def complete_rm(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return self.complete_path(path)
-
     @parse
     def do_cwd(self) -> None:
         "Show the current location"
@@ -387,13 +418,6 @@ class Repl(cmd.Cmd):
                 click.secho("Error parsing arguments", fg="red")
                 p.print_help()
 
-    def complete_submit_job(
-        self, text: str, line: str, begidx: int, endidx: int
-    ) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return self.complete_path(path)
-
     def do_kill_job(self, arg: str) -> None:
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
@@ -415,10 +439,11 @@ class Repl(cmd.Cmd):
         argv = shlex.split(arg)
         p = argparse.ArgumentParser()
         p.add_argument("job_id")
+        p.add_argument("--recursive", "-R", action="store_true")
 
         try:
             args = p.parse_args(argv)
-            self.state.resubmit_job(args.job_id, click.confirm)
+            self.state.resubmit_job(args.job_id, click.confirm, args.recursive)
 
         except SystemExit as e:
             if e.code != 0:

@@ -83,6 +83,7 @@ class State:
         return cls(cfg, cwd)
 
     def refresh_jobs(self, jobs: List[Job]) -> Sequence[Job]:
+        logger.debug("Refresing %d jobs", len(jobs))
         first_job: Job = jobs[0]
         # try bulk refresh first
         first_job.ensure_driver_instance(self.config)
@@ -236,18 +237,38 @@ class State:
         else:
             raise TypeError(f"{source} is not a Folder or a Job")
 
-    def mkdir(self, path: str, exist_ok: bool = False) -> None:
+    def mkdir(
+        self, path: str, exist_ok: bool = False, create_parent: bool = False
+    ) -> None:
+        logger.debug("mkdir %s", path)
         if Folder.find_by_path(self.cwd, path) is not None:
             if not exist_ok:
                 raise CannotCreateError(f"Cannot create folder at {path}")
             else:
                 return
 
+        location: Optional[Folder] = None
+
         head, tail = os.path.split(path)
 
-        location = Folder.find_by_path(self.cwd, head)
+        if create_parent and head != "":
+
+            def create(p):
+                head, tail = os.path.split(p)
+                loc = Folder.find_by_path(self.cwd, head)
+                if loc is None:
+                    loc = create(head)
+                if loc.subfolder(tail) is not None:
+                    return loc.subfolder(tail)
+                return Folder.create(name=tail, parent=loc)
+
+            location = create(head)
+        else:
+            location = Folder.find_by_path(self.cwd, head)
+
         if location is None:
             raise CannotCreateError(f"Cannot create folder at '{path}'")
+
         logger.debug("Attempt to create folder named '%s' in '%s'", tail, location.path)
 
         Folder.create(name=tail, parent=location)
@@ -322,7 +343,7 @@ class State:
         kwargs["folder"] = self.cwd
         return self.default_driver.create_job(*args, **kwargs)
 
-    def _extract_jobs(self, name: JobSpec) -> List[Job]:
+    def _extract_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
         jobs: List[Job] = []
 
         if isinstance(name, int):
@@ -376,7 +397,11 @@ class State:
                             jobs.append(job)
                     return jobs
                 else:
-                    raise ValueError(f"{name} jobspec is not understood")
+                    folder = Folder.find_by_path(self.cwd, name)
+                    if not recursive or folder is None:
+                        raise ValueError(f"{name} jobspec is not understood")
+
+                    jobs = folder.jobs_recursive()
         elif isinstance(name, Job):
             jobs = [name]
         else:
@@ -400,9 +425,16 @@ class State:
         if not confirm(f"Submit {len(jobs)} jobs?"):
             return
 
-        for job in Progress(jobs, desc="Submitting jobs"):
-            job.ensure_driver_instance(self.config)
-            job.submit()
+        assert len(jobs) > 0
+        first_job = jobs[0]
+        first_job.ensure_driver_instance(self.config)
+        driver = first_job.driver_instance
+
+        def job_iter():
+            for job in Progress(jobs, desc="Submitting jobs"):
+                yield job
+
+        driver.bulk_submit(job_iter())
 
     def kill_job(
         self, name: JobSpec, recursive: bool = False, confirm: Confirmation = YES
@@ -422,8 +454,10 @@ class State:
             job.ensure_driver_instance(self.config)
             job.kill()
 
-    def resubmit_job(self, name: JobSpec, confirm: Confirmation = YES) -> None:
-        jobs = self._extract_jobs(name)
+    def resubmit_job(
+        self, name: JobSpec, confirm: Confirmation = YES, recursive: bool = False
+    ) -> None:
+        jobs = self._extract_jobs(name, recursive=recursive)
 
         if not confirm(f"Resubmit {len(jobs)} jobs?"):
             return
@@ -432,8 +466,8 @@ class State:
             job.ensure_driver_instance(self.config)
             job.resubmit()
 
-    def get_jobs(self, name: JobSpec) -> List[Job]:
-        return self._extract_jobs(name)
+    def get_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
+        return self._extract_jobs(name, recursive)
 
     def get_folders(self, pattern: str) -> List[Folder]:
         head, tail = os.path.split(pattern)

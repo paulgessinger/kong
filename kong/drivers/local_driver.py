@@ -139,10 +139,18 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
+    def bulk_cleanup(self, jobs: Collection["Job"]) -> None:
+        for job in jobs:
+            self.cleanup(job)
+
     def remove(self, job: Job) -> None:
         logger.debug("Removing job %s", job)
         self.cleanup(job)
         job.delete_instance()
+
+    def bulk_remove(self, jobs: Collection["Job"]) -> None:
+        for job in jobs:
+            self.remove(job)
 
     @checked_job
     def sync_status(self, job: Job, save: bool = True) -> Job:

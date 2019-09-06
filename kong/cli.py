@@ -23,10 +23,16 @@ version = pkg_resources.require(config.APP_NAME)[0].version
 def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     if verbosity == 0:
         level = logging.WARNING
+        global_level = logging.WARNING
     elif verbosity == 1:
         level = logging.INFO
+        global_level = logging.INFO
     elif verbosity == 2:
         level = logging.DEBUG
+        global_level = logging.INFO
+
+    if verbosity > 2:
+        global_level = logging.DEBUG
 
     coloredlogs.install(
         fmt="%(asctime)s %(levelname)s %(name)s %(filename)s:%(funcName)s %(message)s",
@@ -34,6 +40,7 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     )
 
     logger.setLevel(level)
+    logging.getLogger().setLevel(global_level)
 
     if show_version:
         click.echo(f"{config.APP_NAME} version: {version}")

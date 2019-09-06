@@ -51,7 +51,7 @@ class SlurmAccountingItem:
             status = Job.Status.SUBMITTED
         elif status_str == "COMPLETED":
             status = Job.Status.COMPLETED
-        elif status_str == "FAILED" or status_str == "CANCELLED":
+        elif status_str == "FAILED" or status_str.startswith("CANCELLED"):
             status = Job.Status.FAILED
         elif status_str == "RUNNING":
             status = Job.Status.RUNNING
@@ -100,6 +100,7 @@ class ShellSlurmInterface(SlurmInterface):
 
     def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
 
+        logger.debug("Getting job info for %d jobs", len(jobs))
         starttime = date.today() - timedelta(days=7)
 
         args = dict(
@@ -107,10 +108,16 @@ class ShellSlurmInterface(SlurmInterface):
         )
 
         if len(jobs) > 0:
+            if all(j.batch_job_id is None for j in jobs):
+                logger.debug("no jobs given that are known to the scheduder")
+                return []
+
             job_ids = ",".join(
                 [str(j.batch_job_id) for j in jobs if j.batch_job_id is not None]
             )
             args["jobs"] = job_ids
+
+            logger.debug("Job argument: %s", job_ids)
 
         assert self._sacct is not None
         for line in self._sacct(**args):
@@ -291,6 +298,7 @@ class SlurmDriver(DriverBase):
         return self.bulk_sync_status([job])[0]
 
     def bulk_sync_status(self, jobs: Collection["Job"]) -> Sequence["Job"]:
+        logger.debug("Bulk sync status with %d jobs", len(jobs))
         for job in jobs:
             self._check_driver(job)
 
@@ -326,7 +334,7 @@ class SlurmDriver(DriverBase):
 
     @checked_job
     def kill(self, job: "Job", save: bool = True) -> None:
-        if job.status == Job.Status.CREATED:
+        if job.status in (Job.Status.CREATED, Job.Status.UNKOWN):
             logger.debug("Job %s in %s, simply setting to failed", job, job.status)
             job.status = Job.Status.FAILED
         elif job.status in (Job.Status.RUNNING, Job.Status.SUBMITTED):
@@ -376,6 +384,7 @@ class SlurmDriver(DriverBase):
 
         def sub() -> Iterable[Job]:
             for job in jobs:
+                assert job.driver == self.__class__, "Not valid for different driver"
                 self.submit(job, save=False)
                 job.updated_at = now
                 yield job
@@ -458,10 +467,13 @@ class SlurmDriver(DriverBase):
 
         for job in jobs:
             for d in ["log_dir", "output_dir"]:
-                path = job.data[d]
-                if os.path.exists(path):
-                    logger.debug("Path %s exists, attempting to delete", path)
-                    rmtree(path)
+                try:
+                    path = job.data[d]
+                    if os.path.exists(path):
+                        logger.debug("Path %s exists, attempting to delete", path)
+                        rmtree(path)
+                except Exception:
+                    logger.error("Unable to remove directory %s", d)
         return jobs
 
     def remove(self, job: "Job") -> None:
