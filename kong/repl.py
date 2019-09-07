@@ -60,15 +60,12 @@ def complete_path(cwd: Folder, path: str) -> List[str]:
 
 def add_completion(*names):
     def decorator(cls):
-        print(cls)
         for name in names:
             method_name = f"complete_{name}"
-            print(method_name)
 
             def handler(
                 self, text: str, line: str, begidx: int, endidx: int
             ) -> List[str]:
-                print("HANDLE")
                 logger.debug(
                     "%s: text: %s, line: %s, begidx: %d, endidx: %d",
                     method_name,
@@ -77,12 +74,46 @@ def add_completion(*names):
                     begidx,
                     endidx,
                 )
-                return complete_path(self.state.cwd, text)
+
+                # find component
+                parts = shlex.split(line)
+                base: Optional[str] = None
+                for i, part in enumerate(parts):
+                    prelength = len(" ".join(parts[: i + 1]))
+                    if prelength >= begidx:
+                        base = part
+                        break
+                assert base is not None, "Error extracting active part"
+
+                return complete_path(self.state.cwd, base)
 
             setattr(cls, method_name, handler)
         return cls
 
     return decorator
+
+
+def parse_arguments(fn):
+    _, prog_name = fn.__name__.split("_", 1)
+
+    fn = click.pass_obj(fn)
+    command = click.command()(fn)
+
+    def wrapped(self, argstr: str):
+        argv = shlex.split(argstr)
+        logger.debug("%s", argv)
+        command.main(
+            args=argv,
+            prog_name=prog_name,
+            standalone_mode=False,
+            obj=self,
+            help_option_names=["-h", "--help"],
+        )
+
+    wrapped.__doc__ = fn.__doc__
+    wrapped.__name__ = fn.__name__
+
+    return wrapped
 
 
 @add_completion("ls", "mkdir", "rm", "cd", "submit_job", "kill_job", "info")
@@ -257,30 +288,22 @@ class Repl(cmd.Cmd):
         except pw.DoesNotExist:
             click.secho(f"Folder {arg} does not exist", fg="red")
 
-    def do_mkdir(self, arg: str) -> None:
+    @parse_arguments
+    @click.argument("path")
+    @click.option("--create-parent", "-p", is_flag=True)
+    def do_mkdir(self, path: str, create_parent: bool) -> None:
         "Create a directory at the current location"
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("path")
-        p.add_argument("--create-parent", "-p", action="store_true")
-
         try:
-            args = p.parse_args(argv)
-            try:
-                self.state.mkdir(args.path, create_parent=args.create_parent)
-            except state.CannotCreateError:
-                click.secho(f"Cannot create folder at '{args.path}'", fg="red")
-            except pw.IntegrityError:
-                click.secho(
-                    f"Folder {args.path} in {self.state.cwd.path} already exists",
-                    fg="red",
-                )
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+            self.state.mkdir(path, create_parent=create_parent)
+        except state.CannotCreateError:
+            click.secho(f"Cannot create folder at '{path}'", fg="red")
+        except pw.IntegrityError:
+            click.secho(
+                f"Folder {path} in {self.state.cwd.path} already exists", fg="red"
+            )
 
-    @parse
+    @parse_arguments
+    @click.argument("name", required=False, default="")
     def do_cd(self, name: str = "") -> None:
         # find the folder
         try:
@@ -294,129 +317,86 @@ class Repl(cmd.Cmd):
         path = args[1]
         return complete_path(self.state.cwd, path)
 
-    def do_mv(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("src")
-        p.add_argument("dest")
+    @parse_arguments
+    @click.argument("src")
+    @click.argument("dest")
+    def do_mv(self, src: str, dest: str) -> None:
+        items: List[Union[Job, Folder]] = self.state.mv(src, dest)
+        names = []
+        for item in items:
+            if isinstance(item, Job):
+                names.append(str(item.job_id))
+            else:
+                names.append(item.name)
 
-        try:
-            args = p.parse_args(argv)
-            items: List[Union[Job, Folder]] = self.state.mv(args.src, args.dest)
-            names = []
-            for item in items:
-                if isinstance(item, Job):
-                    names.append(str(item.job_id))
-                else:
-                    names.append(item.name)
+        click.secho(f"Moved {', '.join(names)} -> {dest}")
 
-            click.secho(f"Moved {', '.join(names)} -> {args.dest}")
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--refresh", "-r", is_flag=True)
+    @click.option("--recursive", "-R", is_flag=True)
+    def do_info(self, job: str, refresh: bool, recursive: bool) -> None:
+        jobs = self.state.get_jobs(job, recursive)
+        if refresh:
+            jobs = list(self.state.refresh_jobs(jobs))
 
-    def do_info(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job")
-        p.add_argument("--refresh", "-r", action="store_true")
-        p.add_argument("--recursive", "-R", action="store_true")
-
-        try:
-            args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job, args.recursive)
-            if args.refresh:
-                jobs = list(self.state.refresh_jobs(jobs))
-
-            for job in jobs:
-                click.echo(job)
-                for field in (
-                    "batch_job_id",
-                    "driver",
-                    "folder",
-                    "command",
-                    "cores",
-                    "status",
-                    "created_at",
-                    "updated_at",
-                ):
-                    fg: Optional[str] = None
-                    if field == "status":
-                        fg = color_dict[job.status]
-                    click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
-                click.echo("data:")
-                for k, v in job.data.items():
-                    click.secho(f"{k}: {v}")
-
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
-
-    def do_rm(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("arg")
-        p.add_argument("--recursive", "-R", action="store_true")
-
-        try:
-            args = p.parse_args(argv)
-            if self.state.rm(
-                args.arg, recursive=args.recursive, confirm=lambda s: click.confirm(s)
+        for job in jobs:
+            click.echo(job)
+            for field in (
+                "batch_job_id",
+                "driver",
+                "folder",
+                "command",
+                "cores",
+                "status",
+                "created_at",
+                "updated_at",
             ):
-                click.echo(f"{args.arg} is gone")
+                fg: Optional[str] = None
+                if field == "status":
+                    fg = color_dict[job.status]
+                click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
+            click.echo("data:")
+            for k, v in job.data.items():
+                click.secho(f"{k}: {v}")
+
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--recursive", "-R", is_flag=True)
+    def do_rm(self, job: str, recursive: bool) -> None:
+        try:
+            if self.state.rm(
+                job, recursive=recursive, confirm=lambda s: click.confirm(s)
+            ):
+                click.echo(f"{job} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")
         except DoesNotExist:
-            click.secho(f"Folder {args.arg} does not exist", fg="red")
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+            click.secho(f"Folder {job} does not exist", fg="red")
 
-    @parse
-    def do_cwd(self) -> None:
+    def do_cwd(self, *arg: Any) -> None:
         "Show the current location"
         click.echo(self.state.cwd.path)
 
-    def do_create_job(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("--cores", "-c", type=int, default=1)
-        p.add_argument("command", nargs=argparse.REMAINDER)
+    @parse_arguments
+    @click.argument("command", nargs=-1)
+    @click.option("--cores", "-c", type=int, default=1)
+    def do_create_job(self, command: List[str], cores: int) -> None:
+        if len(command) == 0:
+            click.secho("Please provide a command to run", fg="red")
+            return
+        if command[0] == "--":
+            del command[0]
+        command = " ".join(command)
 
-        try:
-            args = p.parse_args(argv)
-            if len(args.command) == 0:
-                click.secho("Please provide a command to run", fg="red")
-                p.print_help()
-                return
-            if args.command[0] == "--":
-                del args.command[0]
-            args.command = " ".join(args.command)
+        job = self.state.create_job(command=command, cores=cores)
+        click.secho(f"Created job {job}")
 
-            job = self.state.create_job(**vars(args))
-            click.secho(f"Created job {job}")
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
-
-    def do_submit_job(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-        p.add_argument("--recursive", "-R", action="store_true")
-
-        try:
-            args = p.parse_args(argv)
-            self.state.submit_job(args.job_id, click.confirm, recursive=args.recursive)
-
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--recursive", "-R", is_flag=True)
+    def do_submit_job(self, job: str, recursive: bool) -> None:
+        self.state.submit_job(job, click.confirm, recursive=recursive)
 
     def do_kill_job(self, arg: str) -> None:
         argv = shlex.split(arg)

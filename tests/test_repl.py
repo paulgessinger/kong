@@ -95,12 +95,28 @@ def test_complete_funcs(state, tree, repl, monkeypatch):
     for c in ["ls", "mkdir", "cd", "rm", "submit_job"]:
         func = getattr(repl, f"complete_{c}")
 
-        func("hurz", "ls hurz", 0, 0)
+        func("hurz", "ls hurz", 4, 6)
         cmpl.assert_called_once_with(root, "hurz")
         cmpl.reset_mock()
 
-        func("hurz/schmurz", "ls hurz/schmurz", 0, 0)
-        cmpl.assert_called_once_with(root, "hurz/schmurz")
+        func("hurz/", "ls hurz/", 8, 8)
+        cmpl.assert_called_once_with(root, "hurz/")
+        cmpl.reset_mock()
+
+        func("", "ls hurz/ blubb", 8, 8)
+        cmpl.assert_called_once_with(root, "hurz/")
+        cmpl.reset_mock()
+
+        func("blubb", "ls hurz/ blubb", 9, 13)
+        cmpl.assert_called_once_with(root, "blubb")
+        cmpl.reset_mock()
+
+        func("blubb", "ls hurz/ blubb/", 15, 15)
+        cmpl.assert_called_once_with(root, "blubb/")
+        cmpl.reset_mock()
+
+        func("blu", "ls hurz/blu", 8, 10)
+        cmpl.assert_called_once_with(root, "hurz/blu")
         cmpl.reset_mock()
 
 
@@ -173,6 +189,8 @@ def test_mkdir(state, repl, db, capsys, monkeypatch):
             out, err = capsys.readouterr()
             assert "already exists" in out
 
+    assert Repl.do_mkdir.__doc__ is not None
+
 
 def test_mkdir_create_parents(state, repl, capsys):
     root = Folder.get_root()
@@ -183,6 +201,7 @@ def test_mkdir_create_parents(state, repl, capsys):
     assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is None
 
     repl.onecmd("mkdir -p /a1/b2/c3/d4")
+    out, err = capsys.readouterr()
     assert Folder.find_by_path(state.cwd, "/a1") is not None
     assert Folder.find_by_path(state.cwd, "/a1/b2") is not None
     assert Folder.find_by_path(state.cwd, "/a1/b2/c3") is not None
@@ -390,10 +409,9 @@ def test_mv_bulk_folder(state, repl):
 
 
 def test_mv_error(state, repl, capsys, monkeypatch):
-    monkeypatch.setattr(state, "mv", Mock(side_effect=SystemExit))
-    repl.onecmd("mv bla blub")
+    repl.onecmd("mv --nope")
     out, err = capsys.readouterr()
-    assert "Error parsing arguments" in out
+    assert "no such option" in out
 
 
 def test_rm(state, repl, db, capsys, monkeypatch):
@@ -545,7 +563,7 @@ def test_create_job(repl, state, tree, capsys):
 
     repl.do_create_job("")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "provide a command" in out
 
     cmd = "sleep 1"
     repl.do_create_job(f"{cmd}")
@@ -582,11 +600,11 @@ def test_create_job(repl, state, tree, capsys):
 
     repl.do_create_job("--help")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "Usage" in out
 
-    repl.do_create_job("--nope 5 sleep 2")  # wrong option --core
+    repl.onecmd("create_job --nope 5 sleep 2")  # wrong option --core
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such" in out
 
 
 def test_submit_job(repl, state, capsys, monkeypatch):
@@ -609,9 +627,11 @@ def test_submit_job(repl, state, capsys, monkeypatch):
     time.sleep(0.3)
     assert j1.get_status() == Job.Status.COMPLETED
 
+    out, err = capsys.readouterr()
+
     repl.onecmd("submit_job --nope")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such option" in out
 
 
 def test_kill_job(repl, state, capsys, monkeypatch):
@@ -729,12 +749,6 @@ def test_info(state, repl, capsys, monkeypatch):
         repl.onecmd("info 1 -r")
         out, err = capsys.readouterr()
         refresh.assert_called_once()
-
-    with monkeypatch.context() as m:
-        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
-        repl.onecmd("info 8448")
-        out, err = capsys.readouterr()
-        assert "Error parsing arguments" in out
 
 
 def test_tail(state, repl, capsys, monkeypatch):
