@@ -2,6 +2,7 @@ import datetime
 import os
 import re
 from abc import ABC, abstractmethod
+from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, timedelta
 from typing import (
@@ -442,6 +443,64 @@ class SlurmDriver(DriverBase):
         self.submit(job)  # this will reset the status
         return job
 
+    def bulk_resubmit(
+        self, jobs: Iterable["Job"], do_submit: bool = True
+    ) -> Iterable["Job"]:
+
+        logger.debug("Resubmitting jobs")
+
+        jobs = self.bulk_sync_status(list(jobs))
+        # check status is ok
+        for job in jobs:
+            if job.status not in (
+                Job.Status.FAILED,
+                Job.Status.COMPLETED,
+                Job.Status.UNKOWN,
+            ):
+                raise InvalidJobStatus(f"Job {job} not in valid status for resubmit")
+
+        try:
+            jobs = self.bulk_kill(jobs)  # attempt to kill
+        except Exception:
+            pass
+
+        def clean(job: Job) -> Job:
+            # need to make sure the output artifacts are gone, since we're reusing the same job dir
+            for name in ["stdout"]:
+                path = job.data[name]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    os.remove(path)
+                assert not os.path.exists(path)
+
+            for d in ["output_dir"]:
+                path = job.data[d]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    rmtree(path)
+                    os.makedirs(path)
+
+            return job
+
+        nthreads = 40
+        logger.debug("Cleaning up on %d threads", nthreads)
+        with ThreadPoolExecutor(nthreads) as ex:
+            jobs = list(ex.map(clean, jobs))
+
+        # update status
+        with database.atomic():
+            Job.update(
+                status=Job.Status.CREATED, updated_at=datetime.datetime.now()
+            ).execute()
+
+        jobs = Job.select().where(
+            Job.job_id.in_([j.job_id for j in jobs])  # type: ignore
+        )
+        if do_submit:
+            self.bulk_submit(jobs)
+
+        return jobs
+
     def cleanup(self, job: "Job") -> "Job":
         job = self.sync_status(job)
         if job.status in (Job.Status.SUBMITTED, Job.Status.RUNNING):
@@ -455,7 +514,7 @@ class SlurmDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
+    def bulk_cleanup(self, jobs: Collection["Job"]) -> List["Job"]:
         jobs = self.bulk_sync_status(jobs)
         # safety check
         for job in jobs:
@@ -474,7 +533,7 @@ class SlurmDriver(DriverBase):
                         rmtree(path)
                 except Exception:
                     logger.error("Unable to remove directory %s", d)
-        return jobs
+        return list(jobs)
 
     def remove(self, job: "Job") -> None:
         logger.debug("Removing job %s", job)
@@ -485,4 +544,6 @@ class SlurmDriver(DriverBase):
         logger.debug("Removing %d jobs", len(jobs))
         jobs = self.bulk_cleanup(jobs)
         with database.atomic():
-            Job.delete().where(Job.job_id << [j.job_id for j in jobs]).execute()
+            Job.delete().where(  # type: ignore
+                Job.job_id << [j.job_id for j in jobs]  # type: ignore
+            ).execute()

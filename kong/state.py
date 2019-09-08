@@ -2,12 +2,22 @@ import datetime
 from fnmatch import fnmatch
 import os
 import re
-from typing import List, Callable, Any, Union, Optional, Tuple, ContextManager, Sequence
+from typing import (
+    List,
+    Callable,
+    Any,
+    Union,
+    Optional,
+    Tuple,
+    ContextManager,
+    Sequence,
+    Iterable,
+)
 
 import peewee as pw
 from contextlib import contextmanager
 
-from .util import Progress
+from .util import Progress, Spinner
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config
@@ -253,13 +263,14 @@ class State:
 
         if create_parent and head != "":
 
-            def create(p):
+            def create(p: str) -> Folder:
                 head, tail = os.path.split(p)
                 loc = Folder.find_by_path(self.cwd, head)
                 if loc is None:
                     loc = create(head)
-                if loc.subfolder(tail) is not None:
-                    return loc.subfolder(tail)
+                subf = loc.subfolder(tail)
+                if subf is not None:
+                    return subf
                 return Folder.create(name=tail, parent=loc)
 
             location = create(head)
@@ -371,7 +382,7 @@ class State:
                     if j is None:
                         raise DoesNotExist(f"Did not find job with path {name}")
                     jobs = [j]
-                elif tail == "*":
+                elif "*" in tail:
                     # "glob" jobs: get folder, and select all jobs
                     # this is half-recursive right now
                     # folder = Folder.find_by_path(self.cwd, head)
@@ -430,7 +441,8 @@ class State:
         first_job.ensure_driver_instance(self.config)
         driver = first_job.driver_instance
 
-        def job_iter():
+        def job_iter() -> Iterable[Job]:
+            job: Job
             for job in Progress(jobs, desc="Submitting jobs"):
                 yield job
 
@@ -450,9 +462,10 @@ class State:
 
         if not confirm(f"Kill {len(jobs)}?"):
             return
+        job: Job
         for job in Progress(jobs, desc="Killing jobs"):
-            job.ensure_driver_instance(self.config)
-            job.kill()
+            job.ensure_driver_instance(self.config)  # type: ignore
+            job.kill()  # type: ignore
 
     def resubmit_job(
         self,
@@ -461,6 +474,7 @@ class State:
         recursive: bool = False,
         failed_only: bool = False,
     ) -> None:
+        jobs: List[Job]
         jobs = self._extract_jobs(name, recursive=recursive)
 
         if failed_only:
@@ -469,9 +483,20 @@ class State:
         if not confirm(f"Resubmit {len(jobs)} jobs?"):
             return
 
-        for job in Progress(jobs, desc="Resubmitting jobs"):
-            job.ensure_driver_instance(self.config)
-            job.resubmit()
+        assert len(jobs) > 0
+        first_job = jobs[0]
+        first_job.ensure_driver_instance(self.config)
+        driver = first_job.driver_instance
+
+        with Spinner(f"Preparing for resubmission for {len(jobs)}"):
+            jobs = list(driver.bulk_resubmit(jobs, do_submit=False))
+
+        def job_iter() -> Iterable[Job]:
+            job: Job
+            for job in Progress(jobs, desc="Submitting jobs"):
+                yield job
+
+        driver.bulk_submit(job_iter())
 
     def get_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
         return self._extract_jobs(name, recursive)

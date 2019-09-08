@@ -1,5 +1,4 @@
 import datetime
-import functools
 import shlex
 import cmd
 import readline
@@ -48,13 +47,13 @@ def complete_path(cwd: Folder, path: str) -> List[str]:
     return options
 
 
-def add_completion(*names):
-    def decorator(cls):
+def add_completion(*names: str) -> Callable[[type], type]:
+    def decorator(cls: type) -> type:
         for name in names:
             method_name = f"complete_{name}"
 
             def handler(
-                self, text: str, line: str, begidx: int, endidx: int
+                self: type, text: str, line: str, begidx: int, endidx: int
             ) -> List[str]:
                 logger.debug(
                     "%s: text: %s, line: %s, begidx: %d, endidx: %d",
@@ -75,7 +74,7 @@ def add_completion(*names):
                         break
                 assert base is not None, "Error extracting active part"
 
-                return complete_path(self.state.cwd, base)
+                return complete_path(self.state.cwd, base)  # type: ignore
 
             setattr(cls, method_name, handler)
         return cls
@@ -83,13 +82,13 @@ def add_completion(*names):
     return decorator
 
 
-def parse_arguments(fn):
+def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
     _, prog_name = fn.__name__.split("_", 1)
 
     fn = click.pass_obj(fn)
     command = click.command()(fn)
 
-    def wrapped(self, argstr: str):
+    def wrapped(self: Any, argstr: str) -> None:
         argv = shlex.split(argstr)
         logger.debug("%s", argv)
         try:
@@ -103,13 +102,15 @@ def parse_arguments(fn):
         except click.MissingParameter:
             click.echo(f"usage: {fn.__doc__}")
 
-    wrapped.__doc__ = fn.__doc__
-    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__  # type: ignore
+    wrapped.__name__ = fn.__name__  # type: ignore
 
     return wrapped
 
 
-@add_completion("ls", "mkdir", "rm", "cd", "submit_job", "kill_job", "info")
+@add_completion(
+    "ls", "mkdir", "rm", "cd", "submit_job", "kill_job", "info", "resubmit_job"
+)
 class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
@@ -138,9 +139,10 @@ class Repl(cmd.Cmd):
     def do_ls(self, dir: str, refresh: bool, recursive: bool) -> None:
         "List the current directory content"
         try:
-            with Spinner("Getting info", persist=False):
+            width, height = shutil.get_terminal_size((80, 40))
+
+            with Spinner("Getting info", persist=False, enabled=refresh or recursive):
                 folders, jobs = self.state.ls(dir, refresh=refresh)
-                width, height = shutil.get_terminal_size((80, 40))
 
                 if recursive:
                     # is it a folder
@@ -318,11 +320,11 @@ class Repl(cmd.Cmd):
         click.secho(f"Moved {', '.join(names)} -> {dest}")
 
     @parse_arguments
-    @click.argument("job")
+    @click.argument("job_arg")
     @click.option("--refresh", "-r", is_flag=True)
     @click.option("--recursive", "-R", is_flag=True)
-    def do_info(self, job: str, refresh: bool, recursive: bool) -> None:
-        jobs = self.state.get_jobs(job, recursive)
+    def do_info(self, job_arg: str, refresh: bool, recursive: bool) -> None:
+        jobs = self.state.get_jobs(job_arg, recursive)
         if refresh:
             jobs = list(self.state.refresh_jobs(jobs))
 
@@ -373,9 +375,9 @@ class Repl(cmd.Cmd):
             return
         if command[0] == "--":
             del command[0]
-        command = " ".join(command)
+        command_str = " ".join(command)
 
-        job = self.state.create_job(command=command, cores=cores)
+        job = self.state.create_job(command=command_str, cores=cores)
         click.secho(f"Created job {job}")
 
     @parse_arguments
@@ -400,11 +402,11 @@ class Repl(cmd.Cmd):
         )
 
     @parse_arguments
-    @click.argument("job")
+    @click.argument("job_arg")
     @click.option("--refresh", "-r", is_flag=True)
-    def do_status(self, job: str, refresh: bool) -> None:
+    def do_status(self, job_arg: str, refresh: bool) -> None:
         """Print status of JOB"""
-        jobs = self.state.get_jobs(job)
+        jobs = self.state.get_jobs(job_arg)
 
         if refresh:
             self.state.refresh_jobs(jobs)

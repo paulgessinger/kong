@@ -139,9 +139,10 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Collection["Job"]) -> None:
+    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
         for job in jobs:
             self.cleanup(job)
+        return jobs
 
     def remove(self, job: Job) -> None:
         logger.debug("Removing job %s", job)
@@ -262,7 +263,7 @@ class LocalDriver(DriverBase):
 
         return jobs
 
-    def bulk_submit(self, jobs: Collection["Job"]) -> None:
+    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
         now = datetime.datetime.now()
 
         def sub() -> Iterable[Job]:
@@ -376,3 +377,41 @@ class LocalDriver(DriverBase):
         job.save()
         self.submit(job)
         return job
+
+    def bulk_resubmit(
+        self, jobs: Collection["Job"], do_submit: bool = True
+    ) -> Iterable["Job"]:
+        for job in jobs:
+            self.sync_status(job)
+            if job.status not in (
+                Job.Status.COMPLETED,
+                Job.Status.FAILED,
+                Job.Status.UNKOWN,
+            ):
+                logger.error("Will not resubmit job %s in status %s", job, job.status)
+                raise InvalidJobStatus(
+                    f"Will not resubmit job {job} in status {job.status}"
+                )
+
+            self.kill(job)
+
+            # need to make sure the output artifacts are gone, since we're reusing the same job dir
+            for name in ["exit_status_file", "stdout", "stderr"]:
+                path = job.data[name]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    os.remove(path)
+                assert not os.path.exists(path)
+
+            for d in ["scratch_dir", "output_dir"]:
+                path = job.data[d]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    rmtree(path)
+                    os.makedirs(path)
+
+            job.status = Job.Status.CREATED
+            job.save()
+            if do_submit:
+                self.submit(job)
+        return jobs

@@ -100,11 +100,8 @@ def Spinner(
 T = TypeVar("T")
 
 
-def Progress(iter: Iterable[T], *args: Any, **kwargs: Any) -> Iterable[T]:
-    if sys.stdout.isatty():
-        return tqdm(iter, *args, **kwargs)  # type: ignore
-    else:
-        return iter
+def Progress(*args: Any, **kwargs: Any) -> Iterable[T]:
+    return tqdm(*args, **kwargs)  # type: ignore
 
 
 def shorten(string: str, length: int) -> str:
