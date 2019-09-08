@@ -1,4 +1,3 @@
-import argparse
 import datetime
 import functools
 import shlex
@@ -13,7 +12,7 @@ import click
 import peewee as pw
 from click import style
 
-from .util import rjust, shorten_path
+from .util import rjust, shorten_path, Spinner
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -21,15 +20,6 @@ from .model import Job, Folder
 from . import state
 
 history_file = os.path.join(APP_DIR, "history")
-
-
-def parse(f: Any) -> Callable[[str], Any]:
-    @functools.wraps(f)
-    def wrapper(self: Any, args: str = "") -> Any:
-        return f(self, *shlex.split(args))
-
-    return wrapper
-
 
 color_dict = {
     Job.Status.UNKOWN: "red",
@@ -102,13 +92,16 @@ def parse_arguments(fn):
     def wrapped(self, argstr: str):
         argv = shlex.split(argstr)
         logger.debug("%s", argv)
-        command.main(
-            args=argv,
-            prog_name=prog_name,
-            standalone_mode=False,
-            obj=self,
-            help_option_names=["-h", "--help"],
-        )
+        try:
+            command.main(
+                args=argv,
+                prog_name=prog_name,
+                standalone_mode=False,
+                obj=self,
+                help_option_names=["-h", "--help"],
+            )
+        except click.MissingParameter:
+            click.echo(f"usage: {fn.__doc__}")
 
     wrapped.__doc__ = fn.__doc__
     wrapped.__name__ = fn.__name__
@@ -138,29 +131,26 @@ class Repl(cmd.Cmd):
             click.secho(f"{e}", fg="red")
         return False
 
-    def do_ls(self, arg: str = "") -> None:
+    @parse_arguments
+    @click.argument("dir", default="", required=False)
+    @click.option("--refresh", "-r", is_flag=True)
+    @click.option("--recursive", "-R", is_flag=True)
+    def do_ls(self, dir: str, refresh: bool, recursive: bool) -> None:
         "List the current directory content"
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("dir", default=".", nargs="?")
-        p.add_argument("--refresh", "-r", action="store_true")
-        p.add_argument("--recursive", "-R", action="store_true")
-
         try:
-            args = p.parse_args(argv)
-            logger.debug("%s", args)
-            folders, jobs = self.state.ls(args.dir, refresh=args.refresh)
-            width, height = shutil.get_terminal_size((80, 40))
+            with Spinner("Getting info", persist=False):
+                folders, jobs = self.state.ls(dir, refresh=refresh)
+                width, height = shutil.get_terminal_size((80, 40))
 
-            if args.recursive:
-                # is it a folder
-                arg_folder = Folder.find_by_path(self.state.cwd, args.dir)
-                if arg_folder is not None:
-                    self.state.refresh_jobs(arg_folder.jobs_recursive())
-                # refresh folder jobs
-                for folder in folders:
-                    self.state.refresh_jobs(folder.jobs_recursive())
-                folders, jobs = self.state.ls(args.dir, refresh=False)
+                if recursive:
+                    # is it a folder
+                    arg_folder = Folder.find_by_path(self.state.cwd, dir)
+                    if arg_folder is not None:
+                        self.state.refresh_jobs(arg_folder.jobs_recursive())
+                    # refresh folder jobs
+                    for folder in folders:
+                        self.state.refresh_jobs(folder.jobs_recursive())
+                    folders, jobs = self.state.ls(dir, refresh=False)
 
             if len(folders) > 0:
                 folder_name_length = 0
@@ -281,12 +271,8 @@ class Repl(cmd.Cmd):
                         fg=color,
                     )
 
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
         except pw.DoesNotExist:
-            click.secho(f"Folder {arg} does not exist", fg="red")
+            click.secho(f"Folder {dir} does not exist", fg="red")
 
     @parse_arguments
     @click.argument("path")
@@ -398,128 +384,74 @@ class Repl(cmd.Cmd):
     def do_submit_job(self, job: str, recursive: bool) -> None:
         self.state.submit_job(job, click.confirm, recursive=recursive)
 
-    def do_kill_job(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-        p.add_argument("--recursive", "-R", action="store_true")
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--recursive", "-R", is_flag=True)
+    def do_kill_job(self, job: str, recursive: bool) -> None:
+        self.state.kill_job(job, recursive=recursive, confirm=click.confirm)
 
-        try:
-            args = p.parse_args(argv)
-            self.state.kill_job(
-                args.job_id, recursive=args.recursive, confirm=click.confirm
-            )
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--recursive", "-R", is_flag=True)
+    @click.option("--failed", "-F", is_flag=True)
+    def do_resubmit_job(self, job: str, recursive: bool, failed: bool) -> None:
+        self.state.resubmit_job(
+            job, click.confirm, recursive=recursive, failed_only=failed
+        )
 
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+    @parse_arguments
+    @click.argument("job")
+    @click.option("--refresh", "-r", is_flag=True)
+    def do_status(self, job: str, refresh: bool) -> None:
+        """Print status of JOB"""
+        jobs = self.state.get_jobs(job)
 
-    def do_resubmit_job(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-        p.add_argument("--recursive", "-R", action="store_true")
-
-        try:
-            args = p.parse_args(argv)
-            self.state.resubmit_job(args.job_id, click.confirm, args.recursive)
-
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
-
-    def do_status(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-        p.add_argument("--refresh", "-r", action="store_true")
-
-        try:
-            args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job_id)
-
-            if args.refresh:
-                self.state.refresh_jobs(jobs)
-
-            for job in jobs:
-                click.echo(f"{job}")
-
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
-
-    def do_update(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-
-        try:
-            args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job_id)
+        if refresh:
             self.state.refresh_jobs(jobs)
 
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+        for job in jobs:
+            click.echo(f"{job}")
 
-    def do_tail(self, arg: str) -> None:
+    @parse_arguments
+    @click.argument("job")
+    def do_update(self, job: str) -> None:
+        jobs = self.state.get_jobs(job)
+        self.state.refresh_jobs(jobs)
+
+    @parse_arguments
+    @click.argument("job_str")
+    @click.option("--number-of-lines", "-n", default=20, type=int)
+    def do_tail(self, job_str: str, number_of_lines: int) -> None:
         from sh import tail  # type: ignore
 
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-        p.add_argument("-n", type=int, default=20)
+        jobs = self.state.get_jobs(job_str)
+        assert len(jobs) == 1
+        job = jobs[0]
 
-        try:
-            args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job_id)
-            assert len(jobs) == 1
-            job = jobs[0]
+        if not os.path.exists(job.data["stdout"]):
+            raise ValueError(f"Job hasn't created stdout file yet {job.data['stdout']}")
+        width, _ = shutil.get_terminal_size((80, 40))
+        hw = width // 2
+        click.echo("=" * hw + " STDOUT " + "=" * (width - hw - 8))
+        for line in tail("-f", job.data["stdout"], n=number_of_lines, _iter=True):
+            sys.stdout.write(line)
 
-            if not os.path.exists(job.data["stdout"]):
-                raise ValueError(
-                    f"Job hasn't created stdout file yet {job.data['stdout']}"
-                )
-            width, _ = shutil.get_terminal_size((80, 40))
-            hw = width // 2
-            click.echo("=" * hw + " STDOUT " + "=" * (width - hw - 8))
-            for line in tail("-f", job.data["stdout"], n=args.n, _iter=True):
-                sys.stdout.write(line)
+    @parse_arguments
+    @click.argument("job_str")
+    def do_less(self, job_str: str) -> None:
+        jobs = self.state.get_jobs(job_str)
+        assert len(jobs) == 1
+        job = jobs[0]
 
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
-
-    def do_less(self, arg: str) -> None:
-        argv = shlex.split(arg)
-        p = argparse.ArgumentParser()
-        p.add_argument("job_id")
-
-        try:
-            args = p.parse_args(argv)
-            jobs = self.state.get_jobs(args.job_id)
-            assert len(jobs) == 1
-            job = jobs[0]
-
-            def reader() -> Iterable[str]:
-                with open(job.data["stdout"]) as fp:
+        def reader() -> Iterable[str]:
+            with open(job.data["stdout"]) as fp:
+                line = fp.readline()
+                yield line
+                while line:
                     line = fp.readline()
                     yield line
-                    while line:
-                        line = fp.readline()
-                        yield line
 
-            click.echo_via_pager(reader())
-
-        except SystemExit as e:
-            if e.code != 0:
-                click.secho("Error parsing arguments", fg="red")
-                p.print_help()
+        click.echo_via_pager(reader())
 
     def do_exit(self, arg: str) -> bool:
         return True

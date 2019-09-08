@@ -455,9 +455,16 @@ class State:
             job.kill()
 
     def resubmit_job(
-        self, name: JobSpec, confirm: Confirmation = YES, recursive: bool = False
+        self,
+        name: JobSpec,
+        confirm: Confirmation = YES,
+        recursive: bool = False,
+        failed_only: bool = False,
     ) -> None:
         jobs = self._extract_jobs(name, recursive=recursive)
+
+        if failed_only:
+            jobs = [job for job in jobs if job.status == Job.Status.FAILED]
 
         if not confirm(f"Resubmit {len(jobs)} jobs?"):
             return

@@ -622,3 +622,25 @@ def test_job_resubmit(state):
     state.resubmit_job(str(j1.job_id))
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
+
+
+def test_job_resubmit_failed_only(state):
+    root = Folder.get_root()
+    j1 = state.create_job(command="sleep 0.1")
+    j2 = state.create_job(command="sleep 0.1")
+    j3 = state.create_job(command="exit 1")
+
+    for j in [j1, j2, j3]:
+        j.submit()
+
+    state.default_driver.wait([j1, j2, j3])
+
+    assert j1.get_status() == Job.Status.COMPLETED
+    assert j2.get_status() == Job.Status.COMPLETED
+    assert j3.get_status() == Job.Status.FAILED
+
+    state.resubmit_job("/", recursive=True, failed_only=True)
+    j3.reload()
+    assert j1.get_status() == Job.Status.COMPLETED
+    assert j2.get_status() == Job.Status.COMPLETED
+    assert j3.status == Job.Status.SUBMITTED

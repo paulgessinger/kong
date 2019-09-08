@@ -44,7 +44,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
     repl.onecmd("ls --nope")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such option" in out
 
     with monkeypatch.context() as m:
 
@@ -648,12 +648,12 @@ def test_kill_job(repl, state, capsys, monkeypatch):
 
     monkeypatch.setattr("click.confirm", Mock(return_value=True))
     repl.do_kill_job(str(j1.job_id))
-
+    out, err = capsys.readouterr()
     assert j1.get_status() == Job.Status.FAILED
 
     repl.onecmd("kill_job --nope")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such option" in out
 
 
 def test_resubmit_job(repl, state, capsys, monkeypatch):
@@ -674,12 +674,13 @@ def test_resubmit_job(repl, state, capsys, monkeypatch):
     assert j1.get_status() == Job.Status.FAILED
 
     repl.do_resubmit_job(str(j1.job_id))
+    out, err = capsys.readouterr()
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
 
     repl.onecmd("resubmit_job --nope")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such option" in out
 
 
 def test_status_update(repl, state, capsys):
@@ -729,7 +730,7 @@ def test_status_update(repl, state, capsys):
 
     repl.onecmd("update --nope")
     out, err = capsys.readouterr()
-    assert "usage" in out
+    assert "no such option" in out
 
 
 def test_info(state, repl, capsys, monkeypatch):
@@ -771,10 +772,9 @@ def test_tail(state, repl, capsys, monkeypatch):
         assert "hasn't created stdout" in out
 
     with monkeypatch.context() as m:
-        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
-        repl.onecmd(f"tail {job.job_id}")
+        repl.onecmd(f"tail --nope")
         out, err = capsys.readouterr()
-        assert "Error parsing arguments" in out
+        assert "no such option" in out
 
 
 def test_less(state, repl, capsys, monkeypatch):
@@ -797,11 +797,10 @@ def test_less(state, repl, capsys, monkeypatch):
             pager = Mock(side_effect=agg)
             m.setattr("click.echo_via_pager", pager)
             repl.onecmd(f"less {job.job_id}")
+            out, err = capsys.readouterr()
             pager.assert_called_once()
             assert "".join(lines) == content
 
-    with monkeypatch.context() as m:
-        m.setattr(state, "get_jobs", Mock(side_effect=SystemExit))
-        repl.onecmd(f"less {job.job_id}")
-        out, err = capsys.readouterr()
-        assert "Error parsing arguments" in out
+    repl.onecmd(f"less --nope")
+    out, err = capsys.readouterr()
+    assert "no such option" in out
