@@ -323,7 +323,8 @@ class Repl(cmd.Cmd):
     @click.argument("job_arg")
     @click.option("--refresh", "-r", is_flag=True)
     @click.option("--recursive", "-R", is_flag=True)
-    def do_info(self, job_arg: str, refresh: bool, recursive: bool) -> None:
+    @click.option("--full", is_flag=True)
+    def do_info(self, job_arg: str, refresh: bool, recursive: bool, full: bool) -> None:
         jobs = self.state.get_jobs(job_arg, recursive)
         if refresh:
             jobs = list(self.state.refresh_jobs(jobs))
@@ -343,6 +344,13 @@ class Repl(cmd.Cmd):
                 fg: Optional[str] = None
                 if field == "status":
                     fg = color_dict[job.status]
+                if field == "command" and full:
+                    cmd = job.command
+                    if len(cmd) > 500:
+                        cmd = cmd[:500] + "..."
+                    click.secho(f"{field}: {cmd}", fg=fg)
+                    continue
+
                 click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
             click.echo("data:")
             for k, v in job.data.items():

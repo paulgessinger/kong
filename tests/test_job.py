@@ -100,3 +100,20 @@ def test_rm(tree, state):
     assert len(root.jobs) == 0
 
     pseudo_driver.cleanup.assert_called_once_with(j1)
+
+
+def test_bulk_select(state, monkeypatch):
+    jobs = [state.create_job(command="sleep 1") for _ in range(50)]
+    ids = [j.job_id for j in jobs]
+
+    # make sure it's actually batched
+    with monkeypatch.context() as m:
+        execute = Mock(return_value=[])
+        m.setattr("peewee.BaseQuery.execute", execute)
+        list(Job.bulk_select(Job.job_id, ids, batch_size=10))
+        assert execute.call_count == 5
+
+    selected = list(Job.bulk_select(Job.job_id, ids, batch_size=10))
+    assert len(selected) == len(jobs)
+    for exp, act in zip(jobs, selected):
+        assert exp.job_id == act.job_id

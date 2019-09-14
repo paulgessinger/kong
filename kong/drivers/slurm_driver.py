@@ -28,7 +28,7 @@ from ..logger import logger
 from ..db import database
 from ..model import Job, Folder
 from ..config import Config
-from ..util import make_executable, rmtree, format_timedelta, parse_timedelta
+from ..util import make_executable, rmtree, format_timedelta, parse_timedelta, chunks
 from .driver_base import DriverBase, checked_job
 
 
@@ -290,6 +290,7 @@ class SlurmDriver(DriverBase):
 
         make_executable(job.data["jobscript"])
 
+        job._driver_instance = self
         return job
 
     def bulk_create_jobs(self, jobs: Iterable[Dict[str, Any]]) -> List["Job"]:
@@ -330,7 +331,13 @@ class SlurmDriver(DriverBase):
             )
         # reload updated jobs
         ids = [j.job_id for j in jobs]
-        fetched = Job.select().where(Job.job_id << ids).execute()  # type: ignore
+        logger.debug(
+            "Going to reload %d jobs, batch size %d", len(ids), self.select_batch_size
+        )
+
+        fetched: List[Job] = list(
+            Job.bulk_select(Job.job_id, ids, batch_size=self.select_batch_size)
+        )
         return cast(Sequence[Job], fetched)
 
     @checked_job
@@ -493,8 +500,11 @@ class SlurmDriver(DriverBase):
                 status=Job.Status.CREATED, updated_at=datetime.datetime.now()
             ).execute()
 
-        jobs = Job.select().where(
-            Job.job_id.in_([j.job_id for j in jobs])  # type: ignore
+        # jobs = Job.select().where(
+        #     Job.job_id.in_([j.job_id for j in jobs])  # type: ignore
+        # )
+        jobs = Job.bulk_select(
+            Job.job_id, [j.job_id for j in jobs], batch_size=self.select_batch_size
         )
         if do_submit:
             self.bulk_submit(jobs)
@@ -543,7 +553,9 @@ class SlurmDriver(DriverBase):
     def bulk_remove(self, jobs: Collection["Job"]) -> None:
         logger.debug("Removing %d jobs", len(jobs))
         jobs = self.bulk_cleanup(jobs)
+        ids = [j.job_id for j in jobs]
         with database.atomic():
-            Job.delete().where(  # type: ignore
-                Job.job_id << [j.job_id for j in jobs]  # type: ignore
-            ).execute()
+            for chunk in chunks(ids, self.select_batch_size):
+                Job.delete().where(  # type: ignore
+                    Job.job_id << chunk  # type: ignore
+                ).execute()

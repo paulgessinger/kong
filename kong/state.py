@@ -249,13 +249,14 @@ class State:
 
     def mkdir(
         self, path: str, exist_ok: bool = False, create_parent: bool = False
-    ) -> None:
+    ) -> Optional[Folder]:
         logger.debug("mkdir %s", path)
-        if Folder.find_by_path(self.cwd, path) is not None:
+        found_folder = Folder.find_by_path(self.cwd, path)
+        if found_folder is not None:
             if not exist_ok:
                 raise CannotCreateError(f"Cannot create folder at {path}")
             else:
-                return
+                return found_folder
 
         location: Optional[Folder] = None
 
@@ -282,7 +283,7 @@ class State:
 
         logger.debug("Attempt to create folder named '%s' in '%s'", tail, location.path)
 
-        Folder.create(name=tail, parent=location)
+        return Folder.create(name=tail, parent=location)
 
     def rm(
         self,
@@ -290,13 +291,13 @@ class State:
         recursive: bool = False,
         confirm: Confirmation = lambda _: True,
     ) -> bool:
+        jobs: List[Job] = []
         if isinstance(name, str):
             # string name, could be both
             if name == "/":
                 raise CannotRemoveRoot()
 
             folders: List[Folder] = []
-            jobs: List[Job] = []
 
             try:
                 folders = self.get_folders(name)
@@ -339,7 +340,17 @@ class State:
             return False
         elif isinstance(name, Folder):
             folder = name
-            if confirm(f"Delete folder {folder}?"):
+            # jobs: List[Job] = []
+            if recursive:
+                jobs = folder.jobs_recursive()
+            if confirm(f"Delete folder {folder.path} and {len(jobs)} jobs?"):
+                if len(jobs) > 0:
+                    first_job = jobs[0]
+                    first_job.ensure_driver_instance(self.config)
+                    driver = first_job.driver_instance
+
+                    driver.bulk_remove(jobs)
+
                 folder.delete_instance(recursive=True, delete_nullable=True)
                 return True
             return False

@@ -4,7 +4,7 @@ import os
 import shutil
 import stat
 from datetime import timedelta
-from typing import Optional, Any, TypeVar, Iterable, Iterator
+from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
 import contextlib
 
@@ -127,3 +127,8 @@ def shorten_path(path: str, last_length: Optional[int] = None) -> str:
         basename = shorten(basename, last_length)
     shortened.append(basename)
     return "/".join(shortened)
+
+
+def chunks(l: List[T], n: int) -> Iterable[List[T]]:
+    for i in range(0, len(l), n):
+        yield l[i : i + n]

@@ -34,6 +34,7 @@ class DriverBase(ABC):  # pragma: no-cover
     config: Config
 
     batch_size: int = 50
+    select_batch_size: int = 500
 
     def __init__(self, config: "Config") -> None:
         if config is None:
