@@ -1,0 +1,24 @@
+language: python
+python:
+  - "3.6"
+  - "3.7"
+
+# command to install dependencies
+install:
+  - pip install -e ".[dev,test,ipython]"
+  - pip install codecov
+
+script:
+  - mypy kong
+  - flake8 kong
+  - pytest --cov-report=xml --cov=kong --log-level DEBUG
+  - coverage html
+
+jobs:
+  include:
+    - stage: format
+      script:
+        - black --check kong
+
+after_success:
+  - codecov
