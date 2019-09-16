@@ -13,11 +13,11 @@ script:
   - pytest --cov-report=xml --cov=kong --log-level DEBUG
   - coverage html
 
-env: 
-  - CODECOV_TOKEN="8f83285c-28b6-411c-a17c-55c0b607da5f"
-
 jobs:
   include:
     - stage: format
       script:
         - black --check kong
+
+after_success:
+  - codecov
