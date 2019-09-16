@@ -1,4 +1,0 @@
-argcomplete==1.8.2
-tqdm==4.11.2
-termcolor==1.1.0
-argparse==1.4.0
