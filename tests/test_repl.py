@@ -606,6 +606,12 @@ def test_create_job(repl, state, tree, capsys):
     out, err = capsys.readouterr()
     assert "no such" in out
 
+    repl.onecmd("create_job -- exe --and --some arguments --and options")
+    out, err = capsys.readouterr()
+
+    j4 = root.jobs[-1]
+    assert j4.command == "exe --and --some arguments --and options"
+
 
 def test_submit_job(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
@@ -750,6 +756,18 @@ def test_info(state, repl, capsys, monkeypatch):
         repl.onecmd("info 1 -r")
         out, err = capsys.readouterr()
         refresh.assert_called_once()
+
+    command_string = "X" * 600
+
+    long_job = state.create_job(command=command_string)
+
+    repl.onecmd("info 2")
+    out, err = capsys.readouterr()
+    assert not command_string in out
+
+    repl.onecmd("info 2 --full")
+    out, err = capsys.readouterr()
+    assert command_string in out
 
 
 def test_tail(state, repl, capsys, monkeypatch):

@@ -339,7 +339,7 @@ class Repl(cmd.Cmd):
                 fg: Optional[str] = None
                 if field == "status":
                     fg = color_dict[job.status]
-                if field == "command" and full:
+                if field == "command" and not full:
                     cmd = job.command
                     if len(cmd) > 500:
                         cmd = cmd[:500] + "..."
@@ -376,8 +376,6 @@ class Repl(cmd.Cmd):
         if len(command) == 0:
             click.secho("Please provide a command to run", fg="red")
             return
-        if command[0] == "--":
-            del command[0]
         command_str = " ".join(command)
 
         job = self.state.create_job(command=command_str, cores=cores)
