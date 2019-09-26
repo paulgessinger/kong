@@ -1,5 +1,4 @@
 import datetime
-import json
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
@@ -15,11 +14,10 @@ from typing import (
     IO,
     Type,
 )
-import sqlite3
 
 import peewee as pw
 
-
+from ..json_field import JSONField
 from ..db import AutoIncrementField
 from ..drivers import DriverMismatch
 from ..drivers.driver_base import DriverBase
@@ -50,20 +48,6 @@ def with_driver(f: Any) -> Any:
         return f(self, self._driver_instance, *args, **kwargs)
 
     return wrapper
-
-
-if sqlite3.version_info < (3, 9, 0):  # type: ignore
-
-    class JSONField(pw.CharField):
-        def db_value(self, value: Dict) -> str:
-            return json.dumps(value)
-
-        def python_value(self, value: str) -> Dict:
-            return cast(Dict, json.loads(value))
-
-
-else:
-    from playhouse.sqlite_ext import JSONField  # type: ignore
 
 
 class DriverField(pw.CharField):
@@ -202,12 +186,5 @@ class Job(BaseModel):
         with driver.stderr(self) as fh:
             yield fh
 
-    @property
-    def is_done(self) -> bool:
-        return self.status not in (Job.Status.RUNNING, Job.Status.SUBMITTED)
-
     def __str__(self) -> str:
         return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"
-
-    def info(self) -> str:
-        pass

@@ -380,7 +380,7 @@ class SlurmDriver(DriverBase):
     @checked_job
     def submit(self, job: "Job", save: bool = True) -> None:
         if job.status != Job.Status.CREATED:
-            raise ValueError(f"Cannot submit job {job} in status {job.status}")
+            raise InvalidJobStatus(f"Cannot submit job {job} in status {job.status}")
         job.batch_job_id = str(self.slurm.sbatch(job))
         job.status = Job.Status.SUBMITTED
 

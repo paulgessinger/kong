@@ -17,7 +17,7 @@ from kong.drivers import DriverMismatch
 from ..logger import logger
 from ..config import Config
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from ..model import Job, Folder
 
 
@@ -36,7 +36,7 @@ class DriverBase(ABC):  # pragma: no-cover
     batch_size: int = 50
     select_batch_size: int = 500
 
-    def __init__(self, config: "Config") -> None:
+    def __init__(self, config: Optional["Config"]) -> None:
         if config is None:
             logger.debug("Attempt to default-construct configuration object")
             self.config = Config()

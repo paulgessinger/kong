@@ -1,6 +1,8 @@
 import os
 import stat
 from datetime import timedelta
+from io import StringIO
+from unittest.mock import Mock
 
 import click
 import pytest
@@ -15,6 +17,10 @@ from kong.util import (
     shorten_path,
     make_executable,
     is_executable,
+    rmtree,
+    chunks,
+    Spinner,
+    Progress,
 )
 
 
@@ -116,5 +122,112 @@ def test_is_executable(tmp_path):
     assert is_executable(p) == True
 
 
-def test_rmtree():
-    pass
+def test_rmtree(monkeypatch):
+    with monkeypatch.context() as m:
+        rmtree_mock = Mock(side_effect=OSError)
+        m.setattr("shutil.rmtree", rmtree_mock)
+        system = Mock()
+        m.setattr("os.system", system)
+        rmtree("whatever/blaaa")
+        rmtree_mock.assert_called_once_with("whatever/blaaa")
+        system.assert_called_once_with("rm -rf whatever/blaaa")
+
+    with monkeypatch.context() as m:
+        rmtree_mock = Mock()
+        m.setattr("shutil.rmtree", rmtree_mock)
+        system = Mock()
+        m.setattr("os.system", system)
+        rmtree("whatever/blaaa")
+        rmtree_mock.assert_called_once_with("whatever/blaaa")
+        assert system.call_count == 0
+
+
+def test_chunks():
+    l = [1, 2, 3, 4, 5, 6, 7]
+    ch = list(chunks(l, 2))
+
+    assert ch == [[1, 2], [3, 4], [5, 6], [7]]
+
+
+def test_spinner(monkeypatch):
+
+    with monkeypatch.context() as m:
+        write = Mock()
+        isatty = Mock(return_value=False)
+        m.setattr("sys.stdout.isatty", isatty)
+        m.setattr("sys.stdout.write", write)
+        with Spinner(text="blub"):
+            pass
+        write.assert_called_once_with("blub\n")
+
+    with monkeypatch.context() as m:
+        HaloInstance = Mock()
+        HaloInstance.start = Mock()
+        HaloInstance.succeed = Mock()
+        HaloInstance.fail = Mock()
+        HaloInstance.stop = Mock()
+        Halo = Mock(return_value=HaloInstance)
+
+        isatty = Mock(return_value=True)
+        m.setattr("sys.stdout.isatty", isatty)
+        m.setattr("kong.util.Halo", Halo)
+
+        with Spinner(text="blub"):
+            pass
+
+        assert HaloInstance.start.call_count == 1
+        assert HaloInstance.succeed.call_count == 1
+        assert HaloInstance.stop.call_count == 0
+        assert HaloInstance.fail.call_count == 0
+        Halo.assert_called_once_with(
+            "blub", spinner="bouncingBar"
+        )  # bouncingBar is default
+
+    with monkeypatch.context() as m:
+        HaloInstance = Mock()
+        HaloInstance.start = Mock()
+        HaloInstance.succeed = Mock()
+        HaloInstance.fail = Mock()
+        HaloInstance.stop = Mock()
+        Halo = Mock(return_value=HaloInstance)
+
+        isatty = Mock(return_value=True)
+        m.setattr("sys.stdout.isatty", isatty)
+        m.setattr("kong.util.Halo", Halo)
+
+        with pytest.raises(RuntimeError):
+            with Spinner(text="blub"):
+                raise RuntimeError()
+
+        assert HaloInstance.start.call_count == 1
+        assert HaloInstance.succeed.call_count == 0
+        assert HaloInstance.stop.call_count == 0
+        assert HaloInstance.fail.call_count == 1
+
+    with monkeypatch.context() as m:
+        HaloInstance = Mock()
+        HaloInstance.start = Mock()
+        HaloInstance.succeed = Mock()
+        HaloInstance.fail = Mock()
+        HaloInstance.stop = Mock()
+        Halo = Mock(return_value=HaloInstance)
+
+        isatty = Mock(return_value=True)
+        m.setattr("sys.stdout.isatty", isatty)
+        m.setattr("kong.util.Halo", Halo)
+
+        with Spinner(text="blub", persist=False):
+            pass
+
+        assert HaloInstance.start.call_count == 1
+        assert HaloInstance.succeed.call_count == 0
+        assert HaloInstance.stop.call_count == 1
+        assert HaloInstance.fail.call_count == 0
+
+
+def test_progress(monkeypatch):
+    tqdm = Mock(return_value=[])
+    monkeypatch.setattr("kong.util.tqdm", tqdm)
+    for i in Progress(range(10)):
+        pass
+    assert tqdm.call_count == 1

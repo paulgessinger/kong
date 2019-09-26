@@ -124,12 +124,15 @@ class LocalDriver(DriverBase):
         return [self.create_job(**kwargs) for kwargs in jobs]
 
     def cleanup(self, job: Job) -> Job:
-        assert job.status in (
+        if job.status not in (
             Job.Status.CREATED,
             Job.Status.FAILED,
             Job.Status.COMPLETED,
             Job.Status.UNKOWN,
-        ), f"Cannot clean up job {job} in {job.status}, please kill first"
+        ):
+            raise InvalidJobStatus(
+                f"Cannot clean up job {job} in {job.status}, please kill first"
+            )
 
         logger.debug("Removing job output directory for job %s", job)
 

@@ -46,6 +46,7 @@ def rmtree(path: str) -> None:
         shutil.rmtree(path)
     except OSError as e:
         logger.warning("shutil.rmtree failed: %s", e)
+        # @TODO: This is absolutely not portable, maybe fix
         os.system(f"rm -rf {path}")
 
 
@@ -78,7 +79,7 @@ def Spinner(
     stream = kwargs.get("stream", sys.stdout)
     if "spinner" not in kwargs:
         kwargs["spinner"] = "bouncingBar"
-    if stream.isatty() and Halo is not None:
+    if stream.isatty():
         spinner = Halo(text, *args, **kwargs)  # type: ignore
         spinner.start()
         try:

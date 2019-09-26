@@ -1,12 +1,13 @@
 import os
 import random
 import time
+from io import StringIO
 
 import psutil
 import pytest
 from unittest.mock import Mock
 
-from kong.drivers import DriverMismatch
+from kong.drivers import DriverMismatch, InvalidJobStatus
 from kong.drivers.local_driver import LocalDriver
 import kong
 from kong.model import Folder, Job
@@ -121,6 +122,35 @@ def test_job_rm_cleans_up(driver, state):
     ), "Does not cleanup scratch directory"
 
 
+def test_job_bulk_remove(driver, state):
+    jobs = [
+        driver.create_job(command="sleep 1", folder=state.cwd),
+        driver.create_job(command="sleep 1", folder=state.cwd),
+        driver.create_job(command="sleep 1", folder=state.cwd),
+    ]
+    for job in jobs:
+        assert os.path.exists(job.data["log_dir"]), "Does not create job directory"
+        assert os.path.exists(
+            job.data["output_dir"]
+        ), "Does not create output directory"
+        assert os.path.exists(
+            job.data["scratch_dir"]
+        ), "Does not create scratch directory"
+
+    driver.bulk_remove(jobs)
+
+    for job in jobs:
+        assert not os.path.exists(
+            job.data["log_dir"]
+        ), "Driver does not cleanup job directory"
+        assert not os.path.exists(
+            job.data["output_dir"]
+        ), "Driver does not cleanup output directory"
+        assert not os.path.exists(
+            job.data["scratch_dir"]
+        ), "Does not cleanup scratch directory"
+
+
 def test_job_cleanup_status(driver, state):
     j1 = driver.create_job(command="sleep 1", folder=state.cwd)
     assert j1 is not None
@@ -128,13 +158,13 @@ def test_job_cleanup_status(driver, state):
     assert os.path.exists(j1.data["output_dir"])
     j1.status = Job.Status.RUNNING
     j1.save()
-    with pytest.raises(AssertionError):
+    with pytest.raises(InvalidJobStatus):
         driver.cleanup(j1)
     assert os.path.exists(j1.data["log_dir"])
     assert os.path.exists(j1.data["output_dir"])
     j1.status = Job.Status.SUBMITTED
     j1.save()
-    with pytest.raises(AssertionError):
+    with pytest.raises(InvalidJobStatus):
         driver.cleanup(j1)
     assert os.path.exists(j1.data["log_dir"])
     assert os.path.exists(j1.data["output_dir"])
@@ -154,6 +184,36 @@ def test_job_cleanup_status(driver, state):
         driver.cleanup(j)
         assert not os.path.exists(j.data["log_dir"])
         assert not os.path.exists(j.data["output_dir"])
+
+
+def test_job_bulk_cleanup(driver, state):
+    jobs = [
+        driver.create_job(command="sleep 1", folder=state.cwd),
+        driver.create_job(command="sleep 1", folder=state.cwd),
+        driver.create_job(command="sleep 1", folder=state.cwd),
+    ]
+
+    for job in jobs:
+        assert os.path.exists(job.data["log_dir"])
+        assert os.path.exists(job.data["output_dir"])
+
+    jobs[0].status = Job.Status.RUNNING
+    jobs[0].save()
+    with pytest.raises(InvalidJobStatus):
+        driver.bulk_cleanup(jobs)
+
+    for job in jobs:
+        assert os.path.exists(job.data["log_dir"])
+        assert os.path.exists(job.data["output_dir"])
+
+    jobs[0].status = Job.Status.CREATED
+    jobs[0].save()
+
+    driver.bulk_cleanup(jobs)
+
+    for job in jobs:
+        assert not os.path.exists(job.data["log_dir"])
+        assert not os.path.exists(job.data["output_dir"])
 
 
 def test_job_env_is_valid(driver, state):
@@ -226,6 +286,21 @@ def test_run_job(driver, state, db):
     assert out == value
 
 
+def test_submit_invalid_status(driver, state):
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    j1.data["pid"] = 123
+    for status in (
+        Job.Status.COMPLETED,
+        Job.Status.FAILED,
+        Job.Status.RUNNING,
+        Job.Status.UNKOWN,
+    ):
+        j1.status = status
+        j1.save()
+        with pytest.raises(InvalidJobStatus):
+            driver.submit(j1)
+
+
 def test_run_stdout_stderr(driver, state):
     root = Folder.get_root()
     error = "ERRORERROR"
@@ -244,6 +319,26 @@ def test_run_stdout_stderr(driver, state):
         assert fh.read().strip() == error
     with j1.stdout() as fh:
         assert fh.read().strip() == value
+
+
+def test_stdout_stderr_invalid_status(driver, state, monkeypatch):
+    monkeypatch.setattr(driver, "sync_status", Mock())
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    for status in (
+        Job.Status.CREATED,
+        Job.Status.SUBMITTED,
+        Job.Status.RUNNING,
+        Job.Status.UNKOWN,
+    ):
+        j1.status = status
+        j1.save()
+        with pytest.raises(InvalidJobStatus):
+            with driver.stdout(j1):
+                pass
+
+        with pytest.raises(InvalidJobStatus):
+            with driver.stderr(j1):
+                pass
 
 
 def test_run_job_already_completed(driver, state):
@@ -326,6 +421,11 @@ def test_run_terminated(driver, state):
 def test_run_kill(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
+
+    driver.kill(j1)
+    assert j1.status == Job.Status.FAILED
+
+    j1.status = Job.Status.CREATED
     j1.submit()
     driver.kill(j1)
     j1.wait()
@@ -428,6 +528,34 @@ def test_bulk_wait(driver, state):
             assert fh.read().strip() == f"JOB{i+sjobs}"
 
 
+def test_sync_status(driver, state, monkeypatch, tmpdir):
+    root = Folder.get_root()
+    j1 = driver.create_job(
+        command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+    )
+    j1.data["pid"] = 123
+    j1.status = Job.Status.RUNNING
+    j1.save()
+
+    proc = Mock()
+    proc.is_running = Mock(return_value=False)
+    monkeypatch.setattr("psutil.Process", Mock(return_value=proc))
+
+    exit_status_file = tmpdir.join("exitcode.txt")
+    exit_status_file.write("0")
+
+    j1.data["exit_status_file"] = str(exit_status_file)
+    j1u = driver.sync_status(j1)
+    assert j1u.status == Job.Status.COMPLETED
+
+    j1.status = Job.Status.RUNNING
+    j1.save()
+
+    exit_status_file.write("1")
+    j1u = driver.sync_status(j1)
+    assert j1u.status == Job.Status.FAILED
+
+
 def test_bulk_sync(driver, state):
     root = Folder.get_root()
 
@@ -488,3 +616,67 @@ def test_job_resubmit(driver, state, monkeypatch):
     assert j1.status == Job.Status.SUBMITTED
     j1.wait()
     assert j1.status == Job.Status.FAILED
+
+
+def test_resubmit_invalid_status(driver, state, monkeypatch):
+    monkeypatch.setattr(driver, "sync_status", Mock())
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    for status in (Job.Status.CREATED, Job.Status.SUBMITTED, Job.Status.RUNNING):
+        j1.status = status
+        j1.save()
+        with pytest.raises(InvalidJobStatus):
+            driver.resubmit(j1)
+
+
+def test_job_bulk_resubmit(driver, state, monkeypatch):
+    root = Folder.get_root()
+
+    jobs = [
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+    ]
+
+    driver.bulk_submit(jobs)
+    driver.wait(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.FAILED
+        with job.stdout() as fh:
+            assert fh.read().strip() == "begin\nend"
+
+    # we need to prevent driver from actually calling submit
+    submit = Mock()
+    with monkeypatch.context() as m:
+        m.setattr(driver, "submit", submit)
+        driver.bulk_resubmit(jobs)
+    assert submit.call_count == len(jobs)
+
+    for job in jobs:
+        for path in ["exit_status_file", "stdout", "stderr"]:
+            assert not os.path.exists(job.data[path])
+
+    # now actually hit submit
+    driver.bulk_submit(jobs)
+
+    for job in jobs:
+        assert job.status == Job.Status.SUBMITTED
+    driver.wait(jobs)
+    for job in jobs:
+        assert job.status == Job.Status.FAILED
+
+
+def test_resubmit_bulk_invalid_status(driver, state, monkeypatch):
+    monkeypatch.setattr(driver, "sync_status", Mock())
+    j1 = driver.create_job(command="sleep 1", folder=state.cwd)
+    for status in (Job.Status.CREATED, Job.Status.SUBMITTED, Job.Status.RUNNING):
+        j1.status = status
+        j1.save()
+        with pytest.raises(InvalidJobStatus):
+            driver.bulk_resubmit([j1])
