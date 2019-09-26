@@ -41,7 +41,7 @@ class DriverBase(ABC):  # pragma: no-cover
             logger.debug("Attempt to default-construct configuration object")
             self.config = Config()
         else:
-            logger.debug("Taking explicit confit")
+            logger.debug("Taking explicit config")
             self.config = config
 
         logger.debug("Checking jobdir filesystem at %s", self.config.jobdir)

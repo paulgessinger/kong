@@ -429,14 +429,14 @@ def test_rm(state, repl, db, capsys, monkeypatch):
     with monkeypatch.context() as m:
         confirm = Mock(return_value=False)
         m.setattr("click.confirm", confirm)
-        repl.do_rm("alpha")
+        repl.onecmd("rm -R alpha")
         confirm.assert_called_once()
 
     assert root.subfolder("alpha") is not None
     with monkeypatch.context() as m:
         confirm = Mock(return_value=True)
         m.setattr("click.confirm", confirm)
-        repl.do_rm("alpha")
+        repl.onecmd("rm -R alpha")
         confirm.assert_called_once()
     assert root.subfolder("alpha") is None
     out, err = capsys.readouterr()

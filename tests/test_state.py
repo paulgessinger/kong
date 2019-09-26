@@ -1,15 +1,17 @@
 import os
 import time
+import uuid
 
 import pytest
 from unittest.mock import Mock
 import peewee as pw
 
 import kong
+from kong.config import Config
 from kong.drivers.local_driver import LocalDriver
 from kong.model import Folder, Job
 import kong.drivers
-from kong.state import DoesNotExist, CannotCreateError
+from kong.state import DoesNotExist, CannotCreateError, CannotRemoveIsFolder
 
 
 @pytest.fixture
@@ -76,7 +78,7 @@ def test_ls(tree, state, sample_jobs):
 
 def test_ls_refresh(tree, state, sample_jobs):
     _, jobs = state.ls(".")
-    for job in jobs:
+    for job in sample_jobs:
         assert job.status == Job.Status.CREATED
 
     for job in sample_jobs:
@@ -95,6 +97,86 @@ def test_ls_refresh(tree, state, sample_jobs):
     for job in jobs:
         # status is the changes
         assert job.status == Job.Status.COMPLETED
+
+    for job in sample_jobs:
+        job.reload()
+
+    n_completed = len([j for j in sample_jobs if j.status == Job.Status.COMPLETED])
+    assert n_completed == len(state.cwd.jobs)
+
+    _, jobs = state.ls(".", refresh=True, recursive=True)
+    assert len(jobs) == len(sample_jobs)
+    for job in sample_jobs:
+        job.reload()
+    assert all(j.status == Job.Status.COMPLETED for j in sample_jobs)
+
+
+class ValidDriver(kong.drivers.local_driver.LocalDriver):
+    def __init__(self, config: Config):
+        pass
+
+    def create_job(self, folder: Folder, command: str) -> Job:
+        batch_job_id = str(uuid.uuid1())
+        job: Job = Job.create(
+            folder=folder,
+            batch_job_id=batch_job_id,
+            command=command,
+            driver=self.__class__,
+            cores=1,
+        )
+
+        return job
+
+
+def test_refresh_jobs(state, sample_jobs, monkeypatch):
+    _, jobs = state.ls(".")
+    for job in jobs:
+        assert job.status == Job.Status.CREATED
+
+    for job in sample_jobs:
+        job.submit()
+
+    time.sleep(0.2)
+
+    # with refresh
+    jobs = state.refresh_jobs(sample_jobs)
+    for job in jobs:
+        # status is the changes
+        assert job.status == Job.Status.COMPLETED
+
+    driver = ValidDriver(state.config)
+
+    # create more jobs, some with local, some with "valid" driver
+    jobs = [
+        state.default_driver.create_job(command="sleep 0.1", folder=state.cwd),
+        driver.create_job(command="sleep 0.1", folder=state.cwd),
+        state.default_driver.create_job(command="sleep 0.1", folder=state.cwd),
+        state.default_driver.create_job(command="sleep 0.1", folder=state.cwd),
+        state.default_driver.create_job(command="sleep 0.1", folder=state.cwd),
+    ]
+
+    for job in jobs[:1] + jobs[2:]:
+        job.submit()
+
+    time.sleep(0.2)
+
+    state.refresh_jobs(jobs)
+
+    assert all(
+        [
+            a == b
+            for a, b in zip(
+                [j.status for j in jobs],
+                [
+                    Job.Status.COMPLETED,
+                    Job.Status.CREATED,
+                    Job.Status.COMPLETED,
+                    Job.Status.COMPLETED,
+                    Job.Status.COMPLETED,
+                ],
+            )
+        ]
+    )
 
 
 def test_cd(state):
@@ -145,6 +227,11 @@ def test_cd(state):
 
     state.cd(more)
     assert state.cwd == more
+
+
+def test_cd_invalid(state):
+    with pytest.raises(TypeError):
+        state.cd(42)
 
 
 def test_mv_folder(state, db):
@@ -287,6 +374,29 @@ def test_mv_bulk_both(state):
     assert j1.folder == f2
 
 
+def test_mv_invalid(state):
+    root = Folder.get_root()
+    f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
+    f3 = f1.add_folder("f3")
+
+    job = state.create_job(command="sleep 1")
+
+    with pytest.raises(TypeError):
+        state._mv_folder(f1, 42)
+
+    with pytest.raises(TypeError):
+        state._mv_folders([f1, f2], 42)
+
+    with pytest.raises(TypeError):
+        state.mv(f1, 42)
+
+    with pytest.raises(TypeError):
+        state.mv(42, f1)
+
+    with pytest.raises(TypeError):
+        state._mv_jobs(job, 42)
+
+
 def test_cwd_context_manager(state):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
@@ -299,6 +409,10 @@ def test_cwd_context_manager(state):
     with state.pushd("f1"):
         assert state.cwd == f1
     assert state.cwd == root
+
+    with pytest.raises(TypeError):
+        with state.pushd(42):
+            pass
 
 
 def test_mv_bulk_folder(state):
@@ -336,6 +450,9 @@ def test_get_folders(state):
     assert len(globbed) == len(folders)
     for a, b in zip(globbed, folders):
         assert a == b
+
+    with pytest.raises(ValueError):
+        state.get_folders("nope/*")
 
 
 def test_get_folders_pattern(state):
@@ -434,13 +551,29 @@ def test_rm_folder(state, db):
         state.rm("/")
 
     root.add_folder("alpha")
+
+    with pytest.raises(kong.state.CannotRemoveIsFolder):
+        confirm = Mock(return_value=False)
+        state.rm("alpha", confirm=confirm)
+    assert confirm.call_count == 0
+
+    assert root.subfolder("alpha") is not None
+
     confirm = Mock(return_value=False)
-    state.rm("alpha", confirm=confirm)
+    state.rm("alpha", confirm=confirm, recursive=True)
     confirm.assert_called_once()
 
     assert root.subfolder("alpha") is not None
+
+    with pytest.raises(kong.state.CannotRemoveIsFolder):
+        confirm = Mock(return_value=True)
+        state.rm("alpha", confirm=confirm)
+    assert confirm.call_count == 0
+
+    assert root.subfolder("alpha") is not None
+
     confirm = Mock(return_value=True)
-    state.rm("alpha", confirm=confirm)
+    state.rm("alpha", confirm=confirm, recursive=True)
     confirm.assert_called_once()
     assert root.subfolder("alpha") is None
 
@@ -448,12 +581,12 @@ def test_rm_folder(state, db):
     beta = root.add_folder("beta")
     gamma = beta.add_folder("gamma")
     assert beta.subfolder("gamma") is not None
-    state.rm("/beta/gamma")
+    state.rm("/beta/gamma", recursive=True)
     assert beta.subfolder("gamma") is None
 
     # should also work with instance
     assert root.subfolder("beta") is not None
-    state.rm(beta)
+    state.rm(beta, recursive=True)
     assert root.subfolder("beta") is None
 
 
@@ -462,7 +595,7 @@ def test_rm_job(state, db):
     j1 = state.create_job(command="sleep 1")
     assert len(root.jobs) == 1 and root.jobs[0] == j1
     assert Job.get_or_none(job_id=j1.job_id) is not None
-    state.rm(str(j1.job_id))
+    state.rm(str(j1.job_id))  # confirm default is True
     assert len(root.jobs) == 0
     assert Job.get_or_none(job_id=j1.job_id) is None
 
@@ -470,7 +603,17 @@ def test_rm_job(state, db):
     j2 = state.create_job(command="sleep 1")
     assert len(root.jobs) == 1 and root.jobs[0] == j2
     assert Job.get_or_none(job_id=j2.job_id) is not None
-    state.rm(j2)
+    confirm = Mock(return_value=False)
+    state.rm(j2, confirm=confirm)
+    confirm.assert_called_once()
+    # no change
+    assert len(root.jobs) == 1 and root.jobs[0] == j2
+    assert Job.get_or_none(job_id=j2.job_id) is not None
+
+    # now change
+    confirm = Mock(return_value=True)
+    state.rm(j2, confirm=confirm)
+    confirm.assert_called_once()
     assert len(root.jobs) == 0
     assert Job.get_or_none(job_id=j2.job_id) is None
 
@@ -482,6 +625,34 @@ def test_rm_job(state, db):
     state.rm(str(j3.job_id))
     assert len(alpha.jobs) == 0
     assert Job.get_or_none(job_id=j3.job_id) is None
+
+
+def test_rm_recursive(state, sample_jobs):
+    all_jobs = Job.select().execute()
+    assert len(all_jobs) == len(sample_jobs)
+
+    root = Folder.get_root()
+    for f in root.children:
+        confirm = Mock()
+        with pytest.raises(CannotRemoveIsFolder):
+            state.rm(f, confirm=confirm)
+        assert confirm.call_count == 0
+
+        confirm = Mock(return_value=False)
+        assert state.rm(f, recursive=True, confirm=confirm) == False
+        assert confirm.call_count == 1
+
+        confirm = Mock(return_value=True)
+        assert state.rm(f, recursive=True, confirm=confirm) == True
+        assert confirm.call_count == 1
+
+    all_jobs = Job.select().execute()
+    assert len(all_jobs) == len(root.jobs)  # only root jobs remain
+
+
+def test_rm_invalid(state):
+    with pytest.raises(TypeError):
+        state.rm(4.5)
 
 
 def test_get_driver(state, db):
@@ -500,6 +671,14 @@ def test_create_job(state, db):
     j2 = state.create_job(command="sleep 1")
     assert j2.folder == f2
     assert len(f2.jobs) == 1 and f2.jobs[0] == j2
+
+    # no explicit folder
+    with pytest.raises(ValueError):
+        state.create_job(command="a", folder="blub")
+
+    # no explicit driver
+    with pytest.raises(ValueError):
+        state.create_job(command="a", driver="blub")
 
 
 def test_get_jobs(state):
@@ -520,6 +699,20 @@ def test_get_jobs(state):
     assert all(a == b for a, b in zip(state.get_jobs("*"), [j2, j3]))
     state.cwd = root
     assert all(a == b for a, b in zip(state.get_jobs("f2/*"), [j2, j3]))
+
+    # get by id that does not exist
+    with pytest.raises(DoesNotExist):
+        state.get_jobs(42)
+
+    # get path/id that does not exist
+    with pytest.raises(DoesNotExist):
+        state.get_jobs("/42")
+
+    # get single job instance (this is a bit redundant)
+    assert state.get_jobs(j1) == [j1]
+
+    with pytest.raises(TypeError):
+        state.get_jobs(4.2)
 
 
 def test_get_folders_jobs_pattern(state):
@@ -568,12 +761,21 @@ def test_get_jobs_range(state):
         state.get_jobs("4..2")
 
 
-def test_run_job(state, db):
+def test_submit_job(state, db):
     root = Folder.get_root()
 
     j1 = state.create_job(command="sleep 1")
     assert j1.status == Job.Status.CREATED
-    state.submit_job(j1.job_id)
+
+    confirm = Mock(return_value=False)
+    state.submit_job(j1.job_id, confirm=confirm)
+    assert confirm.call_count == 1
+    assert j1.status == Job.Status.CREATED
+
+    confirm = Mock(return_value=True)
+    state.submit_job(j1.job_id, confirm=confirm)
+    assert confirm.call_count == 1
+
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
 
@@ -598,6 +800,32 @@ def test_run_job(state, db):
         state.submit_job("4242")
 
 
+def test_submit_job_non_recursive(state, sample_jobs):
+    root = Folder.get_root()
+
+    assert all(j.status == Job.Status.CREATED for j in sample_jobs)
+    state.submit_job("/*")
+    assert all(j.status == Job.Status.SUBMITTED for j in root.jobs)
+
+    for j in sample_jobs:
+        j.reload()
+
+    submitted_jobs = [j for j in sample_jobs if j.status == Job.Status.SUBMITTED]
+    assert all(a == b for a, b in zip(submitted_jobs, root.jobs))
+
+
+def test_submit_job_recursive(state, sample_jobs):
+    root = Folder.get_root()
+
+    assert all(j.status == Job.Status.CREATED for j in sample_jobs)
+    state.submit_job("/", recursive=True)
+
+    for j in sample_jobs:
+        j.reload()
+
+    assert all(j.status == Job.Status.SUBMITTED for j in sample_jobs)
+
+
 def test_kill_job(state):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
@@ -605,8 +833,43 @@ def test_kill_job(state):
     assert j1.status == Job.Status.SUBMITTED
     time.sleep(0.1)
     assert j1.get_status() == Job.Status.RUNNING
-    state.kill_job(j1.job_id)
+
+    confirm = Mock(return_value=False)
+    state.kill_job(j1.job_id, confirm=confirm)
+    assert confirm.call_count == 1
+    assert j1.get_status() == Job.Status.RUNNING
+
+    confirm = Mock(return_value=True)
+    state.kill_job(j1.job_id, confirm=confirm)
+    assert confirm.call_count == 1
     assert j1.get_status() == Job.Status.FAILED
+
+
+def test_kill_job_non_recursive(state, sample_jobs):
+    root = Folder.get_root()
+
+    assert all(j.status == Job.Status.CREATED for j in sample_jobs)
+    state.kill_job("/*")
+    assert all(j.status == Job.Status.FAILED for j in root.jobs)
+
+    for j in sample_jobs:
+        j.reload()
+
+    failed_jobs = [j for j in sample_jobs if j.status == Job.Status.FAILED]
+    for a, b in zip(failed_jobs, root.jobs):
+        assert a == b
+
+
+def test_kill_job_recursive(state, sample_jobs):
+    root = Folder.get_root()
+
+    assert all(j.status == Job.Status.CREATED for j in sample_jobs)
+    state.kill_job("/", recursive=True)
+
+    for j in sample_jobs:
+        j.reload()
+
+    assert all(j.status == Job.Status.FAILED for j in sample_jobs)
 
 
 def test_job_resubmit(state):
@@ -619,9 +882,47 @@ def test_job_resubmit(state):
     state.kill_job(j1.job_id)
     assert j1.get_status() == Job.Status.FAILED
 
-    state.resubmit_job(str(j1.job_id))
+    confirm = Mock(return_value=False)
+    state.resubmit_job(str(j1.job_id), confirm=confirm)
+    assert confirm.call_count == 1
+    assert j1.get_status() == Job.Status.FAILED
+
+    confirm = Mock(return_value=True)
+    state.resubmit_job(str(j1.job_id), confirm=confirm)
+    assert confirm.call_count == 1
+
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
+
+
+def test_job_resubmit_non_recursive(state, sample_jobs):
+    root = Folder.get_root()
+    for job in sample_jobs:
+        job.status = Job.Status.FAILED
+        job.save()
+
+    state.resubmit_job("/*")
+    assert all(j.status == Job.Status.SUBMITTED for j in root.jobs)
+
+    for j in sample_jobs:
+        j.reload()
+
+    submitted_jobs = [j for j in sample_jobs if j.status == Job.Status.SUBMITTED]
+    assert all(a == b for a, b in zip(submitted_jobs, root.jobs))
+
+
+def test_job_resubmit_recursive(state, sample_jobs):
+    root = Folder.get_root()
+    for job in sample_jobs:
+        job.status = Job.Status.FAILED
+        job.save()
+
+    state.resubmit_job("/", recursive=True)
+
+    for j in sample_jobs:
+        j.reload()
+
+    assert all(j.status == Job.Status.SUBMITTED for j in sample_jobs)
 
 
 def test_job_resubmit_failed_only(state):

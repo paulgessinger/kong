@@ -300,11 +300,6 @@ class Repl(cmd.Cmd):
             click.secho(f"Folder {name} does not exist", fg="red")
         self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
-    def complete_cd(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return complete_path(self.state.cwd, path)
-
     @parse_arguments
     @click.argument("src")
     @click.argument("dest")
