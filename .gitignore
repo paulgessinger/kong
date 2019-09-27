@@ -7,3 +7,4 @@ venv
 .eggs
 coverage.xml
 .tox
+dist

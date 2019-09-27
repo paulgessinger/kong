@@ -1,24 +1,19 @@
 language: python
 python:
-  - "3.6"
-  - "3.7"
+  - '3.6'
+  - '3.7'
 
-# command to install dependencies
-install:
-  - pip install -e ".[dev,test,ipython]"
-  - pip install codecov
+install: pip install tox-travis
 
-script:
-  - mypy kong
-  - flake8 kong
-  - pytest --cov-report=xml --cov=kong --log-level DEBUG
-  - coverage html
-
-jobs:
-  include:
-    - stage: format
-      script:
-        - black --check kong
+script: tox
 
 after_success:
   - codecov
+
+deploy:
+  provider: pypi
+  user: "paulgessinger"
+  on:
+      tags: true
+  skip_existing: true
+  distributions: "sdist bdist_wheel"
