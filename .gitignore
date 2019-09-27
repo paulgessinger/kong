@@ -4,3 +4,6 @@ htmlcov
 .coverage
 .mypy_cache
 venv
+.eggs
+coverage.xml
+.tox

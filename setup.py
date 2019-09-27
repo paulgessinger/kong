@@ -1,12 +1,13 @@
-from setuptools import setup  # type: ignore
+from setuptools import setup, find_packages  # type: ignore
 
 dev_requires = ["black"]
-tests_require = ["pytest", "coverage", "pytest-cov", "mypy", "flake8"]
+tests_require = ["pytest", "coverage", "pytest-cov", "mypy", "flake8", "tox"]
 setup(
-    name="kong",
-    version="0.1.0",
+    name="kong-batch",
+    use_scm_version=True,
+    setup_requires=["setuptools_scm"],
     description="",
-    url="http://github.com/paulgessinger/futile",
+    url="http://github.com/paulgessinger/kong",
     author="Paul Gessinger",
     author_email="hello@paulgessinger.com",
     license="MIT",
@@ -26,5 +27,6 @@ setup(
     tests_require=tests_require,
     extras_require={"dev": dev_requires, "test": tests_require, "ipython": ["ipython"]},
     entry_points={"console_scripts": ["kong=kong.cli:main"]},
-    packages=["kong"],
+    packages=find_packages("src"),
+    package_dir={"": "src"},
 )
