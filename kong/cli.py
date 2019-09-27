@@ -24,14 +24,14 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     if verbosity == 0:
         level = logging.WARNING
         global_level = logging.WARNING
-    elif verbosity == 1:
+    elif verbosity <= 1:
         level = logging.INFO
         global_level = logging.INFO
-    elif verbosity == 2:
+    elif verbosity <= 2:
         level = logging.DEBUG
         global_level = logging.INFO
-
-    if verbosity > 2:
+    else:
+        level = logging.DEBUG
         global_level = logging.DEBUG
 
     coloredlogs.install(

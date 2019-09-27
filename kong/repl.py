@@ -67,7 +67,7 @@ def add_completion(*names: str) -> Callable[[type], type]:
                 # find component
                 parts = shlex.split(line)
                 base: Optional[str] = None
-                for i, part in enumerate(parts):
+                for i, part in enumerate(parts):  # pragma: no branch
                     prelength = len(" ".join(parts[: i + 1]))
                     if prelength >= begidx:
                         base = part
@@ -145,19 +145,16 @@ class Repl(cmd.Cmd):
                 folders, jobs = self.state.ls(dir, refresh=refresh)
 
                 if recursive:
-                    # is it a folder
                     arg_folder = Folder.find_by_path(self.state.cwd, dir)
-                    if arg_folder is not None:
-                        self.state.refresh_jobs(arg_folder.jobs_recursive())
+                    assert arg_folder is not None  # should be a folder
+                    self.state.refresh_jobs(arg_folder.jobs_recursive())
                     # refresh folder jobs
                     for folder in folders:
                         self.state.refresh_jobs(folder.jobs_recursive())
                     folders, jobs = self.state.ls(dir, refresh=False)
 
             if len(folders) > 0:
-                folder_name_length = 0
-                if len(folders) > 0:
-                    folder_name_length = max([len(f.name) for f in folders])
+                folder_name_length = max([len(f.name) for f in folders])
 
                 headers = ("name", "job counts")
 
@@ -210,12 +207,9 @@ class Repl(cmd.Cmd):
                     "status",
                 )
 
-                name_length = 0
-                if len(jobs) > 0:
-                    name_length = max(
-                        name_length, max([len(str(j.job_id)) for j in jobs])
-                    )
-                name_length = max(name_length, len(headers_jobs[0]))
+                name_length = max(
+                    max([len(str(j.job_id)) for j in jobs]), len(headers_jobs[0])
+                )
 
                 status_len = len("SUBMITTED")
                 status_len = max(status_len, len(headers_jobs[-1]))
@@ -300,11 +294,6 @@ class Repl(cmd.Cmd):
             click.secho(f"Folder {name} does not exist", fg="red")
         self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
-    def complete_cd(self, text: str, line: str, begidx: int, endidx: int) -> List[str]:
-        args = shlex.split(line)
-        path = args[1]
-        return complete_path(self.state.cwd, path)
-
     @parse_arguments
     @click.argument("src")
     @click.argument("dest")
@@ -344,7 +333,7 @@ class Repl(cmd.Cmd):
                 fg: Optional[str] = None
                 if field == "status":
                     fg = color_dict[job.status]
-                if field == "command" and full:
+                if field == "command" and not full:
                     cmd = job.command
                     if len(cmd) > 500:
                         cmd = cmd[:500] + "..."
@@ -381,8 +370,6 @@ class Repl(cmd.Cmd):
         if len(command) == 0:
             click.secho("Please provide a command to run", fg="red")
             return
-        if command[0] == "--":
-            del command[0]
         command_str = " ".join(command)
 
         job = self.state.create_job(command=command_str, cores=cores)

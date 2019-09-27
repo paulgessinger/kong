@@ -39,6 +39,10 @@ class DoesNotExist(RuntimeError):
     pass
 
 
+class CannotRemoveIsFolder(RuntimeError):
+    pass
+
+
 JobSpec = Union[str, int, Job]
 
 Confirmation = Callable[[str], bool]
@@ -301,9 +305,12 @@ class State:
 
             try:
                 folders = self.get_folders(name)
-                if recursive:
-                    for folder in folders:
-                        jobs += folder.jobs_recursive()
+                if len(folders) > 0 and not recursive:
+                    raise CannotRemoveIsFolder(
+                        f"{name} matches {len(folders)} folder(s). Use recursive to delete"
+                    )
+                for folder in folders:
+                    jobs += folder.jobs_recursive()
             except ValueError:
                 pass
             try:
@@ -341,8 +348,9 @@ class State:
         elif isinstance(name, Folder):
             folder = name
             # jobs: List[Job] = []
-            if recursive:
-                jobs = folder.jobs_recursive()
+            if not recursive:
+                raise CannotRemoveIsFolder(f"Cannot remove {folder} non-recursively")
+            jobs = folder.jobs_recursive()
             if confirm(f"Delete folder {folder.path} and {len(jobs)} jobs?"):
                 if len(jobs) > 0:
                     first_job = jobs[0]
@@ -355,13 +363,13 @@ class State:
                 return True
             return False
         else:
-            return False
+            raise TypeError("Invalid rm target type given")
 
     def create_job(self, *args: Any, **kwargs: Any) -> Job:
-        assert (
-            "folder" not in kwargs
-        ), "To submit to explicit folder, use driver directly"
-        assert "driver" not in kwargs, "To submit with explicit driver, use it directly"
+        if "folder" in kwargs:
+            raise ValueError("To submit to explicit folder, use driver directly")
+        if "driver" in kwargs:
+            raise ValueError("To submit with explicit driver, use it directly")
         kwargs["folder"] = self.cwd
         return self.default_driver.create_job(*args, **kwargs)
 
@@ -406,8 +414,6 @@ class State:
                     if start > end:
                         raise ValueError(f"Illegal job range: {tail}")
 
-                    r = list(range(start, end + 1))
-
                     folder = Folder.find_by_path(self.cwd, head)
                     assert folder is not None
 
@@ -415,8 +421,7 @@ class State:
                     for job in folder.jobs:
                         if job.job_id < start or job.job_id > end:
                             continue
-                        if job.job_id in r:
-                            jobs.append(job)
+                        jobs.append(job)
                     return jobs
                 else:
                     folder = Folder.find_by_path(self.cwd, name)
@@ -437,7 +442,7 @@ class State:
 
         jobs: List[Job]
         if recursive and isinstance(name, str):
-            # get folders, extract jobs from thos
+            # get folders, extract jobs from those
             folders = self.get_folders(name)
             logger.debug("Recursive, found %s folders", len(folders))
             jobs = sum([f.jobs_recursive() for f in folders], [])

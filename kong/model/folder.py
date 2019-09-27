@@ -8,7 +8,7 @@ from ..logger import logger
 from ..db import AutoIncrementField
 from . import BaseModel
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .job import Job
 
 

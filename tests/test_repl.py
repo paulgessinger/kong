@@ -27,6 +27,9 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     assert all(f.name in out for f in state.cwd.children)
     assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
+    state.mkdir("f4")
+    repl.onecmd("ls f4")
+
     repl.do_ls("")
     out, err = capsys.readouterr()
     assert all(f.name in out for f in state.cwd.children)
@@ -429,14 +432,14 @@ def test_rm(state, repl, db, capsys, monkeypatch):
     with monkeypatch.context() as m:
         confirm = Mock(return_value=False)
         m.setattr("click.confirm", confirm)
-        repl.do_rm("alpha")
+        repl.onecmd("rm -R alpha")
         confirm.assert_called_once()
 
     assert root.subfolder("alpha") is not None
     with monkeypatch.context() as m:
         confirm = Mock(return_value=True)
         m.setattr("click.confirm", confirm)
-        repl.do_rm("alpha")
+        repl.onecmd("rm -R alpha")
         confirm.assert_called_once()
     assert root.subfolder("alpha") is None
     out, err = capsys.readouterr()
@@ -522,6 +525,7 @@ def test_postloop(state, repl, monkeypatch):
 
 def test_precmd(repl):
     assert repl.precmd("whatever") == "whatever"
+    assert repl.precmd("") == ""
 
 
 def test_onecmd(repl, monkeypatch, capsys):
@@ -605,6 +609,12 @@ def test_create_job(repl, state, tree, capsys):
     repl.onecmd("create_job --nope 5 sleep 2")  # wrong option --core
     out, err = capsys.readouterr()
     assert "no such" in out
+
+    repl.onecmd("create_job -- exe --and --some arguments --and options")
+    out, err = capsys.readouterr()
+
+    j4 = root.jobs[-1]
+    assert j4.command == "exe --and --some arguments --and options"
 
 
 def test_submit_job(repl, state, capsys, monkeypatch):
@@ -750,6 +760,18 @@ def test_info(state, repl, capsys, monkeypatch):
         repl.onecmd("info 1 -r")
         out, err = capsys.readouterr()
         refresh.assert_called_once()
+
+    command_string = "X" * 600
+
+    long_job = state.create_job(command=command_string)
+
+    repl.onecmd("info 2")
+    out, err = capsys.readouterr()
+    assert not command_string in out
+
+    repl.onecmd("info 2 --full")
+    out, err = capsys.readouterr()
+    assert command_string in out
 
 
 def test_tail(state, repl, capsys, monkeypatch):
