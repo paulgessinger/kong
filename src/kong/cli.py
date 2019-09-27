@@ -13,7 +13,7 @@ from .repl import Repl
 
 import pkg_resources  # part of setuptools
 
-version = pkg_resources.require(config.APP_NAME)[0].version
+version = pkg_resources.get_distribution("kong-batch").version
 
 
 @click.group(invoke_without_command=True)
