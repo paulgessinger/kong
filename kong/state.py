@@ -414,8 +414,6 @@ class State:
                     if start > end:
                         raise ValueError(f"Illegal job range: {tail}")
 
-                    r = list(range(start, end + 1))
-
                     folder = Folder.find_by_path(self.cwd, head)
                     assert folder is not None
 
@@ -423,8 +421,7 @@ class State:
                     for job in folder.jobs:
                         if job.job_id < start or job.job_id > end:
                             continue
-                        if job.job_id in r:
-                            jobs.append(job)
+                        jobs.append(job)
                     return jobs
                 else:
                     folder = Folder.find_by_path(self.cwd, name)

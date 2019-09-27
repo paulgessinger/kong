@@ -27,6 +27,9 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     assert all(f.name in out for f in state.cwd.children)
     assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
+    state.mkdir("f4")
+    repl.onecmd("ls f4")
+
     repl.do_ls("")
     out, err = capsys.readouterr()
     assert all(f.name in out for f in state.cwd.children)
@@ -522,6 +525,7 @@ def test_postloop(state, repl, monkeypatch):
 
 def test_precmd(repl):
     assert repl.precmd("whatever") == "whatever"
+    assert repl.precmd("") == ""
 
 
 def test_onecmd(repl, monkeypatch, capsys):

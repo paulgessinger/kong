@@ -1,11 +1,12 @@
 import os
 import random
+import shutil
 import time
 from io import StringIO
 
 import psutil
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from kong.drivers import DriverMismatch, InvalidJobStatus
 from kong.drivers.local_driver import LocalDriver
@@ -119,6 +120,27 @@ def test_job_rm_cleans_up(driver, state):
     ), "Driver does not cleanup output directory"
     assert not os.path.exists(
         j1.data["scratch_dir"]
+    ), "Does not cleanup scratch directory"
+
+    j2 = driver.create_job(command="sleep 1", folder=state.cwd)
+    assert j2 is not None
+    assert os.path.exists(j2.data["log_dir"]), "Does not create job directory"
+    assert os.path.exists(j2.data["output_dir"]), "Does not create output directory"
+    assert os.path.exists(j2.data["scratch_dir"]), "Does not create scratch directory"
+
+    shutil.rmtree(j2.data["log_dir"])
+    assert not os.path.exists(j2.data["log_dir"]), "Does not create job directory"
+
+    driver.remove(j2)
+
+    assert not os.path.exists(
+        j2.data["log_dir"]
+    ), "Driver does not cleanup job directory"
+    assert not os.path.exists(
+        j2.data["output_dir"]
+    ), "Driver does not cleanup output directory"
+    assert not os.path.exists(
+        j2.data["scratch_dir"]
     ), "Does not cleanup scratch directory"
 
 
@@ -605,10 +627,16 @@ def test_job_resubmit(driver, state, monkeypatch):
     submit = Mock()
     with monkeypatch.context() as m:
         m.setattr(driver, "submit", submit)
+        makedirs = Mock()
+        m.setattr("os.makedirs", makedirs)
+        remove = Mock(wraps=os.remove)
+        m.setattr("os.remove", remove)
         driver.resubmit(j1)
+        assert makedirs.call_count == 2
     submit.assert_called_once()
-    for path in ["exit_status_file", "stdout", "stderr"]:
-        assert not os.path.exists(j1.data[path])
+    remove.assert_has_calls(
+        [call(j1.data[p]) for p in ["exit_status_file", "stdout", "stderr"]]
+    )
 
     # now actually hit submit
     driver.submit(j1)
@@ -616,6 +644,36 @@ def test_job_resubmit(driver, state, monkeypatch):
     assert j1.status == Job.Status.SUBMITTED
     j1.wait()
     assert j1.status == Job.Status.FAILED
+
+
+def test_job_resubmit_already_deleted(driver, state, monkeypatch):
+    root = Folder.get_root()
+    j1 = driver.create_job(
+        command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+    )
+    j1.status = Job.Status.COMPLETED
+    j1.save()
+
+    # it never ran, so these shouldn't exist
+    for path in ["exit_status_file", "stdout", "stderr"]:
+        assert not os.path.exists(j1.data[path])
+    for d in ["scratch_dir", "output_dir"]:
+        path = j1.data[d]
+        shutil.rmtree(path)
+
+    submit = Mock()
+    with monkeypatch.context() as m:
+        m.setattr(driver, "submit", submit)
+        makedirs = Mock()
+        m.setattr("os.makedirs", makedirs)
+        remove = Mock()
+        m.setattr("os.remove", remove)
+        driver.resubmit(j1)
+        assert makedirs.call_count == 0
+        assert remove.call_count == 0
+    submit.assert_called_once()
+    for path in ["exit_status_file", "stdout", "stderr"]:
+        assert not os.path.exists(j1.data[path])
 
 
 def test_resubmit_invalid_status(driver, state, monkeypatch):
@@ -643,20 +701,49 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
         ),
     ]
 
-    driver.bulk_submit(jobs)
+    for d in ["scratch_dir", "output_dir"]:
+        path = jobs[0].data[d]
+        shutil.rmtree(path)
+
+    jobs[0].status = Job.Status.FAILED
+    jobs[0].save()
+
+    driver.bulk_submit(jobs[1:])
     driver.wait(jobs)
 
-    for job in jobs:
+    for job in jobs[1:]:
         assert job.status == Job.Status.FAILED
         with job.stdout() as fh:
             assert fh.read().strip() == "begin\nend"
 
     # we need to prevent driver from actually calling submit
     submit = Mock()
+    makedirs = Mock()
+    remove = Mock(wraps=os.remove)
     with monkeypatch.context() as m:
         m.setattr(driver, "submit", submit)
+        m.setattr("os.makedirs", makedirs)
+        m.setattr("os.remove", remove)
         driver.bulk_resubmit(jobs)
     assert submit.call_count == len(jobs)
+    remove.assert_has_calls(
+        sum(
+            [
+                [call(j.data[p]) for p in ["exit_status_file", "stdout", "stderr"]]
+                for j in jobs[1:]
+            ],
+            [],
+        )
+    )
+    makedirs.assert_has_calls(
+        sum(
+            [
+                [call(j.data[p]) for p in ["scratch_dir", "output_dir"]]
+                for j in jobs[1:]
+            ],
+            [],
+        )
+    )
 
     for job in jobs:
         for path in ["exit_status_file", "stdout", "stderr"]:

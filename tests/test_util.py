@@ -196,13 +196,35 @@ def test_spinner(monkeypatch):
         m.setattr("kong.util.Halo", Halo)
 
         with pytest.raises(RuntimeError):
-            with Spinner(text="blub"):
+            with Spinner(text="blub", spinner="dots"):
                 raise RuntimeError()
 
         assert HaloInstance.start.call_count == 1
         assert HaloInstance.succeed.call_count == 0
         assert HaloInstance.stop.call_count == 0
         assert HaloInstance.fail.call_count == 1
+        Halo.assert_called_once_with("blub", spinner="dots")
+
+    with monkeypatch.context() as m:
+        HaloInstance = Mock()
+        HaloInstance.start = Mock()
+        HaloInstance.succeed = Mock()
+        HaloInstance.fail = Mock()
+        HaloInstance.stop = Mock()
+        Halo = Mock(return_value=HaloInstance)
+
+        isatty = Mock(return_value=True)
+        m.setattr("sys.stdout.isatty", isatty)
+        m.setattr("kong.util.Halo", Halo)
+
+        with pytest.raises(RuntimeError):
+            with Spinner(text="blub", persist=False):
+                raise RuntimeError()
+
+        assert HaloInstance.start.call_count == 1
+        assert HaloInstance.succeed.call_count == 0
+        assert HaloInstance.stop.call_count == 1
+        assert HaloInstance.fail.call_count == 0
 
     with monkeypatch.context() as m:
         HaloInstance = Mock()

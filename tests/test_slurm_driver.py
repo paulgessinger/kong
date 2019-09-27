@@ -1,9 +1,11 @@
 import os
+import shutil
 from datetime import timedelta
-from unittest.mock import Mock, ANY
+from unittest.mock import Mock, ANY, call
 
 import pytest
 
+from kong import util
 from kong.config import Config
 from kong.drivers import InvalidJobStatus
 from kong.drivers.slurm_driver import (
@@ -255,28 +257,38 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
         ),
     ]
 
+    jobs[0].status = Job.Status.FAILED
+    jobs[0].save()
+
     sbatch = Mock(side_effect=[1, 2, 3])
     monkeypatch.setattr(driver.slurm, "sbatch", sbatch)
-    driver.bulk_submit(jobs)
-    assert sbatch.call_count == 3
+    driver.bulk_submit(jobs[1:])
+    assert sbatch.call_count == 2
 
-    for job in jobs:
+    for job in jobs[1:]:
         job.status = Job.Status.COMPLETED
 
-        # os.makedirs(job.data["output_dir"])
         with open(job.data["stdout"], "w") as f:
             f.write("hurz")
 
         job.save()
 
+    shutil.rmtree(jobs[0].data["output_dir"])
+
     # we need to prevent driver from actually calling submit
     submit = Mock()
+    remove = Mock(wraps=os.remove)
+    makedirs = Mock()
     with monkeypatch.context() as m:
         m.setattr(driver, "submit", submit)
         m.setattr(driver.slurm, "sacct", Mock(return_value=[]))
         m.setattr(driver, "bulk_kill", Mock(side_effect=RuntimeError))
+        m.setattr("os.remove", remove)
+        m.setattr("os.makedirs", makedirs)
         driver.bulk_resubmit(jobs)
     assert submit.call_count == len(jobs)
+    remove.assert_has_calls([call(j.data["stdout"]) for j in jobs[1:]])
+    makedirs.assert_has_calls([call(j.data["output_dir"]) for j in jobs[1:]])
 
     for job in jobs:
         job.reload()
@@ -291,6 +303,38 @@ def test_resubmit_bulk_invalid_status(driver, state, monkeypatch):
         j1.save()
         with pytest.raises(InvalidJobStatus):
             driver.bulk_resubmit([j1])
+
+
+def test_job_bulk_resubmit_no_submit(driver, state, monkeypatch):
+    root = Folder.get_root()
+
+    jobs = [
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+        driver.create_job(
+            command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+        ),
+    ]
+
+    sbatch = Mock(side_effect=[1, 2, 3])
+    monkeypatch.setattr(driver.slurm, "sbatch", sbatch)
+    driver.bulk_submit(jobs)
+    assert sbatch.call_count == 3
+
+    for job in jobs:
+        job.status = Job.Status.COMPLETED
+        job.save()
+
+    bulk_submit = Mock()
+    with monkeypatch.context() as m:
+        m.setattr(driver.slurm, "sacct", Mock(return_value=[]))
+        m.setattr(driver, "bulk_submit", bulk_submit)
+        driver.bulk_resubmit(jobs, do_submit=False)
+    assert bulk_submit.call_count == 0
 
 
 def test_stdout_stderr(driver, state, monkeypatch):
@@ -583,6 +627,32 @@ def test_cleanup_driver(driver, state, monkeypatch):
     assert not os.path.exists(j1.data["output_dir"])
 
 
+def test_cleanup_driver_already_deleted(driver, state, monkeypatch):
+    root = Folder.get_root()
+    j1 = driver.create_job(command="sleep 1", folder=root)
+
+    assert j1.status == Job.Status.CREATED
+    assert os.path.exists(j1.data["log_dir"])
+    assert os.path.exists(j1.data["output_dir"])
+
+    shutil.rmtree(j1.data["log_dir"])
+
+    # disable job updates
+    monkeypatch.setattr(driver, "sync_status", Mock(side_effect=lambda j: j))
+
+    j1.status = Job.Status.COMPLETED
+
+    assert not os.path.exists(j1.data["log_dir"])
+    rmtree = Mock(wraps=util.rmtree)
+    with monkeypatch.context() as m:
+        m.setattr("kong.drivers.slurm_driver.rmtree", rmtree)
+        driver.cleanup(j1)
+    rmtree.assert_has_calls([call(j1.data["output_dir"])])
+
+    assert not os.path.exists(j1.data["log_dir"])
+    assert not os.path.exists(j1.data["output_dir"])
+
+
 def test_job_bulk_cleanup(driver, state, monkeypatch):
     jobs = [
         driver.create_job(command="sleep 1", folder=state.cwd),
@@ -596,6 +666,7 @@ def test_job_bulk_cleanup(driver, state, monkeypatch):
 
     jobs[0].status = Job.Status.RUNNING
     jobs[0].save()
+
     with pytest.raises(InvalidJobStatus):
         driver.bulk_cleanup(jobs)
 
@@ -603,12 +674,23 @@ def test_job_bulk_cleanup(driver, state, monkeypatch):
         assert os.path.exists(job.data["log_dir"])
         assert os.path.exists(job.data["output_dir"])
 
+    shutil.rmtree(jobs[0].data["log_dir"])
     jobs[0].status = Job.Status.CREATED
     jobs[0].save()
 
+    rmtree = Mock(side_effect=OSError)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.slurm_driver.rmtree", Mock(side_effect=OSError))
+        m.setattr("kong.drivers.slurm_driver.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
+    rmtree.assert_has_calls(
+        [
+            call(jobs[0].data["output_dir"]),
+            call(jobs[1].data["log_dir"]),
+            call(jobs[1].data["output_dir"]),
+            call(jobs[2].data["log_dir"]),
+            call(jobs[2].data["output_dir"]),
+        ]
+    )
 
     driver.bulk_cleanup(jobs)
 
