@@ -17,7 +17,8 @@ after_success:
 jobs:
   include:
     - stage: deploy
-      script: skip     # usually you do not want to rerun any tests
+      script:
+          - pip install .
       python: '3.7'
       deploy:
           provider: pypi
