@@ -500,7 +500,7 @@ def test_bulk_kill(driver, state):
     root = Folder.get_root()
 
     jobs = driver.bulk_create_jobs(
-        [dict(folder=root, command=f"sleep 0.1; echo 'JOB{i}'") for i in range(15)]
+        [dict(folder=root, command=f"sleep 10; echo 'JOB{i}'") for i in range(15)]
     )
 
     for job in jobs:
