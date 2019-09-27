@@ -17,9 +17,9 @@ after_success:
 jobs:
   include:
     - stage: deploy
-      script:
-          - pip install .
+      script: skip
       python: '3.7'
+      before_deploy: pip install .
       deploy:
           provider: pypi
           user: "paulgessinger"
