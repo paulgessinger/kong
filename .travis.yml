@@ -10,10 +10,15 @@ script: tox
 after_success:
   - codecov
 
-deploy:
-  provider: pypi
-  user: "paulgessinger"
-  on:
-      tags: true
-  skip_existing: true
-  distributions: "sdist bdist_wheel"
+
+jobs:
+  include:
+    - stage: deploy
+      script: skip     # usually you do not want to rerun any tests
+      deploy:
+          provider: pypi
+          user: "paulgessinger"
+          on:
+              tags: true
+          skip_existing: true
+          distributions: "sdist bdist_wheel"
