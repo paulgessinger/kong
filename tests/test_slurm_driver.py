@@ -287,8 +287,10 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
         m.setattr("os.makedirs", makedirs)
         driver.bulk_resubmit(jobs)
     assert submit.call_count == len(jobs)
-    remove.assert_has_calls([call(j.data["stdout"]) for j in jobs[1:]])
-    makedirs.assert_has_calls([call(j.data["output_dir"]) for j in jobs[1:]])
+    remove.assert_has_calls([call(j.data["stdout"]) for j in jobs[1:]], any_order=True)
+    makedirs.assert_has_calls(
+        [call(j.data["output_dir"]) for j in jobs[1:]], any_order=True
+    )
 
     for job in jobs:
         job.reload()
