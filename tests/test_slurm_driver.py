@@ -1,22 +1,22 @@
 import os
 import shutil
 from datetime import timedelta
+from typing import Collection, Iterator
 from unittest.mock import Mock, ANY, call
 
 import pytest
 
 from kong import util
-from kong.config import Config
+from kong.config import Config, slurm_schema
 from kong.drivers import InvalidJobStatus
 from kong.drivers.slurm_driver import (
     SlurmInterface,
     SlurmDriver,
     SlurmAccountingItem,
     ShellSlurmInterface,
-    config_schema,
 )
 from kong.model import Job, Folder
-from kong.util import is_executable
+from kong.util import is_executable, exhaust
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def test_sacct_parse(driver, monkeypatch, state):
             SlurmAccountingItem(5_205_350, Job.Status.FAILED, 13),
             SlurmAccountingItem(5_205_355, Job.Status.SUBMITTED, 0),
             SlurmAccountingItem(5_205_757, Job.Status.COMPLETED, 0),
-            SlurmAccountingItem(22822, Job.Status.UNKOWN, 0),
+            SlurmAccountingItem(22822, Job.Status.UNKNOWN, 0),
         ]
 
         assert len(ref) == len(res)
@@ -113,7 +113,7 @@ def test_sacct_parse(driver, monkeypatch, state):
 
 
 def test_repr():
-    sai = SlurmAccountingItem(1, Job.Status.UNKOWN, 0)
+    sai = SlurmAccountingItem(1, Job.Status.UNKNOWN, 0)
     assert repr(sai) != ""
 
 
@@ -136,8 +136,34 @@ def test_create_job(driver, state):
     assert os.path.exists(j1.data["batchfile"])
     assert is_executable(j1.data["jobscript"])
 
-    j2 = driver.create_job(command="sleep 1", walltime="03:00:00", folder=root)
+    j2 = driver.create_job(
+        command="sleep 1", walltime="03:00:00", folder=root, licenses="bliblablubb"
+    )
     assert j2.data["walltime"] == "03:00:00"
+
+    with open(j2.data["jobscript"]) as f:
+        jobscript = f.read()
+        assert str(j2.job_id) in jobscript
+        assert str(j2.cores) in jobscript
+        assert j2.command in jobscript
+        for v in ["output_dir", "log_dir", "stdout"]:
+            assert j2.data[v] in jobscript
+    with open(j2.data["batchfile"]) as f:
+        batchfile = f.read()
+        assert str(j2.cores) in batchfile
+        assert str(j2.memory) in batchfile
+        for v in [
+            "name",
+            "slurm_out",
+            "queue",
+            "ntasks",
+            "nnodes",
+            "walltime",
+            "account",
+            "jobscript",
+            "licenses",
+        ]:
+            assert str(j2.data[v]) in batchfile
 
     with pytest.raises(ValueError):
         driver.create_job(command="sleep 1", walltime="100:00:00", folder=root)
@@ -510,7 +536,7 @@ def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
 
     SAI = SlurmAccountingItem
     sacct_return = [SAI(i + 1, Job.Status.RUNNING, 0) for i in range(len(jobs))]
-    sacct_return += [SAI(12_345_665, Job.Status.UNKOWN, 0)]
+    sacct_return += [SAI(12_345_665, Job.Status.UNKNOWN, 0)]
     sacct = Mock(return_value=sacct_return)
     # pretend they're all running now
     monkeypatch.setattr(driver.slurm, "sacct", sacct)
@@ -576,8 +602,48 @@ def test_bulk_kill(driver, state, monkeypatch):
         assert job.status == Job.Status.FAILED
 
 
-def test_wait(driver, state):
+def test_wait(driver, state, monkeypatch):
     root = Folder.get_root()
+
+    class SlurmInterfaceDummy(SlurmInterface):
+        def __init__(self):
+            self.max_job_id = 1
+            self.id_map = {}
+            self.state_idx = 0
+            self.jobs = []
+
+        def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
+            values = [
+                [
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0)
+                    for j in self.jobs
+                ],
+                [  # first half done
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    for j in self.jobs[len(self.jobs) // 2 :]
+                ],
+                [  # all done
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    for j in self.jobs
+                ],
+            ]
+
+            v = values[self.state_idx]
+            self.state_idx += 1
+            return v
+
+        def sbatch(self, job: Job) -> int:
+            self.jobs.append(job)
+            self.max_job_id += 1
+            job.batch_job_id = self.max_job_id
+            self.id_map[job] = self.max_job_id
+            return self.max_job_id
+
+        def scancel(self, job: Job) -> None:
+            pass
+
+    si = SlurmInterfaceDummy()
+    monkeypatch.setattr(driver, "slurm", si)
 
     jobs = [
         driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB{i}'")
@@ -587,17 +653,32 @@ def test_wait(driver, state):
     for job in jobs:
         assert job.status == Job.Status.CREATED
 
-    with pytest.raises(NotImplementedError):
-        driver.wait(jobs)
+    driver.bulk_submit(jobs)
+
+    for job in jobs:
+        job.reload()
+        i = si.id_map[job]
+        assert job.batch_job_id == str(i)
+        assert job.status == Job.Status.SUBMITTED
+
+    with monkeypatch.context() as m:
+        sacct = Mock(wraps=si.sacct)
+        m.setattr(si, "sacct", sacct)
+        exhaust(driver.wait(jobs, poll_interval=0.01))
+        assert sacct.call_count == 3
+
+    for job in jobs:
+        job.reload()
+        assert job.status == Job.Status.COMPLETED
 
 
 def test_config_schema():
-    assert not config_schema.is_valid(dict())
-    assert config_schema.is_valid(
+    assert slurm_schema.is_valid(dict())
+    assert slurm_schema.is_valid(
         dict(account="bla", node_size=80, default_queue="whatever")
     )
-    assert not config_schema.is_valid(dict(account="bla", node_size="blub"))
-    assert not config_schema.is_valid(dict(account=42))
+    assert not slurm_schema.is_valid(dict(account="bla", node_size="blub"))
+    assert not slurm_schema.is_valid(dict(account=42))
 
 
 def test_cleanup_driver(driver, state, monkeypatch):

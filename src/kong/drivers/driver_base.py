@@ -81,8 +81,11 @@ class DriverBase(ABC):  # pragma: no-cover
 
     @abstractmethod
     def wait(
-        self, job: Union["Job", List["Job"]], timeout: Optional[int] = None
-    ) -> None:
+        self,
+        job: Union["Job", List["Job"]],
+        poll_interval: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> Iterable[List["Job"]]:
         raise NotImplementedError()
 
     @abstractmethod

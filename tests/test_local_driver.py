@@ -195,7 +195,7 @@ def test_job_cleanup_status(driver, state):
         Job.Status.CREATED,
         Job.Status.FAILED,
         Job.Status.COMPLETED,
-        Job.Status.UNKOWN,
+        Job.Status.UNKNOWN,
     ]:
         j = driver.create_job(command="sleep 1", folder=state.cwd)
         assert j is not None
@@ -315,7 +315,7 @@ def test_submit_invalid_status(driver, state):
         Job.Status.COMPLETED,
         Job.Status.FAILED,
         Job.Status.RUNNING,
-        Job.Status.UNKOWN,
+        Job.Status.UNKNOWN,
     ):
         j1.status = status
         j1.save()
@@ -350,7 +350,7 @@ def test_stdout_stderr_invalid_status(driver, state, monkeypatch):
         Job.Status.CREATED,
         Job.Status.SUBMITTED,
         Job.Status.RUNNING,
-        Job.Status.UNKOWN,
+        Job.Status.UNKNOWN,
     ):
         j1.status = status
         j1.save()
@@ -420,7 +420,7 @@ def test_run_killed(driver, state):
     proc = psutil.Process(pid=j1.data["pid"])
     proc.kill()
     j1.wait()
-    assert j1.status == Job.Status.UNKOWN
+    assert j1.status == Job.Status.UNKNOWN
 
 
 def test_run_terminated(driver, state):

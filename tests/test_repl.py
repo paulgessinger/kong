@@ -95,7 +95,17 @@ def test_complete_funcs(state, tree, repl, monkeypatch):
     cmpl = Mock()
     monkeypatch.setattr("kong.repl.complete_path", cmpl)
 
-    for c in ["ls", "mkdir", "cd", "rm", "submit_job"]:
+    for c in [
+        "ls",
+        "mkdir",
+        "mv",
+        "rm",
+        "cd",
+        "submit_job",
+        "kill_job",
+        "info",
+        "resubmit_job",
+    ]:
         func = getattr(repl, f"complete_{c}")
 
         func("hurz", "ls hurz", 4, 6)

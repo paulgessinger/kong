@@ -1,4 +1,5 @@
 import datetime
+import time
 import os
 import re
 from abc import ABC, abstractmethod
@@ -21,13 +22,13 @@ from typing import (
 )
 
 import sh
-import schema as sc
+from jinja2 import Environment, DictLoader
 
 from ..drivers import InvalidJobStatus
 from ..logger import logger
+from ..config import Config, slurm_schema
 from ..db import database
 from ..model import Job, Folder
-from ..config import Config
 from ..util import make_executable, rmtree, format_timedelta, parse_timedelta, chunks
 from .driver_base import DriverBase, checked_job
 
@@ -57,7 +58,7 @@ class SlurmAccountingItem:
         elif status_str == "RUNNING":
             status = Job.Status.RUNNING
         else:
-            status = Job.Status.UNKOWN
+            status = Job.Status.UNKNOWN
 
         return cls(int(job_id), status, int(exit_code))
 
@@ -141,46 +142,48 @@ class ShellSlurmInterface(SlurmInterface):
         logger.debug("scancel: %s", res)
 
 
-jobscript_tpl = """
+jobscript_tpl_str = """
 #!/usr/bin/env bash
 
-export KONG_JOB_ID={internal_job_id}
-export KONG_JOB_OUTPUT_DIR={output_dir}
-export KONG_JOB_LOG_DIR={log_dir}
-export KONG_JOB_NPROC={cores}
-export KONG_JOB_SCRATCHDIR=/localscratch/${{SLURM_JOB_ID}}/
+export KONG_JOB_ID={{internal_job_id}}
+export KONG_JOB_OUTPUT_DIR={{output_dir}}
+export KONG_JOB_LOG_DIR={{log_dir}}
+export KONG_JOB_NPROC={{cores}}
+export KONG_JOB_SCRATCHDIR=/localscratch/${{ "{" }}SLURM_JOB_ID{{ "}" }}/
 
 mkdir -p $KONG_JOB_SCRATCHDIR
 
-stdout={stdout}
+stdout={{stdout}}
 
-({command}) > $stdout 2>&1
+({{command}}) > $stdout 2>&1
 """.strip()
 
-batchfile_tpl = """
+batchfile_tpl_str = """
 #!/bin/bash
-#SBATCH -J {name}
-#SBATCH -o {slurm_out} 
-#SBATCH -p {queue}                
+#SBATCH -J {{name}}
+#SBATCH -o {{slurm_out}}
+#SBATCH -p {{queue}}
               
-#SBATCH -n {ntasks}                    
-#SBATCH -N {nnodes}                    
-#SBATCH -c {cores} 
-#SBATCH --mem {memory}M 
-#SBATCH -t {walltime}             
+#SBATCH -n {{ntasks}}
+#SBATCH -N {{nnodes}}
+#SBATCH -c {{cores}}
+#SBATCH --mem-per-cpu {{memory}}M 
+#SBATCH -t {{walltime}}
+{%- if licenses is not none %}
+#SBATCH -L {{licenses}}
+{% endif %}
 
-#SBATCH -A {account}             
+#SBATCH -A {{account}}
 
-srun --export=NONE {jobscript}
+srun --export=NONE {{jobscript}}
 """.strip()  # noqa: W291, W293
 
-config_schema = sc.Schema(
-    {
-        "account": sc.And(str, len),
-        "node_size": sc.And(int, lambda i: i > 0),
-        "default_queue": sc.And(str, len),
-    }
+env = Environment(
+    loader=DictLoader({"batchfile": batchfile_tpl_str, "jobscript": jobscript_tpl_str})
 )
+
+batchfile_tpl = env.get_template("batchfile")
+jobscript_tpl = env.get_template("jobscript")
 
 
 class SlurmDriver(DriverBase):
@@ -190,7 +193,7 @@ class SlurmDriver(DriverBase):
         self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
         assert "slurm_driver" in self.config.data
-        self.slurm_config = config_schema.validate(self.config.slurm_driver)
+        self.slurm_config = slurm_schema.validate(self.config.slurm_driver)
 
     def create_job(
         self,
@@ -203,6 +206,7 @@ class SlurmDriver(DriverBase):
         queue: Optional[str] = None,
         name: Optional[str] = None,
         walltime: Union[timedelta, str] = timedelta(minutes=30),
+        licenses: Optional[str] = None,
     ) -> "Job":
 
         if queue is None:
@@ -257,6 +261,8 @@ class SlurmDriver(DriverBase):
             ntasks=ntasks,
             exit_code=0,
             walltime=norm_walltime,
+            account=self.config.slurm_driver["account"],
+            licenses=licenses,
         )
         job.save()
 
@@ -277,14 +283,15 @@ class SlurmDriver(DriverBase):
             name=name,
             queue=queue,
             walltime=norm_walltime,
+            licenses=licenses,
         )
 
-        batchfile_content = batchfile_tpl.format(**values)
+        batchfile_content = batchfile_tpl.render(**values)
 
         with open(batchfile, "w") as fh:
             fh.write(batchfile_content)
 
-        jobscript_content = jobscript_tpl.format(**values)
+        jobscript_content = jobscript_tpl.render(**values)
         with open(job.data["jobscript"], "w") as fh:
             fh.write(jobscript_content)
 
@@ -342,7 +349,7 @@ class SlurmDriver(DriverBase):
 
     @checked_job
     def kill(self, job: "Job", save: bool = True) -> None:
-        if job.status in (Job.Status.CREATED, Job.Status.UNKOWN):
+        if job.status in (Job.Status.CREATED, Job.Status.UNKNOWN):
             logger.debug("Job %s in %s, simply setting to failed", job, job.status)
             job.status = Job.Status.FAILED
         elif job.status in (Job.Status.RUNNING, Job.Status.SUBMITTED):
@@ -373,9 +380,55 @@ class SlurmDriver(DriverBase):
         return jobs
 
     def wait(
-        self, job: Union["Job", List["Job"]], timeout: Optional[int] = None
-    ) -> None:
-        raise NotImplementedError()
+        self,
+        job: Union["Job", List["Job"]],
+        poll_interval: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> Iterable[List[Job]]:
+        start = datetime.datetime.now()
+        poll_interval = poll_interval or 30
+
+        jobs: List[Job]
+        if isinstance(job, Job):
+            jobs = [job]
+        elif isinstance(job, list):
+            jobs = job
+        else:
+            raise TypeError("Argument is neither job nor list of jobs")
+
+        # pre-check for status
+        for job in jobs:
+            if job.status == Job.Status.CREATED:
+                raise ValueError(f"Job is in status {job.status}, cannot wait")
+
+        logger.debug("Begin waiting for %d jobs", len(jobs))
+
+        while True:
+            now = datetime.datetime.now()
+            delta: timedelta = now - start
+            if timeout is not None:
+                if delta.total_seconds() > timeout:
+                    raise TimeoutError()
+
+            logger.debug("Refreshing %d", len(jobs))
+            jobs = list(self.bulk_sync_status(jobs))  # overwrite with updated
+            # filter out all that are considered waitable
+            remaining_jobs = [
+                j
+                for j in jobs
+                if j.status
+                not in (Job.Status.COMPLETED, Job.Status.FAILED, Job.Status.UNKNOWN)
+            ]
+            if len(remaining_jobs) == 0:
+                logger.debug("Waiting completed")
+                break
+            yield jobs
+            logger.debug(
+                "Waiting. Elapsed time: %s, %d jobs remaining",
+                delta,
+                len(remaining_jobs),
+            )
+            time.sleep(poll_interval)
 
     @checked_job
     def submit(self, job: "Job", save: bool = True) -> None:
@@ -419,7 +472,7 @@ class SlurmDriver(DriverBase):
         if job.status not in (
             Job.Status.FAILED,
             Job.Status.COMPLETED,
-            Job.Status.UNKOWN,
+            Job.Status.UNKNOWN,
         ):
             raise InvalidJobStatus(f"Job {job} not in valid status for resubmit")
 
@@ -462,7 +515,7 @@ class SlurmDriver(DriverBase):
             if job.status not in (
                 Job.Status.FAILED,
                 Job.Status.COMPLETED,
-                Job.Status.UNKOWN,
+                Job.Status.UNKNOWN,
             ):
                 raise InvalidJobStatus(f"Job {job} not in valid status for resubmit")
 

@@ -17,12 +17,11 @@ from . import BaseModel
 
 class EnumField(pw.IntegerField):
     def __init__(self, choices: List, *args: Any, **kwargs: Any):
-        self.to_db: Dict[str, int] = {v: k for k, v in enumerate(choices)}
-        self.from_db: Dict[int, str] = {k: v for k, v in enumerate(choices)}
+        self.from_db: Dict[int, str] = {int(k): k for k in choices}
         super(pw.IntegerField, self).__init__(*args, **kwargs)
 
-    def db_value(self, value: str) -> int:
-        return self.to_db[value]
+    def db_value(self, value: "Job.Status") -> int:
+        return int(value)
 
     def python_value(self, value: int) -> str:
         return self.from_db[value]
@@ -62,12 +61,12 @@ class DriverField(pw.CharField):
 
 class Job(BaseModel):
     class Status(IntFlag):
+        UNKNOWN = 5
         CREATED = 0
         SUBMITTED = 1
         RUNNING = 2
         FAILED = 3
         COMPLETED = 4
-        UNKOWN = 5
 
     class Meta:
         indexes = (
@@ -177,3 +176,13 @@ class Job(BaseModel):
 
     def __str__(self) -> str:
         return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"
+
+
+color_dict = {
+    Job.Status.UNKNOWN: "red",
+    Job.Status.CREATED: "white",
+    Job.Status.SUBMITTED: "yellow",
+    Job.Status.RUNNING: "blue",
+    Job.Status.FAILED: "red",
+    Job.Status.COMPLETED: "green",
+}

@@ -86,4 +86,4 @@ def interactive(state: State) -> None:
     logger.debug("Launching IPython session")
     import IPython
 
-    IPython.embed()
+    IPython.embed(colors="neutral")

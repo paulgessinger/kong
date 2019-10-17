@@ -26,8 +26,8 @@ def test_setup(app_env, monkeypatch):
         prompt.assert_has_calls(
             [
                 call(mock.ANY, default="kong.drivers.local_driver.LocalDriver"),
-                call(mock.ANY, default=mock.ANY),
-                call(mock.ANY, default=mock.ANY),
+                call(mock.ANY, default=os.path.join(app_dir, "jobdir")),
+                call(mock.ANY, default=os.path.join(app_dir, "joboutput")),
             ]
         )
 

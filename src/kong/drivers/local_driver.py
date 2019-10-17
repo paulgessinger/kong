@@ -3,7 +3,19 @@ import tempfile
 import os
 from contextlib import contextmanager
 from subprocess import Popen
-from typing import Any, Optional, IO, Union, List, Iterable, Dict, Collection, Iterator
+from typing import (
+    Any,
+    Optional,
+    IO,
+    ContextManager,
+    Union,
+    List,
+    Iterable,
+    Dict,
+    Collection,
+    Iterator,
+    cast,
+)
 import uuid
 
 import psutil
@@ -118,7 +130,7 @@ class LocalDriver(DriverBase):
             Job.Status.CREATED,
             Job.Status.FAILED,
             Job.Status.COMPLETED,
-            Job.Status.UNKOWN,
+            Job.Status.UNKNOWN,
         ):
             raise InvalidJobStatus(
                 f"Cannot clean up job {job} in {job.status}, please kill first"
@@ -165,7 +177,7 @@ class LocalDriver(DriverBase):
                 logger.debug(
                     "Job %s appears to have exited, but exit status file is not present"
                 )
-                job.status = Job.Status.UNKOWN
+                job.status = Job.Status.UNKNOWN
             else:
                 with open(exit_status_file, "r") as fh:
                     exit_code = int(fh.read().strip())
@@ -310,7 +322,7 @@ class LocalDriver(DriverBase):
             yield fh
 
     @checked_job
-    def _wait_single(self, job: Job, timeout: Optional[int] = None) -> None:
+    def _wait_single(self, job: Job, timeout: Optional[int] = None) -> Job:
         logger.debug("Wait for job %s requested", job)
         self.sync_status(job)
         if job.status not in (Job.Status.SUBMITTED, Job.Status.RUNNING):
@@ -319,16 +331,21 @@ class LocalDriver(DriverBase):
                 job,
                 job.status,
             )
-            return
+            return job
 
         proc = psutil.Process(pid=job.data["pid"])
         try:
             proc.wait(timeout=timeout)
         except psutil.TimeoutExpired as e:
             raise TimeoutError(str(e))
-        self.sync_status(job)
+        return cast(Job, self.sync_status(job))
 
-    def wait(self, jobs: Union[Job, List[Job]], timeout: Optional[int] = None) -> None:
+    def wait(
+        self,
+        jobs: Union[Job, List[Job]],
+        poll_interval: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> Iterable[List[Job]]:
         if not isinstance(jobs, list):
             jobs = [jobs]
 
@@ -336,13 +353,15 @@ class LocalDriver(DriverBase):
         for job in jobs:
             self._wait_single(job, timeout=timeout)
 
+        yield list(self.bulk_sync_status(jobs))
+
     @checked_job
     def resubmit(self, job: Job) -> Job:
         self.sync_status(job)
         if job.status not in (
             Job.Status.COMPLETED,
             Job.Status.FAILED,
-            Job.Status.UNKOWN,
+            Job.Status.UNKNOWN,
         ):
             logger.error("Will not resubmit job %s in status %s", job, job.status)
             raise InvalidJobStatus(
@@ -379,7 +398,7 @@ class LocalDriver(DriverBase):
             if job.status not in (
                 Job.Status.COMPLETED,
                 Job.Status.FAILED,
-                Job.Status.UNKOWN,
+                Job.Status.UNKNOWN,
             ):
                 logger.error("Will not resubmit job %s in status %s", job, job.status)
                 raise InvalidJobStatus(
