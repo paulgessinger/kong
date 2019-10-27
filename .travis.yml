@@ -7,7 +7,7 @@ python:
 git:
   depth: false
 
-install: pip install tox-travis
+install: pip install tox-travis codecov
 
 script: tox
 
@@ -21,6 +21,7 @@ jobs:
       script: skip
       python: '3.7'
       before_deploy: pip install .
+      after_success:
       deploy:
           provider: pypi
           user: "paulgessinger"
