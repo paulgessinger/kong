@@ -9,10 +9,9 @@ from typing import (
     Union,
     Optional,
     Tuple,
-    ContextManager,
     Sequence,
     Iterable,
-)
+    Iterator)
 
 import peewee as pw
 from contextlib import contextmanager
@@ -61,7 +60,7 @@ class State:
         )
 
     @contextmanager  # type: ignore
-    def pushd(self, folder: Union["Folder", str]) -> ContextManager[None]:
+    def pushd(self, folder: Union["Folder", str]) -> Iterator[None]:
         prev = self.cwd
 
         if isinstance(folder, Folder):

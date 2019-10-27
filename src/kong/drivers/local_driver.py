@@ -7,13 +7,12 @@ from typing import (
     Any,
     Optional,
     IO,
-    ContextManager,
     Union,
     List,
     Iterable,
     Dict,
     Collection,
-)
+    Iterator)
 import uuid
 
 import psutil
@@ -301,7 +300,7 @@ class LocalDriver(DriverBase):
 
     @checked_job  # type: ignore
     @contextmanager  # type: ignore
-    def stdout(self, job: Job) -> ContextManager[IO[str]]:
+    def stdout(self, job: Job) -> Iterator[IO[str]]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
             raise InvalidJobStatus("Cannot get stdout for job in status %s", job.status)
@@ -311,7 +310,7 @@ class LocalDriver(DriverBase):
 
     @checked_job  # type: ignore
     @contextmanager  # type: ignore
-    def stderr(self, job: Job) -> ContextManager[IO[str]]:
+    def stderr(self, job: Job) -> Iterator[IO[str]]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
             raise InvalidJobStatus("Cannot get stdout for job in status %s", job.status)

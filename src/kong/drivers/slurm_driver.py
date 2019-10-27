@@ -406,7 +406,7 @@ class SlurmDriver(DriverBase):
 
     @checked_job  # type: ignore
     @contextmanager  # type: ignore
-    def stdout(self, job: Job) -> ContextManager[IO[str]]:
+    def stdout(self, job: Job) -> Iterator[IO[str]]:
         with open(job.data["stdout"], "r") as fh:
             yield fh
 
