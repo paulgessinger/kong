@@ -522,15 +522,8 @@ def test_preloop(repl, monkeypatch):
 
 
 def test_postloop(state, repl, monkeypatch):
-    set_length = Mock()
-    write = Mock()
-    monkeypatch.setattr("readline.set_history_length", set_length)
-    monkeypatch.setattr("readline.write_history_file", write)
-
     repl.postloop()
 
-    set_length.assert_called_once_with(state.config.history_length)
-    write.assert_called_once()
 
 
 def test_precmd(repl):
@@ -539,10 +532,17 @@ def test_precmd(repl):
 
 
 def test_onecmd(repl, monkeypatch, capsys):
+    set_length = Mock()
+    write = Mock()
+    monkeypatch.setattr("readline.set_history_length", set_length)
+    monkeypatch.setattr("readline.write_history_file", write)
     m = Mock(return_value="ok")
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
     assert repl.onecmd("whatever") == "ok"
+    set_length.assert_called_once_with(repl.state.config.history_length)
+    write.assert_called_once()
     m.assert_called_once()
+
     m = Mock(side_effect=TypeError("MESSAGE"))
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
     repl.onecmd("whatever")

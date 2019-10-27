@@ -340,7 +340,7 @@ class LocalDriver(DriverBase):
             raise TimeoutError(str(e))
         return cast(Job, self.sync_status(job))
 
-    def wait(
+    def wait_gen(
         self,
         jobs: Union[Job, List[Job]],
         poll_interval: Optional[int] = None,

@@ -563,7 +563,7 @@ class State:
         try:
             with Spinner(text=f"Waiting for {len(jobs)} jobs") as s:
                 for cur_jobs in driver.wait(
-                    jobs, timeout=timeout, poll_interval=poll_interval
+                    jobs, timeout=timeout, poll_interval=poll_interval, progress=True
                 ):
                     counts = {k: 0 for k in Job.Status}
                     for job in cur_jobs:

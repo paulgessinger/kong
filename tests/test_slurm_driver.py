@@ -664,7 +664,7 @@ def test_wait(driver, state, monkeypatch):
     with monkeypatch.context() as m:
         sacct = Mock(wraps=si.sacct)
         m.setattr(si, "sacct", sacct)
-        exhaust(driver.wait(jobs, poll_interval=0.01))
+        driver.wait(jobs, poll_interval=0.01)
         assert sacct.call_count == 3
 
     for job in jobs:

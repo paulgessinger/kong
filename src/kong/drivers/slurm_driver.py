@@ -379,7 +379,7 @@ class SlurmDriver(DriverBase):
 
         return jobs
 
-    def wait(
+    def wait_gen(
         self,
         job: Union["Job", List["Job"]],
         poll_interval: Optional[int] = None,
