@@ -94,14 +94,14 @@ class DriverBase(ABC):  # pragma: no-cover
         job: Union["Job", List["Job"]],
         poll_interval: Optional[int] = None,
         timeout: Optional[int] = None,
-        progress: bool = False
+        progress: bool = False,
     ) -> Optional[Iterable[List["Job"]]]:
         it = self.wait_gen(job, poll_interval=poll_interval, timeout=timeout)
         if progress:
             return it
         else:
             exhaust(it)
-
+            return None
 
     @abstractmethod
     def submit(self, job: "Job") -> None:

@@ -671,6 +671,25 @@ def test_wait(driver, state, monkeypatch):
         job.reload()
         assert job.status == Job.Status.COMPLETED
 
+def test_wait_single(driver, monkeypatch):
+    root = Folder.get_root()
+    j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
+
+    monkeypatch.setattr(driver, "bulk_sync_status", Mock(return_value=[j1]))
+
+    with pytest.raises(ValueError):
+        driver.wait(j1) # job is in CREATED
+
+    j1.status = Job.Status.COMPLETED
+    driver.wait(j1)
+
+    # timeout
+    j1.status = Job.Status.RUNNING
+    with pytest.raises(TimeoutError):
+        driver.wait(j1, timeout=0.05, poll_interval=0.1)
+
+    with pytest.raises(TypeError):
+        driver.wait("nope")
 
 def test_config_schema():
     assert slurm_schema.is_valid(dict())

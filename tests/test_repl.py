@@ -489,6 +489,7 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
     assert len(alpha.jobs) == 0
 
 
+
 def test_cwd(state, repl, tree, capsys):
     root = tree
     repl.do_cwd()
@@ -504,6 +505,16 @@ def test_cwd(state, repl, tree, capsys):
     repl.do_cwd()
     out, err = capsys.readouterr()
     assert out.strip() == "/f2/gamma"
+
+
+def test_wait(repl, monkeypatch):
+    state = Mock()
+    state.wait = Mock(return_value=iter([]))
+    monkeypatch.setattr(repl, "state", state)
+
+    repl.onecmd("wait * --no-notify --recursive --poll-interval 50")
+
+    state.wait.assert_called_once_with("*", notify=False, recursive=True, poll_interval=50)
 
 
 def test_exit(repl):

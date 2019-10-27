@@ -12,7 +12,7 @@ import peewee as pw
 from click import style
 from kong.model.job import color_dict
 
-from .util import rjust, shorten_path, Spinner, exhaust
+from .util import rjust, shorten_path, Spinner
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -461,10 +461,8 @@ class Repl(cmd.Cmd):
     def do_wait(
         self, job_arg: str, notify: bool, recursive: bool, poll_interval: int
     ) -> None:
-        exhaust(
-            self.state.wait(
-                job_arg, notify=notify, recursive=recursive, poll_interval=poll_interval
-            )
+        self.state.wait(
+            job_arg, notify=notify, recursive=recursive, poll_interval=poll_interval
         )
 
     def do_exit(self, arg: str) -> bool:

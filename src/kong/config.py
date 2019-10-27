@@ -53,13 +53,6 @@ class Notifier:
         self._notifier = notifiers.get_notifier(self.name)
         self._kwargs = kwargs
 
-        # if "notify" in config.data and config.data["notify"] is not None:
-        #     self.name = config.notify["name"]
-        #     self.args = dict(config.notify)
-        #     del self.args["name"]
-        #     self.logger.debug("Init notifier %s with %s", self.name, self.args)
-        #     self.notifier = notifiers.get_notifier(self.name)
-
     def notify(
         self,
         message: str,

@@ -3,7 +3,7 @@ import time
 import uuid
 
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, ANY
 import peewee as pw
 
 import kong
@@ -12,6 +12,7 @@ from kong.drivers.local_driver import LocalDriver
 from kong.model import Folder, Job
 import kong.drivers
 from kong.state import DoesNotExist, CannotCreateError, CannotRemoveIsFolder
+from kong.util import exhaust
 
 
 @pytest.fixture
@@ -945,3 +946,58 @@ def test_job_resubmit_failed_only(state):
     assert j1.get_status() == Job.Status.COMPLETED
     assert j2.get_status() == Job.Status.COMPLETED
     assert j3.status == Job.Status.SUBMITTED
+
+def test_wait(state, monkeypatch):
+    root = Folder.get_root()
+    j1 = state.create_job(command="sleep 0.1")
+    j2 = state.create_job(command="sleep 0.1")
+    j3 = state.create_job(command="exit 1")
+
+    jobs = [[j1, j2, j3]]
+
+    driver = Mock()
+    driver.wait = Mock()
+    driver.wait.return_value = iter(jobs)
+
+    factory = Mock(return_value=driver)
+    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver", factory)
+
+    monkeypatch.setattr("kong.state.Spinner", MagicMock())
+
+    nm = Mock()
+    nm.notify = Mock()
+    monkeypatch.setattr(state.config, "notifications", nm)
+
+    state.wait("*", notify=False)
+    assert nm.notify.call_count == 0
+    assert driver.wait.call_count == 1
+
+    exhaust(state.wait("*", notify=True, progress=True))
+    assert nm.notify.call_count == 1
+    assert driver.wait.call_count == 2
+
+
+def test_wait_timeout(state, monkeypatch):
+    root = Folder.get_root()
+    j1 = state.create_job(command="sleep 0.1")
+    j2 = state.create_job(command="sleep 0.1")
+    j3 = state.create_job(command="exit 1")
+
+    jobs = [[j1, j2, j3]]
+
+    driver = Mock()
+    driver.wait = Mock()
+    driver.wait.side_effect = TimeoutError
+
+    factory = Mock(return_value=driver)
+    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver", factory)
+
+    monkeypatch.setattr("kong.state.Spinner", MagicMock())
+
+    with monkeypatch.context() as m:
+        nm = MagicMock()
+        m.setattr(state.config, "notifications", nm)
+        state.wait("*", notify=False)
+        assert nm.notify.call_count == 0
+        state.wait("*", notify=True)
+        assert nm.notify.call_count == 1

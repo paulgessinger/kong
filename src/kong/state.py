@@ -12,6 +12,7 @@ from typing import (
     Sequence,
     Iterable,
     Iterator,
+    cast,
 )
 
 import peewee as pw
@@ -20,7 +21,7 @@ from contextlib import contextmanager
 from click import style
 from kong.model.job import color_dict
 
-from .util import Progress, Spinner
+from .util import Progress, Spinner, exhaust
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config
@@ -545,6 +546,16 @@ class State:
             return [folder]
 
     def wait(
+        self, *args: Any, progress: bool = False, **kwargs: Any
+    ) -> Optional[Iterable[List[Job]]]:
+        it = self.wait_gen(*args, **kwargs)
+        if progress:
+            return it
+        else:
+            exhaust(it)
+            return None
+
+    def wait_gen(
         self,
         jobspec: JobSpec,
         recursive: bool = False,
@@ -562,8 +573,14 @@ class State:
 
         try:
             with Spinner(text=f"Waiting for {len(jobs)} jobs") as s:
-                for cur_jobs in driver.wait(
-                    jobs, timeout=timeout, poll_interval=poll_interval, progress=True
+                for cur_jobs in cast(
+                    Iterable[List[Job]],
+                    driver.wait(
+                        jobs,
+                        timeout=timeout,
+                        poll_interval=poll_interval,
+                        progress=True,
+                    ),
                 ):
                     counts = {k: 0 for k in Job.Status}
                     for job in cur_jobs:
@@ -577,11 +594,11 @@ class State:
                     yield cur_jobs
 
             driver.bulk_sync_status(orig_jobs)
-            counts = {k.name: 0 for k in Job.Status}
+            counts = {k: 0 for k in Job.Status}
             for job in orig_jobs:
-                counts[job.status.name] += 1
+                counts[job.status] += 1
 
-            out = [f"{k[:1]}{v}" for k, v in counts.items()]
+            out = [f"{k.name[:1]}{v}" for k, v in counts.items()]
 
             if notify:
                 self.config.notifications.notify(
