@@ -2,16 +2,7 @@ import datetime
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
-from typing import (
-    Any,
-    List,
-    Dict,
-    Union,
-    cast,
-    TYPE_CHECKING,
-    Optional,
-    Type,
-    Iterator)
+from typing import Any, List, Dict, Union, cast, TYPE_CHECKING, Optional, Type, Iterator
 
 import peewee as pw
 

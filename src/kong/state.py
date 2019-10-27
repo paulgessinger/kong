@@ -11,7 +11,8 @@ from typing import (
     Tuple,
     Sequence,
     Iterable,
-    Iterator)
+    Iterator,
+)
 
 import peewee as pw
 from contextlib import contextmanager

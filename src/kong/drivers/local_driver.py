@@ -3,16 +3,7 @@ import tempfile
 import os
 from contextlib import contextmanager
 from subprocess import Popen
-from typing import (
-    Any,
-    Optional,
-    IO,
-    Union,
-    List,
-    Iterable,
-    Dict,
-    Collection,
-    Iterator)
+from typing import Any, Optional, IO, Union, List, Iterable, Dict, Collection, Iterator
 import uuid
 
 import psutil
