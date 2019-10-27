@@ -7,7 +7,7 @@ python:
 git:
   depth: false
 
-install: pip install tox-travis
+install: pip install tox-travis codecov
 
 script: tox
 
