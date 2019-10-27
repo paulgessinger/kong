@@ -12,12 +12,16 @@ from typing import (
     Sequence,
     Iterable,
     Iterator,
+    cast,
 )
 
 import peewee as pw
 from contextlib import contextmanager
 
-from .util import Progress, Spinner
+from click import style
+from kong.model.job import color_dict
+
+from .util import Progress, Spinner, exhaust
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config
@@ -504,7 +508,7 @@ class State:
         first_job.ensure_driver_instance(self.config)
         driver = first_job.driver_instance
 
-        with Spinner(f"Preparing for resubmission for {len(jobs)}"):
+        with Spinner(f"Preparing for resubmission for {len(jobs)} jobs"):
             jobs = list(driver.bulk_resubmit(jobs, do_submit=False))
 
         def job_iter() -> Iterable[Job]:
@@ -540,3 +544,70 @@ class State:
             if folder is None:
                 raise ValueError(f"No folder {pattern} found")
             return [folder]
+
+    def wait(
+        self, *args: Any, progress: bool = False, **kwargs: Any
+    ) -> Optional[Iterable[List[Job]]]:
+        it = self.wait_gen(*args, **kwargs)
+        if progress:
+            return it
+        else:
+            exhaust(it)
+            return None
+
+    def wait_gen(
+        self,
+        jobspec: JobSpec,
+        recursive: bool = False,
+        notify: bool = True,
+        timeout: Optional[int] = None,
+        poll_interval: Optional[int] = None,
+    ) -> Iterable[List[Job]]:
+        jobs: List[Job]
+        jobs = self._extract_jobs(jobspec, recursive=recursive)
+        assert len(jobs) > 0
+        first_job = jobs[0]
+        first_job.ensure_driver_instance(self.config)
+        driver = first_job.driver_instance
+        orig_jobs = jobs[:]
+
+        try:
+            with Spinner(text=f"Waiting for {len(jobs)} jobs") as s:
+                for cur_jobs in cast(
+                    Iterable[List[Job]],
+                    driver.wait(
+                        jobs,
+                        timeout=timeout,
+                        poll_interval=poll_interval,
+                        progress=True,
+                    ),
+                ):
+                    counts = {k: 0 for k in Job.Status}
+                    for job in cur_jobs:
+                        counts[job.status] += 1
+
+                    out = [
+                        style(f"{k.name[:1]}{v}", fg=color_dict[k])
+                        for k, v in counts.items()
+                    ]
+                    s.text = f"Waiting for {len(jobs)} jobs: {', '.join(out)}"
+                    yield cur_jobs
+
+            driver.bulk_sync_status(orig_jobs)
+            counts = {k: 0 for k in Job.Status}
+            for job in orig_jobs:
+                counts[job.status] += 1
+
+            out = [f"{k.name[:1]}{v}" for k, v in counts.items()]
+
+            if notify:
+                self.config.notifications.notify(
+                    title="kong: Job wait complete",
+                    message=f"Successfully waited for {len(jobs)} job(s) to finish:\n{', '.join(out)}",
+                )
+        except TimeoutError:
+            if notify:
+                self.config.notifications.notify(
+                    title="kong: Job wait timeout",
+                    message=f"Timeout waiting for {len(jobs)} job(s) after {timeout}s",
+                )

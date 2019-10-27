@@ -10,6 +10,7 @@ import shutil
 import click
 import peewee as pw
 from click import style
+from kong.model.job import color_dict
 
 from .util import rjust, shorten_path, Spinner
 from .state import DoesNotExist
@@ -19,15 +20,6 @@ from .model import Job, Folder
 from . import state
 
 history_file = os.path.join(APP_DIR, "history")
-
-color_dict = {
-    Job.Status.UNKOWN: "red",
-    Job.Status.CREATED: "white",
-    Job.Status.SUBMITTED: "yellow",
-    Job.Status.RUNNING: "blue",
-    Job.Status.FAILED: "red",
-    Job.Status.COMPLETED: "green",
-}
 
 
 def complete_path(cwd: Folder, path: str) -> List[str]:
@@ -109,7 +101,16 @@ def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
 
 
 @add_completion(
-    "ls", "mkdir", "rm", "cd", "submit_job", "kill_job", "info", "resubmit_job"
+    "ls",
+    "mkdir",
+    "mv",
+    "rm",
+    "cd",
+    "submit_job",
+    "kill_job",
+    "info",
+    "resubmit_job",
+    "wait",
 )
 class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
@@ -126,7 +127,15 @@ class Repl(cmd.Cmd):
 
     def onecmd(self, *args: str) -> bool:
         try:
-            return super().onecmd(*args)
+            res = super().onecmd(*args)
+            logger.debug(
+                "Writing history of length %d to file %s",
+                self.state.config.history_length,
+                history_file,
+            )
+            readline.set_history_length(self.state.config.history_length)
+            readline.write_history_file(history_file)
+            return res
         except (BaseException, Exception) as e:
             logger.debug("Exception occured", exc_info=True)
             click.secho(f"{e}", fg="red")
@@ -176,20 +185,14 @@ class Repl(cmd.Cmd):
                     folder_jobs = folder.jobs_recursive()
                     # accumulate counts
                     # @TODO: SLOW! Optimize to query
-                    counts = {
-                        Job.Status.UNKOWN: 0,
-                        Job.Status.CREATED: 0,
-                        Job.Status.SUBMITTED: 0,
-                        Job.Status.RUNNING: 0,
-                        Job.Status.FAILED: 0,
-                        Job.Status.COMPLETED: 0,
-                    }
+                    counts = {k: 0 for k in Job.Status}
+
                     for job in folder_jobs:
                         counts[job.status] += 1
 
                     output = ""
-                    for (k, c), l in zip(counts.items(), "UCSRFC"):
-                        output += style(f" {c:> 6d}{l}", fg=color_dict[k])
+                    for k, c in counts.items():
+                        output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
                     output = folder.name.ljust(folder_name_length) + rjust(
                         output, width - folder_name_length
                     )
@@ -450,6 +453,18 @@ class Repl(cmd.Cmd):
 
         click.echo_via_pager(reader())
 
+    @parse_arguments
+    @click.argument("job_arg")
+    @click.option("--notify/--no-notify", default=True)
+    @click.option("--recursive", "-R", is_flag=True)
+    @click.option("--poll-interval", "-i", type=int, default=None)
+    def do_wait(
+        self, job_arg: str, notify: bool, recursive: bool, poll_interval: int
+    ) -> None:
+        self.state.wait(
+            job_arg, notify=notify, recursive=recursive, poll_interval=poll_interval
+        )
+
     def do_exit(self, arg: str) -> bool:
         return True
 
@@ -464,13 +479,7 @@ class Repl(cmd.Cmd):
             logger.debug("No history file found")
 
     def postloop(self) -> None:
-        logger.debug(
-            "Writing history of length %d to file %s",
-            self.state.config.history_length,
-            history_file,
-        )
-        readline.set_history_length(self.state.config.history_length)
-        readline.write_history_file(history_file)
+        pass
 
     def cmdloop(self, intro: Optional[Any] = None) -> Any:
         print(self.intro)

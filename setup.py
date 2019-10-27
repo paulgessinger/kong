@@ -23,6 +23,8 @@ setup(
         "psutil",
         "schema",
         "tqdm",
+        "notifiers",
+        "jinja2",
     ],
     tests_require=tests_require,
     extras_require={"dev": dev_requires, "test": tests_require, "ipython": ["ipython"]},

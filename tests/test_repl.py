@@ -95,7 +95,17 @@ def test_complete_funcs(state, tree, repl, monkeypatch):
     cmpl = Mock()
     monkeypatch.setattr("kong.repl.complete_path", cmpl)
 
-    for c in ["ls", "mkdir", "cd", "rm", "submit_job"]:
+    for c in [
+        "ls",
+        "mkdir",
+        "mv",
+        "rm",
+        "cd",
+        "submit_job",
+        "kill_job",
+        "info",
+        "resubmit_job",
+    ]:
         func = getattr(repl, f"complete_{c}")
 
         func("hurz", "ls hurz", 4, 6)
@@ -479,6 +489,7 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
     assert len(alpha.jobs) == 0
 
 
+
 def test_cwd(state, repl, tree, capsys):
     root = tree
     repl.do_cwd()
@@ -494,6 +505,16 @@ def test_cwd(state, repl, tree, capsys):
     repl.do_cwd()
     out, err = capsys.readouterr()
     assert out.strip() == "/f2/gamma"
+
+
+def test_wait(repl, monkeypatch):
+    state = Mock()
+    state.wait = Mock(return_value=iter([]))
+    monkeypatch.setattr(repl, "state", state)
+
+    repl.onecmd("wait * --no-notify --recursive --poll-interval 50")
+
+    state.wait.assert_called_once_with("*", notify=False, recursive=True, poll_interval=50)
 
 
 def test_exit(repl):
@@ -512,15 +533,8 @@ def test_preloop(repl, monkeypatch):
 
 
 def test_postloop(state, repl, monkeypatch):
-    set_length = Mock()
-    write = Mock()
-    monkeypatch.setattr("readline.set_history_length", set_length)
-    monkeypatch.setattr("readline.write_history_file", write)
-
     repl.postloop()
 
-    set_length.assert_called_once_with(state.config.history_length)
-    write.assert_called_once()
 
 
 def test_precmd(repl):
@@ -529,10 +543,17 @@ def test_precmd(repl):
 
 
 def test_onecmd(repl, monkeypatch, capsys):
+    set_length = Mock()
+    write = Mock()
+    monkeypatch.setattr("readline.set_history_length", set_length)
+    monkeypatch.setattr("readline.write_history_file", write)
     m = Mock(return_value="ok")
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
     assert repl.onecmd("whatever") == "ok"
+    set_length.assert_called_once_with(repl.state.config.history_length)
+    write.assert_called_once()
     m.assert_called_once()
+
     m = Mock(side_effect=TypeError("MESSAGE"))
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
     repl.onecmd("whatever")

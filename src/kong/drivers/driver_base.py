@@ -14,6 +14,7 @@ from typing import (
 from abc import abstractmethod, ABC
 
 from kong.drivers import DriverMismatch
+from kong.util import exhaust
 from ..logger import logger
 from ..config import Config
 
@@ -80,10 +81,27 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def wait(
-        self, job: Union["Job", List["Job"]], timeout: Optional[int] = None
-    ) -> None:
+    def wait_gen(
+        self,
+        job: Union["Job", List["Job"]],
+        poll_interval: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ) -> Iterable[List["Job"]]:
         raise NotImplementedError()
+
+    def wait(
+        self,
+        job: Union["Job", List["Job"]],
+        poll_interval: Optional[int] = None,
+        timeout: Optional[int] = None,
+        progress: bool = False,
+    ) -> Optional[Iterable[List["Job"]]]:
+        it = self.wait_gen(job, poll_interval=poll_interval, timeout=timeout)
+        if progress:
+            return it
+        else:
+            exhaust(it)
+            return None
 
     @abstractmethod
     def submit(self, job: "Job") -> None:

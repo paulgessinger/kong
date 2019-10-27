@@ -17,13 +17,13 @@ def setup(cfg: Optional[config.Config]) -> None:
 
     data: Dict[str, Any]
     if cfg is None:
-        data = dict()
+        data = config.config_schema.validate({})
     else:
         data = dict(cfg.data)
 
     data["default_driver"] = click.prompt(
         f"Which batch system driver shall we use by default?",
-        default=data.get("default_driver", "kong.drivers.local_driver.LocalDriver"),
+        default=data.get("default_driver"),
     )
 
     try:
@@ -36,7 +36,7 @@ def setup(cfg: Optional[config.Config]) -> None:
     data["jobdir"] = os.path.expanduser(
         click.prompt(
             "Where is a good place to put job (e.g. log) files?",
-            default=data.get("jobdir", os.path.join(config.APP_DIR, "jobdir")),
+            default=data.get("jobdir"),
         )
     )
 
@@ -46,14 +46,14 @@ def setup(cfg: Optional[config.Config]) -> None:
     data["joboutputdir"] = os.path.expanduser(
         click.prompt(
             "Where is a good place to put job output files?",
-            default=data.get("joboutputdir", os.path.join(config.APP_DIR, "joboutput")),
+            default=data.get("joboutputdir"),
         )
     )
 
     if not os.path.exists(data["joboutputdir"]):
         os.makedirs(data["joboutputdir"])
 
-    data["history_length"] = data.get("history_length", 1000)
+    data["history_length"] = data.get("history_length")
 
     data = config.config_schema.validate(data)
 

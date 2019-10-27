@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
 import contextlib
+from collections import deque
 
 from tqdm import tqdm  # type: ignore
 from halo import Halo  # type: ignore
@@ -75,7 +76,7 @@ def parse_timedelta(string: str) -> timedelta:
 @contextlib.contextmanager
 def Spinner(
     text: str, persist: bool = True, *args: Any, **kwargs: Any
-) -> Iterator[None]:
+) -> Iterator[Halo]:
     stream = kwargs.get("stream", sys.stdout)
     if "spinner" not in kwargs:
         kwargs["spinner"] = "bouncingBar"
@@ -83,10 +84,10 @@ def Spinner(
         spinner = Halo(text, *args, **kwargs)  # type: ignore
         spinner.start()
         try:
-            yield
+            yield spinner
             if persist:
                 spinner.succeed()
-        except Exception:
+        except:  # noqa: E722
             if persist:
                 spinner.fail()
             raise
@@ -133,3 +134,7 @@ def shorten_path(path: str, last_length: Optional[int] = None) -> str:
 def chunks(l: List[T], n: int) -> Iterable[List[T]]:
     for i in range(0, len(l), n):
         yield l[i : i + n]
+
+
+def exhaust(generator: Iterable[Any]) -> None:
+    deque(generator, maxlen=0)
