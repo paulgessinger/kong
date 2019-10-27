@@ -2,18 +2,7 @@ import datetime
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
-from typing import (
-    Any,
-    List,
-    Dict,
-    Union,
-    cast,
-    TYPE_CHECKING,
-    Optional,
-    ContextManager,
-    IO,
-    Type,
-)
+from typing import Any, List, Dict, Union, cast, TYPE_CHECKING, Optional, Type, Iterator
 
 import peewee as pw
 
@@ -176,13 +165,13 @@ class Job(BaseModel):
 
     @with_driver  # type: ignore
     @contextmanager  # type: ignore
-    def stdout(self, driver: DriverBase) -> ContextManager[IO[str]]:
+    def stdout(self, driver: DriverBase) -> Iterator[None]:
         with driver.stdout(self) as fh:
             yield fh
 
     @with_driver  # type: ignore
     @contextmanager  # type: ignore
-    def stderr(self, driver: DriverBase) -> ContextManager[IO[str]]:
+    def stderr(self, driver: DriverBase) -> Iterator[None]:
         with driver.stderr(self) as fh:
             yield fh
 
