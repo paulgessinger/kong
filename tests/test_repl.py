@@ -489,7 +489,6 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
     assert len(alpha.jobs) == 0
 
 
-
 def test_cwd(state, repl, tree, capsys):
     root = tree
     repl.do_cwd()
@@ -514,7 +513,9 @@ def test_wait(repl, monkeypatch):
 
     repl.onecmd("wait * --no-notify --recursive --poll-interval 50")
 
-    state.wait.assert_called_once_with("*", notify=False, recursive=True, poll_interval=50)
+    state.wait.assert_called_once_with(
+        "*", notify=False, recursive=True, poll_interval=50
+    )
 
 
 def test_exit(repl):
@@ -534,7 +535,6 @@ def test_preloop(repl, monkeypatch):
 
 def test_postloop(state, repl, monkeypatch):
     repl.postloop()
-
 
 
 def test_precmd(repl):

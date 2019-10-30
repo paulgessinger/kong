@@ -6,11 +6,11 @@ from kong.config import Config, Notifier, NotificationManager, slurm_schema
 def test_config_creation(state):
     config = Config({})
 
+
 def test_notifier(monkeypatch):
     notifier = Mock()
     get_notifier = Mock(return_value=notifier)
-    monkeypatch.setattr("kong.config.notifiers.get_notifier",
-                        get_notifier)
+    monkeypatch.setattr("kong.config.notifiers.get_notifier", get_notifier)
 
     inst = Notifier("hurz")
 
@@ -46,6 +46,7 @@ def test_notifier(monkeypatch):
     notifier.notify.assert_called_once_with(message=ANY, subject="some title")
     notifier.reset_mock()
 
+
 def test_notificationmanager(monkeypatch):
     inst = Mock()
     inst.notify = Mock(return_value="RETURN_TAG")
@@ -70,13 +71,14 @@ def test_notificationmanager(monkeypatch):
 
     res = nm.notify("a message", "some title", "extra pos", extra_kw=42)
 
-    inst.notify.assert_called_once_with("a message", "some title", "extra pos", extra_kw=42)
+    inst.notify.assert_called_once_with(
+        "a message", "some title", "extra pos", extra_kw=42
+    )
 
     assert len(res) == 1
     assert res[0] == "RETURN_TAG"
 
+
 def test_slurm_schema():
     assert slurm_schema.is_valid({"node_size": 2})
     assert not slurm_schema.is_valid({"node_size": -1})
-
-

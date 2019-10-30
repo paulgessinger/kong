@@ -76,6 +76,7 @@ def test_checked_job(driver):
     wrapped(driver, job)
     inner.assert_called_once_with(driver, job)
 
+
 def test_wait(driver, monkeypatch):
     wait_gen = Mock(return_value=iter([]))
     monkeypatch.setattr(driver, "wait_gen", wait_gen)
@@ -87,4 +88,3 @@ def test_wait(driver, monkeypatch):
 
     driver.wait("*", progress=False)
     assert wait_gen.call_count == 1
-

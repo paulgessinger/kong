@@ -947,6 +947,7 @@ def test_job_resubmit_failed_only(state):
     assert j2.get_status() == Job.Status.COMPLETED
     assert j3.status == Job.Status.SUBMITTED
 
+
 def test_wait(state, monkeypatch):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 0.1")
