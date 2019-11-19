@@ -8,3 +8,4 @@ venv
 coverage.xml
 .tox
 dist
+doc/_build

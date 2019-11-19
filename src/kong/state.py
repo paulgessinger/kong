@@ -34,18 +34,30 @@ from .logger import logger
 
 
 class CannotCreateError(RuntimeError):
+    """
+    Raised whenever something cannot be created.
+    """
     pass
 
 
 class CannotRemoveRoot(RuntimeError):
+    """
+    Raised when the root folder is attempted to be deleted.
+    """
     pass
 
 
 class DoesNotExist(RuntimeError):
+    """
+    Raised whenever a query does not resolve to an existing resource.
+    """
     pass
 
 
 class CannotRemoveIsFolder(RuntimeError):
+    """
+    Raised if non-recursive removal of a folder is requested.
+    """
     pass
 
 
@@ -59,7 +71,25 @@ def YES(_: str) -> bool:
 
 
 class State:
+    """
+    The state class provides a stateful interface to the kong database.
+    This is modeled closely after the interactive pseudo-shell from :class:`kong.repl.Repl`,
+    but is pure python. (Actually, :class:`kong.repl.Repl` is implemented entirely on top of
+    :class:`kong.state.State`, with argument parsing and result printing)
+    """
+
     def __init__(self, config: config.Config, cwd: Folder) -> None:
+        """
+        Initializer for the state class. Takes an instance of :class:`kong.config.Config`
+        and a current working directory to start out in.
+
+        Parameters
+        ----------
+        config
+            The config to initialize with
+        cwd: kong.model.Folder
+            Current working directory to start in
+        """
         self.config = config
         self.cwd = cwd
         self.default_driver: DriverBase = get_driver(self.config.default_driver)(
@@ -68,6 +98,16 @@ class State:
 
     @contextmanager  # type: ignore
     def pushd(self, folder: Union["Folder", str]) -> Iterator[None]:
+        """
+        Contextmanager to temporarily change the current working directory.
+
+        Parameters
+        ----------
+        folder: kong.model.Folder|str
+            Folder instance or path string to change into
+
+        """
+
         prev = self.cwd
 
         if isinstance(folder, Folder):
@@ -86,6 +126,13 @@ class State:
 
     @classmethod
     def get_instance(cls) -> "State":
+        """
+        Create an instance of :class:`kong.state.State`, by reading the default config, and preparing the database.
+        The returned state object can be used for stateful work with the kong database.
+
+        Returns:
+            kong.state.State: A state object
+        """
         cfg = config.Config()
         logger.debug("Initialized config: %s", cfg.data)
 
@@ -125,7 +172,15 @@ class State:
     def ls(
         self, path: str = ".", refresh: bool = False, recursive: bool = False
     ) -> Tuple[List["Folder"], List["Job"]]:
-        "List the current directory content"
+        """
+        Lists the current directory content.
+
+        :param path: The path to list the content for.
+        :param refresh:  Flag to indicate whether job statuses should be refreshed.
+        :param recursive: Descent into the folder hierarchy to find all jobs and list them.
+        :return: Both folders and jobs that were found in the instructed manner.
+        """
+
         logger.debug("%s", list(self.cwd.children))
         folder = Folder.find_by_path(self.cwd, path)
         if folder is None:
@@ -142,6 +197,11 @@ class State:
         return list(folder.children), jobs
 
     def cd(self, target: Union[str, Folder] = ".") -> None:
+        """
+        Change the current working directory.
+
+        :param target: String path or folder instance to change into.
+        """
         if isinstance(target, str):
             if target == "":
                 folder = Folder.get_root()
@@ -221,6 +281,12 @@ class State:
     def mv(
         self, source: Union[str, Job, Folder], dest: Union[str, Folder]
     ) -> List[Union[Job, Folder]]:
+        """
+        Move a folder or job
+        :param source:
+        :param dest:
+        :return:
+        """
         # source might be: a job or a folder
         if isinstance(source, Folder):
             self._mv_folder(source, dest)
