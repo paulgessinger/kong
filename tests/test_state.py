@@ -738,7 +738,11 @@ def test_get_folders_jobs_pattern(state):
 
     globbed_beta = state.get_jobs("beta_*/*")
     assert len(globbed_beta) == len(jobs_beta)
-    assert all(a == b for a, b in zip(globbed_beta, jobs_beta))
+    jobid = lambda j: j.job_id
+    assert all(
+        a == b
+        for a, b in zip(sorted(globbed_beta, key=jobid), sorted(jobs_beta, key=jobid))
+    )
 
 
 def test_get_jobs_range(state):
