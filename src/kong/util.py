@@ -79,7 +79,8 @@ def Spinner(
 ) -> Iterator[Halo]:
     stream = kwargs.get("stream", sys.stdout)
     if "spinner" not in kwargs:
-        kwargs["spinner"] = "bouncingBar"
+        kwargs["spinner"] = "line"
+        kwargs["interval"] = 80
     if stream.isatty():
         spinner = Halo(text, *args, **kwargs)  # type: ignore
         spinner.start()

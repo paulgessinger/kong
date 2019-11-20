@@ -103,7 +103,7 @@ class ShellSlurmInterface(SlurmInterface):
     def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
 
         logger.debug("Getting job info for %d jobs", len(jobs))
-        starttime = date.today() - timedelta(days=7)
+        starttime = date.today() - timedelta(weeks=3)
 
         args = dict(
             brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
