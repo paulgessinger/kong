@@ -382,7 +382,6 @@ def test_run_job_already_completed(driver, state):
     assert j1.status == Job.Status.COMPLETED
 
 
-
 @skip_lxplus
 def test_run_job_timeout(driver, state):
     root = Folder.get_root()

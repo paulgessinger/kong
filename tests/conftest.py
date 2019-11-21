@@ -12,7 +12,11 @@ from kong.model import Folder, Job
 import kong.setup
 import kong
 
-skip_lxplus = pytest.mark.skipif(socket.gethostname().startswith("lxplus"), reason="Lxplus doesn't allow access to proc info")
+skip_lxplus = pytest.mark.skipif(
+    socket.gethostname().startswith("lxplus"),
+    reason="Lxplus doesn't allow access to proc info",
+)
+
 
 @pytest.yield_fixture
 def db():

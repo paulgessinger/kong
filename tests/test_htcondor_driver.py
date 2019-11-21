@@ -18,6 +18,7 @@ from kong.drivers.htcondor_driver import (
 from kong.model import Job, Folder
 from kong.util import is_executable
 
+
 @pytest.fixture
 def driver(monkeypatch, state):
     # set some config values
@@ -32,6 +33,7 @@ def driver(monkeypatch, state):
     sif.config = state.config.htcondor_driver
 
     return HTCondorDriver(state.config, sif)
+
 
 def test_condor_q(driver, monkeypatch, state):
     condor_q_output = """
@@ -112,17 +114,20 @@ def test_condor_q(driver, monkeypatch, state):
         for a, b in zip(ref, res):
             assert a == b
 
+
 def test_condor_q_empty(driver, monkeypatch, state):
     mock = Mock(return_value="")
     monkeypatch.setattr(driver.htcondor, "_condor_q", mock)
     res = list(driver.htcondor.condor_q())
     assert res == []
 
+
 def test_condor_history_empty(driver, monkeypatch, state):
     mock = Mock(return_value="")
     monkeypatch.setattr(driver.htcondor, "_condor_history", mock)
     res = list(driver.htcondor.condor_history())
     assert res == []
+
 
 def test_condor_history(driver, monkeypatch, state):
     condor_history_output = """
@@ -206,7 +211,12 @@ def test_condor_history(driver, monkeypatch, state):
         res = list(driver.htcondor.condor_history())
 
         mock.assert_called_once_with(
-            ANY, "-attributes", "ClusterId,ProcId,JobStatus,ExitCode", "-json", "-limit", ANY
+            ANY,
+            "-attributes",
+            "ClusterId,ProcId,JobStatus,ExitCode",
+            "-json",
+            "-limit",
+            ANY,
         )
 
         ref = [
@@ -226,6 +236,7 @@ def test_condor_history(driver, monkeypatch, state):
         for a, b in zip(ref, res):
             assert a == b
 
+
 def test_condor_submit_rm(driver, monkeypatch, state):
     condor_submit_output = """
 Submitting job(s).
@@ -234,7 +245,9 @@ Submitting job(s).
 
     with monkeypatch.context() as m:
         batch_job_id = 5184660
-        condor_submit = Mock(return_value=condor_submit_output.format(batch_job_id=batch_job_id))
+        condor_submit = Mock(
+            return_value=condor_submit_output.format(batch_job_id=batch_job_id)
+        )
         m.setattr(driver.htcondor, "_condor_submit", condor_submit)
         job = Job()
         job.data["batchfile"] = "somefile.sh"
@@ -249,9 +262,11 @@ Submitting job(s).
         driver.htcondor.condor_rm(job)
         condor_rm.assert_called_once_with(batch_job_id)
 
+
 def test_repr():
     htai = HTCondorAccountingItem(1, Job.Status.UNKNOWN, 0)
     assert repr(htai) != ""
+
 
 def test_create_job(driver, state):
     root = Folder.get_root()
@@ -265,7 +280,7 @@ def test_create_job(driver, state):
         walltime=timedelta(hours=5),
     )
 
-    extra = "requirements = (OpSysAndVer =?= \"CentOS7\")"
+    extra = 'requirements = (OpSysAndVer =?= "CentOS7")'
     driver.htcondor_config["submitfile_extra"] = extra
 
     assert j1.status == Job.Status.CREATED
@@ -277,10 +292,8 @@ def test_create_job(driver, state):
     assert os.path.exists(j1.data["batchfile"])
     assert is_executable(j1.data["jobscript"])
 
-    j2 = driver.create_job(
-        command="sleep 1", walltime="03:00:00", folder=root
-    )
-    assert j2.data["walltime"] == 3*60*60
+    j2 = driver.create_job(command="sleep 1", walltime="03:00:00", folder=root)
+    assert j2.data["walltime"] == 3 * 60 * 60
 
     with open(j2.data["jobscript"]) as f:
         jobscript = f.read()
@@ -293,13 +306,7 @@ def test_create_job(driver, state):
         batchfile = f.read()
         assert str(j2.cores) in batchfile
         assert str(j2.memory) in batchfile
-        for v in [
-            "name",
-            "htcondor_out",
-            "universe",
-            "walltime",
-            "jobscript",
-        ]:
+        for v in ["name", "htcondor_out", "universe", "walltime", "jobscript"]:
             assert str(j2.data[v]) in batchfile
 
     assert extra in batchfile
@@ -320,7 +327,6 @@ def test_submit_job(driver, state, monkeypatch):
         name="job1",
         walltime=timedelta(hours=5),
     )
-
 
     assert j1.status == Job.Status.CREATED
 
@@ -343,6 +349,7 @@ def test_submit_job(driver, state, monkeypatch):
 
     assert j1.status == Job.Status.SUBMITTED
     assert j1.batch_job_id == str(batch_job_id)
+
 
 def test_resubmit_job(driver, state, monkeypatch):
     root = Folder.get_root()
@@ -539,6 +546,7 @@ def test_stdout_stderr(driver, state, monkeypatch):
     with pytest.raises(NotImplementedError):
         driver.stderr(j1)
 
+
 def test_sync_status(driver, monkeypatch):
     root = Folder.get_root()
     j1 = driver.create_job(command="sleep 1", folder=root)
@@ -550,7 +558,9 @@ def test_sync_status(driver, monkeypatch):
     assert j1.status == Job.Status.CREATED
 
     batch_job_id = 5_207_375
-    monkeypatch.setattr(driver.htcondor, "condor_submit", Mock(return_value=batch_job_id))
+    monkeypatch.setattr(
+        driver.htcondor, "condor_submit", Mock(return_value=batch_job_id)
+    )
     driver.submit(j1)
     assert j1.status == Job.Status.SUBMITTED
     assert j1.batch_job_id == str(batch_job_id)
@@ -567,6 +577,7 @@ def test_sync_status(driver, monkeypatch):
     assert j1.status == Job.Status.RUNNING
     j1 = driver.sync_status(j1)
     assert j1.status == Job.Status.FAILED
+
 
 def test_bulk_create(driver, state):
     root = Folder.get_root()
@@ -590,7 +601,7 @@ def test_bulk_submit(driver, state, monkeypatch):
     for job in jobs:
         assert job.status == Job.Status.CREATED
 
-    condor_submit = Mock(side_effect=[i+1 for i in range(len(jobs))])
+    condor_submit = Mock(side_effect=[i + 1 for i in range(len(jobs))])
 
     monkeypatch.setattr(driver.htcondor, "condor_submit", condor_submit)
     driver.bulk_submit(jobs)
@@ -600,6 +611,7 @@ def test_bulk_submit(driver, state, monkeypatch):
     for job in jobs:
         assert job.status == Job.Status.SUBMITTED
         assert str(job.job_id) == job.batch_job_id
+
 
 def test_bulk_sync_status(driver, state, monkeypatch):
 
@@ -620,8 +632,9 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     HTAI = HTCondorAccountingItem
 
-    condor_q = Mock(return_value=[HTAI(i+1, Job.Status.RUNNING, -1) for i in range(len(jobs))])
-
+    condor_q = Mock(
+        return_value=[HTAI(i + 1, Job.Status.RUNNING, -1) for i in range(len(jobs))]
+    )
 
     # pretend they're all running now
 
@@ -632,17 +645,22 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         jobs = driver.bulk_sync_status(jobs)
 
         driver.htcondor.condor_history.assert_called_once_with()
-        condor_q.assert_called_once_with(
-        )
+        condor_q.assert_called_once_with()
 
     for job in jobs:
         assert job.status == Job.Status.RUNNING
 
-
     with monkeypatch.context() as m:
         condor_history = Mock(
-            return_value=[HTAI(i + 1, Job.Status.COMPLETED if i < 6 else Job.Status.FAILED, 0 if i < 6 else 1) for i in
-                          range(len(jobs))])
+            return_value=[
+                HTAI(
+                    i + 1,
+                    Job.Status.COMPLETED if i < 6 else Job.Status.FAILED,
+                    0 if i < 6 else 1,
+                )
+                for i in range(len(jobs))
+            ]
+        )
         m.setattr(driver.htcondor, "condor_history", condor_history)
         m.setattr(driver.htcondor, "condor_q", Mock(return_value=[]))
 
@@ -654,6 +672,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         assert job.status == Job.Status.COMPLETED
     for job in jobs[6:]:
         assert job.status == Job.Status.FAILED
+
 
 def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
 
@@ -672,11 +691,14 @@ def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
     condor_history_return = [HTAI(12_345_665, Job.Status.UNKNOWN, 0)]
     # pretend they're all running now
     monkeypatch.setattr(driver.htcondor, "condor_q", Mock(return_value=condor_q_return))
-    monkeypatch.setattr(driver.htcondor, "condor_history", Mock(return_value=condor_history_return))
+    monkeypatch.setattr(
+        driver.htcondor, "condor_history", Mock(return_value=condor_history_return)
+    )
     jobs = driver.bulk_sync_status(jobs)
 
     for job in jobs:
         assert job.status == Job.Status.RUNNING
+
 
 def test_kill_job(driver, state, monkeypatch):
     root = Folder.get_root()
@@ -701,6 +723,7 @@ def test_kill_job(driver, state, monkeypatch):
 
     driver.kill(j1)
     assert j1.status == Job.Status.FAILED
+
 
 def test_bulk_kill(driver, state, monkeypatch):
     root = Folder.get_root()
@@ -732,6 +755,7 @@ def test_bulk_kill(driver, state, monkeypatch):
 
     for job in jobs:
         assert job.status == Job.Status.FAILED
+
 
 def test_wait(driver, state, monkeypatch):
     root = Folder.get_root()
@@ -805,6 +829,7 @@ def test_wait(driver, state, monkeypatch):
         job.reload()
         assert job.status == Job.Status.COMPLETED
 
+
 def test_wait_single(driver, monkeypatch):
     root = Folder.get_root()
     j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
@@ -824,6 +849,7 @@ def test_wait_single(driver, monkeypatch):
 
     with pytest.raises(TypeError):
         driver.wait("nope")
+
 
 def test_cleanup_driver(driver, state, monkeypatch):
     root = Folder.get_root()
@@ -872,7 +898,7 @@ def test_cleanup_driver_already_deleted(driver, state, monkeypatch):
     assert not os.path.exists(j1.data["log_dir"])
     rmtree = Mock(wraps=util.rmtree)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.slurm_driver.rmtree", rmtree)
+        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
         driver.cleanup(j1)
     rmtree.assert_has_calls([call(j1.data["output_dir"])])
 
@@ -909,7 +935,7 @@ def test_job_bulk_cleanup(driver, state, monkeypatch):
 
     rmtree = Mock(side_effect=OSError)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.slurm_driver.rmtree", rmtree)
+        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
     rmtree.assert_has_calls(
         [

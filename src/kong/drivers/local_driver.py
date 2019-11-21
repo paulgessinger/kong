@@ -14,6 +14,7 @@ from typing import (
     Collection,
     Iterator,
     cast,
+    Sequence,
 )
 import uuid
 
@@ -143,7 +144,7 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
+    def bulk_cleanup(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
         for job in jobs:
             self.cleanup(job)
         return jobs
@@ -153,7 +154,7 @@ class LocalDriver(DriverBase):
         self.cleanup(job)
         job.delete_instance()
 
-    def bulk_remove(self, jobs: Collection["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
         for job in jobs:
             self.remove(job)
 
@@ -215,7 +216,7 @@ class LocalDriver(DriverBase):
                 job.save()
         return job
 
-    def bulk_sync_status(self, jobs: Collection[Job]) -> Iterable[Job]:
+    def bulk_sync_status(self, jobs: Sequence[Job]) -> Sequence[Job]:
         # simply implemented as loop over single sync status for local driver
         now = datetime.datetime.now()
 
@@ -251,7 +252,7 @@ class LocalDriver(DriverBase):
         if save:
             job.save()
 
-    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable[Job]:
+    def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence[Job]:
         now = datetime.datetime.now()
 
         def k() -> Iterable[Job]:

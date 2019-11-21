@@ -1,23 +1,18 @@
 import datetime
 import itertools
 import json
-import time
 import os
 import re
 from abc import ABC, abstractmethod
-from concurrent.futures.thread import ThreadPoolExecutor
-from contextlib import contextmanager
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import (
     Any,
     Iterator,
     Iterable,
     Optional,
-    ContextManager,
     Union,
     List,
     Dict,
-    IO,
     Sequence,
     cast,
     Collection,
@@ -26,13 +21,13 @@ from typing import (
 import sh
 from jinja2 import Environment, DictLoader
 
-from kong.drivers.slurm_driver import SlurmDriver
-from ..drivers import InvalidJobStatus
+from .batch_driver_base import BatchDriverBase
+from . import InvalidJobStatus
 from ..logger import logger
 from ..config import Config, htcondor_schema
 from ..db import database
 from ..model import Job, Folder
-from ..util import make_executable, rmtree, format_timedelta, parse_timedelta, chunks
+from ..util import make_executable, parse_timedelta
 from .driver_base import DriverBase, checked_job
 
 
@@ -47,9 +42,10 @@ class HTCondorAccountingItem:
         self.status = status
         self.exit_code = exit_code
 
-
     @classmethod
-    def from_parts(cls, job_id: int, condor_status: int, exit_code: int) -> "HTCondorAccountingItem":
+    def from_parts(
+        cls, job_id: int, condor_status: int, exit_code: int
+    ) -> "HTCondorAccountingItem":
         # see http://pages.cs.wisc.edu/~adesmet/status.html
 
         if condor_status == 0:
@@ -96,9 +92,7 @@ class HTCondorAccountingItem:
 
 class HTCondorInterface(ABC):
     @abstractmethod
-    def condor_submit(
-        self, job: Job
-    ) -> int:
+    def condor_submit(self, job: Job) -> int:
         raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
@@ -131,7 +125,7 @@ class ShellHTCondorInterface(HTCondorInterface):
         self._condor_history = sh.Command("condor_history")
         self._condor_rm = sh.Command("condor_rm")
 
-    def _parse_output(self, output: str)-> Iterator[HTCondorAccountingItem]:
+    def _parse_output(self, output: str) -> Iterator[HTCondorAccountingItem]:
         if output.strip() == "":
             return []
         data = json.loads(output)
@@ -142,35 +136,23 @@ class ShellHTCondorInterface(HTCondorInterface):
             exit_code = item["ExitCode"] if "ExitCode" in item else -1
             yield HTCondorAccountingItem.from_parts(job_id, condor_status, exit_code)
 
-    def condor_q(
-        self
-    ) -> Iterator[HTCondorAccountingItem]:
+    def condor_q(self) -> Iterator[HTCondorAccountingItem]:
 
         logger.debug("Getting job infos")
 
-        args = [
-            "-attributes",
-            ",".join(
-                ["ClusterId", "ProcId", "JobStatus"]
-            ),
-            "-json",
-        ]
+        args = ["-attributes", ",".join(["ClusterId", "ProcId", "JobStatus"]), "-json"]
 
         assert self._condor_q is not None
         return self._parse_output(str(self._condor_q(*args)))
 
-    def condor_history(
-        self
-    ) -> Iterator[HTCondorAccountingItem]:
+    def condor_history(self) -> Iterator[HTCondorAccountingItem]:
 
         logger.debug("Getting job infos")
 
         args = [
             self.config["user"],
             "-attributes",
-            ",".join(
-                ["ClusterId", "ProcId", "JobStatus", "ExitCode"]
-            ),
+            ",".join(["ClusterId", "ProcId", "JobStatus", "ExitCode"]),
             "-json",
             "-limit",
             "10000",
@@ -178,7 +160,6 @@ class ShellHTCondorInterface(HTCondorInterface):
 
         assert self._condor_history is not None
         return self._parse_output(str(self._condor_history(*args)))
-
 
     def condor_submit(self, job: Job) -> int:
         assert self._condor_submit is not None
@@ -233,12 +214,14 @@ batchfile_tpl = env.get_template("batchfile")
 jobscript_tpl = env.get_template("jobscript")
 
 
-class HTCondorDriver(SlurmDriver):
+class HTCondorDriver(BatchDriverBase):
     htcondor: HTCondorInterface
 
     def __init__(self, config: Config, htcondor: Optional[HTCondorInterface] = None):
         DriverBase.__init__(self, config)
-        self.htcondor_config = htcondor_schema.validate(self.config.data.get("htcondor_driver", {}))
+        self.htcondor_config = htcondor_schema.validate(
+            self.config.data.get("htcondor_driver", {})
+        )
         self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
 
     def create_job(
@@ -250,7 +233,7 @@ class HTCondorDriver(SlurmDriver):
         universe: Optional[str] = None,
         name: Optional[str] = None,
         walltime: Union[timedelta, str] = timedelta(minutes=30),
-    ) -> "Job": # type: ignore
+    ) -> "Job":  # type: ignore
 
         if universe is None:
             universe = self.htcondor_config["default_universe"]
@@ -302,7 +285,7 @@ class HTCondorDriver(SlurmDriver):
             exit_code=0,
             universe=universe,
             walltime=norm_walltime,
-            submitfile_extra=self.htcondor_config["submitfile_extra"]
+            submitfile_extra=self.htcondor_config["submitfile_extra"],
         )
         job.save()
 
@@ -320,7 +303,7 @@ class HTCondorDriver(SlurmDriver):
             universe=universe,
             name=name,
             walltime=norm_walltime,
-            submitfile_extra=self.htcondor_config["submitfile_extra"]
+            submitfile_extra=self.htcondor_config["submitfile_extra"],
         )
 
         batchfile_content = batchfile_tpl.render(**values)
@@ -346,7 +329,9 @@ class HTCondorDriver(SlurmDriver):
 
         def proc() -> Iterable[Job]:
             job_not_found = 0
-            for item in itertools.chain(self.htcondor.condor_q(), self.htcondor.condor_history()):
+            for item in itertools.chain(
+                self.htcondor.condor_q(), self.htcondor.condor_history()
+            ):
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
                     job_not_found += 1
