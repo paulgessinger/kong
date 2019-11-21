@@ -2,7 +2,6 @@ import os
 import random
 import shutil
 import time
-from io import StringIO
 
 import psutil
 import pytest
@@ -12,6 +11,7 @@ from kong.drivers import DriverMismatch, InvalidJobStatus
 from kong.drivers.local_driver import LocalDriver
 import kong
 from kong.model import Folder, Job
+from conftest import skip_lxplus
 
 
 @pytest.fixture
@@ -382,6 +382,8 @@ def test_run_job_already_completed(driver, state):
     assert j1.status == Job.Status.COMPLETED
 
 
+
+@skip_lxplus
 def test_run_job_timeout(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="sleep 0.3", folder=root)
@@ -413,6 +415,7 @@ def test_run_failed(driver, state):
     assert j2.data["exit_code"] == 127
 
 
+@skip_lxplus
 def test_run_killed(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="sleep 10", folder=root)
@@ -423,6 +426,7 @@ def test_run_killed(driver, state):
     assert j1.status == Job.Status.UNKNOWN
 
 
+@skip_lxplus
 def test_run_terminated(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
@@ -463,6 +467,7 @@ def test_run_kill(driver, state):
     assert j2.status == Job.Status.FAILED  # shouldn't change after waiting
 
 
+@skip_lxplus
 def test_bulk_submit(driver, state):
     root = Folder.get_root()
 
@@ -517,6 +522,7 @@ def test_bulk_kill(driver, state):
         assert job.status == Job.Status.FAILED
 
 
+@skip_lxplus
 def test_bulk_wait(driver, state):
     root = Folder.get_root()
 
@@ -578,6 +584,7 @@ def test_sync_status(driver, state, monkeypatch, tmpdir):
     assert j1u.status == Job.Status.FAILED
 
 
+@skip_lxplus
 def test_bulk_sync(driver, state):
     root = Folder.get_root()
 
@@ -612,6 +619,7 @@ def test_bulk_sync(driver, state):
             assert fh.read().strip() == f"JOB{i+sjobs}"
 
 
+@skip_lxplus
 def test_job_resubmit(driver, state, monkeypatch):
     root = Folder.get_root()
     j1 = driver.create_job(
@@ -686,6 +694,7 @@ def test_resubmit_invalid_status(driver, state, monkeypatch):
             driver.resubmit(j1)
 
 
+@skip_lxplus
 def test_job_bulk_resubmit(driver, state, monkeypatch):
     root = Folder.get_root()
 

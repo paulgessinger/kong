@@ -1,6 +1,7 @@
 import os
 import typing
 import socket
+import getpass
 
 import click
 import yaml
@@ -21,6 +22,14 @@ slurm_schema = Schema(
     }
 )
 
+htcondor_schema = Schema(
+    {
+        Optional("user", default=getpass.getuser()): And(str, len),
+        Optional("default_universe", default="vanilla"): And(str, len),
+        Optional("submitfile_extra", default=""): str,
+    }
+)
+
 config_schema = Schema(
     {
         Optional(
@@ -34,6 +43,7 @@ config_schema = Schema(
         ): os.path.exists,
         Optional("history_length", default=1000): int,
         Optional("slurm_driver"): slurm_schema,
+        Optional("htcondor_driver"): htcondor_schema,
         Optional("notify", default=[]): [{"name": str, Optional(object): object}],
         Optional(object): object,
     }

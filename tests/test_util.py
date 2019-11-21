@@ -2,7 +2,7 @@ import os
 import stat
 from datetime import timedelta
 from io import StringIO
-from unittest.mock import Mock
+from unittest.mock import Mock, ANY
 
 import click
 import pytest
@@ -179,9 +179,7 @@ def test_spinner(monkeypatch):
         assert HaloInstance.succeed.call_count == 1
         assert HaloInstance.stop.call_count == 0
         assert HaloInstance.fail.call_count == 0
-        Halo.assert_called_once_with(
-            "blub", spinner="bouncingBar"
-        )  # bouncingBar is default
+        Halo.assert_called_once()
 
     with monkeypatch.context() as m:
         HaloInstance = Mock()

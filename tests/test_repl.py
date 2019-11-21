@@ -6,6 +6,7 @@ import pytest
 from unittest import mock
 from unittest.mock import Mock, ANY
 import peewee as pw
+from conftest import skip_lxplus
 
 from kong.model import Folder, Job
 from kong.repl import Repl, complete_path
@@ -60,6 +61,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         repl.onecmd("ls -R /")
 
 
+@skip_lxplus
 def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     repl.do_ls(".")
     out, err = capsys.readouterr()
@@ -638,6 +640,7 @@ def test_create_job(repl, state, tree, capsys):
     assert j4.command == "exe --and --some arguments --and options"
 
 
+@skip_lxplus
 def test_submit_job(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
     value = "VALUE VALUE VALUE"
@@ -714,6 +717,7 @@ def test_resubmit_job(repl, state, capsys, monkeypatch):
     assert "no such option" in out
 
 
+@skip_lxplus
 def test_status_update(repl, state, capsys):
     root = Folder.get_root()
 

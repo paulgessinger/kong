@@ -192,8 +192,7 @@ class SlurmDriver(DriverBase):
     def __init__(self, config: Config, slurm: Optional[SlurmInterface] = None):
         self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
-        assert "slurm_driver" in self.config.data
-        self.slurm_config = slurm_schema.validate(self.config.slurm_driver)
+        self.slurm_config = slurm_schema.validate(self.config.data.get("slurm_driver", {}))
 
     def create_job(
         self,
@@ -325,8 +324,8 @@ class SlurmDriver(DriverBase):
                 job.updated_at = now
                 yield job
             if job_not_found > 0:
-                logger.warning(
-                    "Tried to fetch %d slurm jobs which where not found in the database",
+                logger.info(
+                    "Tried to fetch %d jobs which where not found in the database",
                     job_not_found,
                 )
 

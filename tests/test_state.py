@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from conftest import skip_lxplus
 
 import pytest
 from unittest.mock import Mock, MagicMock, ANY
@@ -77,6 +78,7 @@ def test_ls(tree, state, sample_jobs):
     assert all(a == b for a, b in zip(jobs, f2.jobs))
 
 
+@skip_lxplus
 def test_ls_refresh(tree, state, sample_jobs):
     _, jobs = state.ls(".")
     for job in sample_jobs:
@@ -129,6 +131,7 @@ class ValidDriver(kong.drivers.local_driver.LocalDriver):
         return job
 
 
+@skip_lxplus
 def test_refresh_jobs(state, sample_jobs, monkeypatch):
     _, jobs = state.ls(".")
     for job in jobs:
@@ -930,6 +933,7 @@ def test_job_resubmit_recursive(state, sample_jobs):
     assert all(j.status == Job.Status.SUBMITTED for j in sample_jobs)
 
 
+@skip_lxplus
 def test_job_resubmit_failed_only(state):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 0.1")

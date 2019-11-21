@@ -593,7 +593,7 @@ class State:
                     s.text = f"Waiting for {len(jobs)} jobs: {', '.join(out)}"
                     yield cur_jobs
 
-            driver.bulk_sync_status(orig_jobs)
+            orig_jobs = list(driver.bulk_sync_status(orig_jobs))
             counts = {k: 0 for k in Job.Status}
             for job in orig_jobs:
                 counts[job.status] += 1
