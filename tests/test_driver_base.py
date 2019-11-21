@@ -5,6 +5,7 @@ import inspect
 
 from kong.drivers import DriverMismatch
 from kong.drivers.driver_base import DriverBase, checked_job
+from kong.model import Job
 
 
 @pytest.fixture
@@ -25,16 +26,20 @@ def test_driver_base_all_methods(driver):
     excl = ["__init__", "_check_driver"]
 
     for name, method in methods:
-        if name in excl:
+        if not hasattr(method, "__isabstractmethod__"):
+            continue
+
+        if not method.__isabstractmethod__:
             continue
 
         sig = inspect.signature(method)
 
         args = len(sig.parameters) * [None]
 
-        with pytest.raises(NotImplementedError):
+        try:
             method(*args)
-
+        except NotImplementedError:
+            pass
 
 def test_init(noabc, state):
     DriverBase(None)
@@ -88,3 +93,32 @@ def test_wait(driver, monkeypatch):
 
     driver.wait("*", progress=False)
     assert wait_gen.call_count == 1
+
+def test_make_log_path(driver, monkeypatch):
+        monkeypatch.setitem(driver.config.data, "jobdir", "JOB_BASE")
+
+        job = Mock()
+
+        job.job_id = 123456
+        assert driver.make_log_path(job).endswith("JOB_BASE/12/34/123456")
+
+        job.job_id = 994784367
+        assert driver.make_log_path(job).endswith("JOB_BASE/99/47/994784367")
+
+        job.job_id = 456
+        assert driver.make_log_path(job).endswith("JOB_BASE/04/56/000456")
+
+
+def test_make_output_path(driver, monkeypatch):
+    monkeypatch.setitem(driver.config.data, "joboutputdir", "JOB_BASE")
+
+    job = Mock()
+
+    job.job_id = 123456
+    assert driver.make_output_path(job).endswith("JOB_BASE/12/34/123456")
+
+    job.job_id = 994784367
+    assert driver.make_output_path(job).endswith("JOB_BASE/99/47/994784367")
+
+    job.job_id = 456
+    assert driver.make_output_path(job).endswith("JOB_BASE/04/56/000456")

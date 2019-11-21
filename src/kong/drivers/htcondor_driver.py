@@ -251,14 +251,10 @@ class HTCondorDriver(BatchDriverBase):
             name = f"kong_job_{job.job_id}"
 
         # in job dir, create output dir
-        output_dir = os.path.abspath(
-            os.path.join(self.config.joboutputdir, f"{job.job_id:>06d}")
-        )
+        output_dir = self.make_output_path(job)
         os.makedirs(output_dir, exist_ok=True)
 
-        log_dir = os.path.abspath(
-            os.path.join(self.config.jobdir, f"{job.job_id:>06d}")
-        )
+        log_dir = self.make_log_path(job)
         os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))

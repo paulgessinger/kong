@@ -145,3 +145,16 @@ class DriverBase(ABC):  # pragma: no-cover
     @abstractmethod
     def bulk_remove(self, jobs: Sequence["Job"]) -> None:
         raise NotImplementedError()
+
+
+    def make_log_path(self, job: "Job") -> str:
+        job_str = f"{job.job_id:>04d}"
+        return os.path.abspath(
+            os.path.join(self.config.jobdir, job_str[:2], job_str[2:4], f"{job.job_id:>06d}")
+        )
+
+    def make_output_path(self, job: "Job") -> str:
+        job_str = f"{job.job_id:>04d}"
+        return os.path.abspath(
+            os.path.join(self.config.joboutputdir,  job_str[:2], job_str[2:4], f"{job.job_id:>06d}")
+        )
