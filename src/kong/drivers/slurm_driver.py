@@ -210,7 +210,6 @@ class SlurmDriver(BatchDriverBase):
         if name is None:
             name = f"kong_job_{job.job_id}"
 
-
         # in job dir, create output dir
         output_dir = self.make_output_path(job)
         os.makedirs(output_dir, exist_ok=True)
