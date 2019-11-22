@@ -346,7 +346,7 @@ class Repl(cmd.Cmd):
                 click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
             click.echo("data:")
             for k, v in job.data.items():
-                click.secho(f"{k}: {v}")
+                click.secho(f"- {k}: {v}")
 
     @parse_arguments
     @click.argument("job")

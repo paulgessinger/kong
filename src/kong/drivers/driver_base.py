@@ -10,6 +10,7 @@ from typing import (
     TYPE_CHECKING,
     Dict,
     Collection,
+    Sequence,
 )
 from abc import abstractmethod, ABC
 
@@ -69,15 +70,15 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_sync_status(self, jobs: Collection["Job"]) -> Iterable["Job"]:
+    def bulk_sync_status(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
-    def kill(self, job: "Job") -> "Job":
+    def kill(self, job: "Job", save: bool = True) -> "Job":
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable["Job"]:
+    def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -104,7 +105,7 @@ class DriverBase(ABC):  # pragma: no-cover
             return None
 
     @abstractmethod
-    def submit(self, job: "Job") -> None:
+    def submit(self, job: "Job", save: bool = True) -> None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -134,7 +135,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
+    def bulk_cleanup(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -142,5 +143,24 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_remove(self, jobs: Collection["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
         raise NotImplementedError()
+
+    def make_log_path(self, job: "Job") -> str:
+        job_str = f"{job.job_id:>04d}"
+        return os.path.abspath(
+            os.path.join(
+                self.config.jobdir, job_str[:2], job_str[2:4], f"{job.job_id:>06d}"
+            )
+        )
+
+    def make_output_path(self, job: "Job") -> str:
+        job_str = f"{job.job_id:>04d}"
+        return os.path.abspath(
+            os.path.join(
+                self.config.joboutputdir,
+                job_str[:2],
+                job_str[2:4],
+                f"{job.job_id:>06d}",
+            )
+        )

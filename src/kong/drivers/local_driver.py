@@ -14,6 +14,7 @@ from typing import (
     Collection,
     Iterator,
     cast,
+    Sequence,
 )
 import uuid
 
@@ -70,14 +71,10 @@ class LocalDriver(DriverBase):
         )
 
         # in job dir, create output dir
-        output_dir = os.path.abspath(
-            os.path.join(self.config.joboutputdir, f"{job.job_id:>06d}")
-        )
+        output_dir = self.make_output_path(job)
         os.makedirs(output_dir, exist_ok=True)
 
-        log_dir = os.path.abspath(
-            os.path.join(self.config.jobdir, f"{job.job_id:>06d}")
-        )
+        log_dir = self.make_log_path(job)
         os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
@@ -143,7 +140,7 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Collection["Job"]) -> Collection["Job"]:
+    def bulk_cleanup(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
         for job in jobs:
             self.cleanup(job)
         return jobs
@@ -153,7 +150,7 @@ class LocalDriver(DriverBase):
         self.cleanup(job)
         job.delete_instance()
 
-    def bulk_remove(self, jobs: Collection["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
         for job in jobs:
             self.remove(job)
 
@@ -215,7 +212,7 @@ class LocalDriver(DriverBase):
                 job.save()
         return job
 
-    def bulk_sync_status(self, jobs: Collection[Job]) -> Iterable[Job]:
+    def bulk_sync_status(self, jobs: Sequence[Job]) -> Sequence[Job]:
         # simply implemented as loop over single sync status for local driver
         now = datetime.datetime.now()
 
@@ -251,7 +248,7 @@ class LocalDriver(DriverBase):
         if save:
             job.save()
 
-    def bulk_kill(self, jobs: Collection["Job"]) -> Iterable[Job]:
+    def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence[Job]:
         now = datetime.datetime.now()
 
         def k() -> Iterable[Job]:

@@ -97,7 +97,7 @@ def test_repl_raises(app_env, db, cli, monkeypatch):
     assert result.exception is not None
 
 
-def test_interative(app_env, cli, monkeypatch):
+def test_interactive(app_env, cli, monkeypatch):
     mock = Mock()
     monkeypatch.setattr("IPython.embed", mock)
 
