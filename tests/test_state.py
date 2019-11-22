@@ -967,7 +967,7 @@ def test_wait(state, monkeypatch):
     driver = Mock()
     driver.wait = Mock()
     driver.wait.return_value = iter(jobs)
-    driver.bulk_sync_status = Mock(return_value=[])
+    driver.bulk_sync_status = Mock(return_value=jobs[0])
 
     factory = Mock(return_value=driver)
     monkeypatch.setattr("kong.drivers.local_driver.LocalDriver", factory)
