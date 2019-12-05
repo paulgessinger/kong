@@ -4,6 +4,7 @@ import cmd
 import readline
 import os
 import sys
+import time
 from typing import Any, Callable, List, Optional, Union, Iterable
 import shutil
 
@@ -128,11 +129,11 @@ class Repl(cmd.Cmd):
     def onecmd(self, *args: str) -> bool:
         try:
             res = super().onecmd(*args)
-            logger.debug(
-                "Writing history of length %d to file %s",
-                self.state.config.history_length,
-                history_file,
-            )
+            # logger.debug(
+            #     "Writing history of length %d to file %s",
+            #     self.state.config.history_length,
+            #     history_file,
+            # )
             readline.set_history_length(self.state.config.history_length)
             readline.write_history_file(history_file)
             return res
@@ -145,7 +146,8 @@ class Repl(cmd.Cmd):
     @click.argument("dir", default="", required=False)
     @click.option("--refresh", "-r", is_flag=True)
     @click.option("--recursive", "-R", is_flag=True)
-    def do_ls(self, dir: str, refresh: bool, recursive: bool) -> None:
+    @click.option("--jobs", "show_jobs", is_flag=True)
+    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_jobs: bool) -> None:
         "List the current directory content"
         try:
             width, height = shutil.get_terminal_size((80, 40))
@@ -161,6 +163,8 @@ class Repl(cmd.Cmd):
                     for folder in folders:
                         self.state.refresh_jobs(folder.jobs_recursive())
                     folders, jobs = self.state.ls(dir, refresh=False)
+                    if show_jobs:
+                        jobs = sum([f.jobs_recursive() for f in folders], [])
 
             if len(folders) > 0:
                 folder_name_length = max([len(f.name) for f in folders])
@@ -429,7 +433,13 @@ class Repl(cmd.Cmd):
         job = jobs[0]
 
         if not os.path.exists(job.data["stdout"]):
-            raise ValueError(f"Job hasn't created stdout file yet {job.data['stdout']}")
+            with Spinner(
+                text=f"Waiting for job to create stdout file '{job.data['stdout']}'"
+            ):
+                while not os.path.exists(job.data["stdout"]):
+                    time.sleep(1)
+                logger.info("Outfile exists now")
+
         width, _ = shutil.get_terminal_size((80, 40))
         hw = width // 2
         click.echo("=" * hw + " STDOUT " + "=" * (width - hw - 8))
@@ -473,7 +483,7 @@ class Repl(cmd.Cmd):
 
     def preloop(self) -> None:
         if os.path.exists(history_file):
-            logger.debug("Loading history from %s", history_file)
+            # logger.debug("Loading history from %s", history_file)
             readline.read_history_file(history_file)
         else:
             logger.debug("No history file found")
