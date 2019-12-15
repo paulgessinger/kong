@@ -149,18 +149,11 @@ class DriverBase(ABC):  # pragma: no-cover
     def make_log_path(self, job: "Job") -> str:
         job_str = f"{job.job_id:>06d}"
         return os.path.abspath(
-            os.path.join(
-                self.config.jobdir, job_str[:2], job_str[2:4], job_str
-            )
+            os.path.join(self.config.jobdir, job_str[:2], job_str[2:4], job_str)
         )
 
     def make_output_path(self, job: "Job") -> str:
         job_str = f"{job.job_id:>06d}"
         return os.path.abspath(
-            os.path.join(
-                self.config.joboutputdir,
-                job_str[:2],
-                job_str[2:4],
-                job_str,
-            )
+            os.path.join(self.config.joboutputdir, job_str[:2], job_str[2:4], job_str)
         )

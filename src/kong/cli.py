@@ -1,13 +1,11 @@
-import contextlib
 import os
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 import click
 import coloredlogs
 
-from kong.config import Config
 from . import config
 from . import setup
 from .state import State
@@ -92,13 +90,13 @@ def interactive(state: State) -> None:
     IPython.embed(colors="neutral")
 
 
-
 cwd_file = Path(config.APP_DIR, "cwd.txt")
 
-def _wrap_repl_func(fn):
-    orig_fn = fn.__orig_fn__
 
-    def wrapped(state, *args, **kwargs):
+def _wrap_repl_func(fn: Callable[[Any, str], None]) -> Callable[[Any], None]:
+    orig_fn = fn.__orig_fn__  # type: ignore
+
+    def wrapped(state: State, *args: Any, **kwargs: Any) -> Any:
         if cwd_file.exists():
             with cwd_file.open("r") as fh:
                 state.cd(fh.read().strip())
@@ -106,13 +104,13 @@ def _wrap_repl_func(fn):
         return orig_fn(repl, *args, **kwargs)
 
     if hasattr(orig_fn, "__click_params__"):
-        wrapped.__click_params__ = orig_fn.__click_params__
-    wrapped.__doc__ = orig_fn.__doc__
+        wrapped.__click_params__ = orig_fn.__click_params__  # type: ignore
+    wrapped.__doc__ = orig_fn.__doc__  # type: ignore
 
     return wrapped
 
 
-def repl_func(fn, name=None):
+def repl_func(fn: Callable[[Any, str], None], name: Optional[str] = None) -> Any:
     if name is None:
         _, name = fn.__name__.split("_", 1)
     return main.command(name=name)(click.pass_obj(_wrap_repl_func(fn)))
@@ -137,6 +135,7 @@ for fn in [
 ]:
     repl_func(fn)
 
+
 @main.command()
 @click.pass_obj
 @click.argument("name", required=False, default="")
@@ -147,4 +146,3 @@ def cd(state: State, name: str) -> None:
     state.cd(name)
     with cwd_file.open("w") as f:
         f.write(state.cwd.path)
-

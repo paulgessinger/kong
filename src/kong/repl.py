@@ -99,7 +99,7 @@ def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
 
     wrapped.__doc__ = fn.__doc__  # type: ignore
     wrapped.__name__ = fn.__name__  # type: ignore
-    wrapped.__orig_fn__ = orig_fn
+    wrapped.__orig_fn__ = orig_fn  # type: ignore
 
     return wrapped
 
@@ -151,7 +151,9 @@ class Repl(cmd.Cmd):
     @click.option("--recursive", "-R", is_flag=True)
     @click.option("--jobs", "show_jobs", is_flag=True)
     @click.option("--json", "as_json", is_flag=True)
-    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_jobs: bool, as_json: bool) -> None:
+    def do_ls(
+        self, dir: str, refresh: bool, recursive: bool, show_jobs: bool, as_json: bool
+    ) -> None:
         "List the current directory content"
         try:
             width, height = shutil.get_terminal_size((80, 40))
