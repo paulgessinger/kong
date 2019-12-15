@@ -147,20 +147,20 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     def make_log_path(self, job: "Job") -> str:
-        job_str = f"{job.job_id:>04d}"
+        job_str = f"{job.job_id:>06d}"
         return os.path.abspath(
             os.path.join(
-                self.config.jobdir, job_str[:2], job_str[2:4], f"{job.job_id:>06d}"
+                self.config.jobdir, job_str[:2], job_str[2:4], job_str
             )
         )
 
     def make_output_path(self, job: "Job") -> str:
-        job_str = f"{job.job_id:>04d}"
+        job_str = f"{job.job_id:>06d}"
         return os.path.abspath(
             os.path.join(
                 self.config.joboutputdir,
                 job_str[:2],
                 job_str[2:4],
-                f"{job.job_id:>06d}",
+                job_str,
             )
         )

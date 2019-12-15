@@ -1,3 +1,4 @@
+import copy
 import datetime
 import shlex
 import cmd
@@ -78,6 +79,7 @@ def add_completion(*names: str) -> Callable[[type], type]:
 def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
     _, prog_name = fn.__name__.split("_", 1)
 
+    orig_fn = copy.copy(fn)
     fn = click.pass_obj(fn)
     command = click.command()(fn)
 
@@ -97,6 +99,7 @@ def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
 
     wrapped.__doc__ = fn.__doc__  # type: ignore
     wrapped.__name__ = fn.__name__  # type: ignore
+    wrapped.__orig_fn__ = orig_fn
 
     return wrapped
 
@@ -147,7 +150,8 @@ class Repl(cmd.Cmd):
     @click.option("--refresh", "-r", is_flag=True)
     @click.option("--recursive", "-R", is_flag=True)
     @click.option("--jobs", "show_jobs", is_flag=True)
-    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_jobs: bool) -> None:
+    @click.option("--json", "as_json", is_flag=True)
+    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_jobs: bool, as_json: bool) -> None:
         "List the current directory content"
         try:
             width, height = shutil.get_terminal_size((80, 40))
@@ -302,8 +306,8 @@ class Repl(cmd.Cmd):
         self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
     @parse_arguments
-    @click.argument("src")
     @click.argument("dest")
+    @click.argument("src")
     def do_mv(self, src: str, dest: str) -> None:
         items: List[Union[Job, Folder]] = self.state.mv(src, dest)
         names = []
@@ -366,7 +370,8 @@ class Repl(cmd.Cmd):
         except DoesNotExist:
             click.secho(f"Folder {job} does not exist", fg="red")
 
-    def do_cwd(self, *arg: Any) -> None:
+    @parse_arguments
+    def do_cwd(self) -> None:
         "Show the current location"
         click.echo(self.state.cwd.path)
 

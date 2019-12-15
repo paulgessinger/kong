@@ -106,7 +106,10 @@ def test_make_log_path(driver, monkeypatch):
         assert driver.make_log_path(job).endswith("JOB_BASE/99/47/994784367")
 
         job.job_id = 456
-        assert driver.make_log_path(job).endswith("JOB_BASE/04/56/000456")
+        assert driver.make_log_path(job).endswith("JOB_BASE/00/04/000456")
+
+        job.job_id = 3854
+        assert driver.make_log_path(job).endswith("JOB_BASE/00/38/003854")
 
 
 def test_make_output_path(driver, monkeypatch):
@@ -121,4 +124,7 @@ def test_make_output_path(driver, monkeypatch):
     assert driver.make_output_path(job).endswith("JOB_BASE/99/47/994784367")
 
     job.job_id = 456
-    assert driver.make_output_path(job).endswith("JOB_BASE/04/56/000456")
+    assert driver.make_output_path(job).endswith("JOB_BASE/00/04/000456")
+
+    job.job_id = 3854
+    assert driver.make_output_path(job).endswith("JOB_BASE/00/38/003854")

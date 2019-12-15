@@ -4,7 +4,7 @@ import time
 
 import pytest
 from unittest import mock
-from unittest.mock import Mock, ANY
+from unittest.mock import Mock, ANY, MagicMock
 import peewee as pw
 from conftest import skip_lxplus
 
@@ -493,17 +493,17 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
 
 def test_cwd(state, repl, tree, capsys):
     root = tree
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/"
 
     state.cwd = root / "f1"
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/f1"
 
     state.cwd = root / "f2" / "gamma"
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/f2/gamma"
 
@@ -802,21 +802,25 @@ def test_info(state, repl, capsys, monkeypatch):
 def test_tail(state, repl, capsys, monkeypatch):
     job = state.create_job(command="sleep 1")
 
+    # with monkeypatch.context() as m:
+    #     tail = Mock(return_value=["LINENO1", "LINENO2"])
+    #     m.setattr("sh.tail", tail)
+    #     m.setattr("os.path.exists", Mock(return_value=True))
+    #     repl.onecmd(f"tail {job.job_id}")
+    #     tail.assert_called_once_with("-f", job.data["stdout"], n=ANY, _iter=True)
+    #     out, err = capsys.readouterr()
+    #     assert "LINENO1" in out
+    #     assert "LINENO2" in out
+    #
     with monkeypatch.context() as m:
         tail = Mock(return_value=["LINENO1", "LINENO2"])
         m.setattr("sh.tail", tail)
-        m.setattr("os.path.exists", Mock(return_value=True))
-        repl.onecmd(f"tail {job.job_id}")
-        tail.assert_called_once_with("-f", job.data["stdout"], n=ANY, _iter=True)
-        out, err = capsys.readouterr()
-        assert "LINENO1" in out
-        assert "LINENO2" in out
-
-    with monkeypatch.context() as m:
-        m.setattr("os.path.exists", Mock(return_value=False))
+        m.setattr("os.path.exists", Mock(side_effect=[False, True]))
+        spinner = MagicMock()
+        m.setattr("kong.repl.Spinner", spinner)
         repl.onecmd(f"tail {job.job_id}")
         out, err = capsys.readouterr()
-        assert "hasn't created stdout" in out
+        spinner.assert_called_once()
 
     with monkeypatch.context() as m:
         repl.onecmd(f"tail --nope")
