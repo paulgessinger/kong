@@ -4,7 +4,7 @@ import time
 
 import pytest
 from unittest import mock
-from unittest.mock import Mock, ANY
+from unittest.mock import Mock, ANY, MagicMock
 import peewee as pw
 from conftest import skip_lxplus
 
@@ -31,10 +31,21 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     state.mkdir("f4")
     repl.onecmd("ls f4")
 
-    repl.do_ls("")
+    j1 = Job.get(1)
+    j1.batch_job_id = None
+    j1.save()
+    state.mv(j1, "f1")
+
+    repl.onecmd("ls")
     out, err = capsys.readouterr()
     assert all(f.name in out for f in state.cwd.children)
-    assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
+    assert all(f"{j}" in out for j in [2, 3])
+
+    repl.onecmd("ls --recursive")
+    out, err = capsys.readouterr()
+    #assert all(f.name in out for f in state.cwd.children)
+    all_jobs = [j.job_id for j in Job.select()]
+    assert all(f"{j}" in out for j in all_jobs)
 
     repl.do_ls("/nope")
     out, err = capsys.readouterr()
@@ -88,8 +99,8 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     with monkeypatch.context() as m:
         mock = Mock()
         m.setattr(state, "refresh_jobs", mock)
-        repl.onecmd("ls -R /")
-        assert mock.call_count == 4  # called for each folder plus one preliminary time
+        repl.onecmd("ls -r /")
+        assert mock.call_count == 1  # called once
 
 
 def test_complete_funcs(state, tree, repl, monkeypatch):
@@ -278,13 +289,19 @@ def test_cd(state, repl, db, capsys):
 def test_mv_folder(state, repl, capsys):
     root = Folder.get_root()
 
+    repl.onecmd("mv --help")
+    out, err = capsys.readouterr()
+
+
     f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
 
     assert len(root.children) == 5
+    assert len(f2.children) == 0
 
     # actual move
     repl.onecmd("mv f1 f2")
     assert len(root.children) == 4
+    f2.reload()
     assert len(f2.children) == 1 and f2.children[0] == f1
     f1.reload()
     assert f1.parent == f2
@@ -493,17 +510,17 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
 
 def test_cwd(state, repl, tree, capsys):
     root = tree
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/"
 
     state.cwd = root / "f1"
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/f1"
 
     state.cwd = root / "f2" / "gamma"
-    repl.do_cwd()
+    repl.onecmd("cwd")
     out, err = capsys.readouterr()
     assert out.strip() == "/f2/gamma"
 
@@ -805,18 +822,23 @@ def test_tail(state, repl, capsys, monkeypatch):
     with monkeypatch.context() as m:
         tail = Mock(return_value=["LINENO1", "LINENO2"])
         m.setattr("sh.tail", tail)
-        m.setattr("os.path.exists", Mock(return_value=True))
+        m.setattr("time.sleep", Mock())
+        m.setattr("os.path.exists", Mock(side_effect=[False, False, True]))
+        spinner = MagicMock()
+        m.setattr("kong.repl.Spinner", spinner)
         repl.onecmd(f"tail {job.job_id}")
-        tail.assert_called_once_with("-f", job.data["stdout"], n=ANY, _iter=True)
         out, err = capsys.readouterr()
-        assert "LINENO1" in out
-        assert "LINENO2" in out
+        spinner.assert_called_once()
 
     with monkeypatch.context() as m:
-        m.setattr("os.path.exists", Mock(return_value=False))
+        tail = Mock(return_value=["LINENO1", "LINENO2"])
+        m.setattr("sh.tail", tail)
+        m.setattr("os.path.exists", Mock(side_effect=[True]))
+        spinner = MagicMock()
+        m.setattr("kong.repl.Spinner", spinner)
         repl.onecmd(f"tail {job.job_id}")
         out, err = capsys.readouterr()
-        assert "hasn't created stdout" in out
+        assert spinner.call_count == 0
 
     with monkeypatch.context() as m:
         repl.onecmd(f"tail --nope")

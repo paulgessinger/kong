@@ -4,6 +4,7 @@ import socket
 
 import pytest
 import click
+from click.testing import CliRunner
 from unittest.mock import Mock
 
 from kong.db import database

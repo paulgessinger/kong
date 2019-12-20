@@ -1,8 +1,6 @@
 import os
 import logging
 
-import pytest
-from click.testing import CliRunner
 from unittest.mock import Mock
 
 from kong.cli import main
@@ -11,7 +9,7 @@ from kong.model import Folder
 from kong import logger
 
 
-def test_verbosity(app_env, db, cli):
+def test_verbosity(app_env, cli):
     app_dir, config_path, tmp_path = app_env
 
     result = cli.invoke(main, ["--version"])
@@ -103,3 +101,4 @@ def test_interactive(app_env, cli, monkeypatch):
 
     cli.invoke(main, ["interactive"])
     mock.assert_called_once()
+
