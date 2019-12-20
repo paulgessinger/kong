@@ -1,7 +1,6 @@
 import os
 import logging
-from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import click
 import coloredlogs
@@ -88,61 +87,3 @@ def interactive(state: State) -> None:
     import IPython
 
     IPython.embed(colors="neutral")
-
-
-cwd_file = Path(config.APP_DIR, "cwd.txt")
-
-
-def _wrap_repl_func(fn: Callable[[Any, str], None]) -> Callable[[Any], None]:
-    orig_fn = fn.__orig_fn__  # type: ignore
-
-    def wrapped(state: State, *args: Any, **kwargs: Any) -> Any:
-        if cwd_file.exists():
-            with cwd_file.open("r") as fh:
-                state.cd(fh.read().strip())
-        repl = Repl(state)
-        return orig_fn(repl, *args, **kwargs)
-
-    if hasattr(orig_fn, "__click_params__"):
-        wrapped.__click_params__ = orig_fn.__click_params__  # type: ignore
-    wrapped.__doc__ = orig_fn.__doc__  # type: ignore
-
-    return wrapped
-
-
-def repl_func(fn: Callable[[Any, str], None], name: Optional[str] = None) -> Any:
-    if name is None:
-        _, name = fn.__name__.split("_", 1)
-    return main.command(name=name)(click.pass_obj(_wrap_repl_func(fn)))
-
-
-for fn in [
-    Repl.do_ls,
-    Repl.do_create_job,
-    Repl.do_submit_job,
-    Repl.do_resubmit_job,
-    Repl.do_update,
-    Repl.do_status,
-    Repl.do_wait,
-    Repl.do_mv,
-    Repl.do_mkdir,
-    Repl.do_rm,
-    Repl.do_info,
-    Repl.do_kill_job,
-    Repl.do_cwd,
-    Repl.do_less,
-    Repl.do_tail,
-]:
-    repl_func(fn)
-
-
-@main.command()
-@click.pass_obj
-@click.argument("name", required=False, default="")
-def cd(state: State, name: str) -> None:
-    if cwd_file.exists():
-        with cwd_file.open("r") as f:
-            state.cd(f.read().strip())
-    state.cd(name)
-    with cwd_file.open("w") as f:
-        f.write(state.cwd.path)
