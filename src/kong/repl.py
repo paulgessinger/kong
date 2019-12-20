@@ -6,7 +6,9 @@ import readline
 import os
 import sys
 import time
-from typing import Any, Callable, List, Optional, Union, Iterable
+
+import sh
+from typing import Any, Callable, List, Optional, Union, Iterable, cast
 import shutil
 
 import click
@@ -79,7 +81,7 @@ def add_completion(*names: str) -> Callable[[type], type]:
 def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
     _, prog_name = fn.__name__.split("_", 1)
 
-    orig_fn = copy.copy(fn)
+    orig_fn = copy.deepcopy(fn)
     fn = click.pass_obj(fn)
     command = click.command()(fn)
 
@@ -149,11 +151,8 @@ class Repl(cmd.Cmd):
     @click.argument("dir", default="", required=False)
     @click.option("--refresh", "-r", is_flag=True)
     @click.option("--recursive", "-R", is_flag=True)
-    @click.option("--jobs", "show_jobs", is_flag=True)
     @click.option("--json", "as_json", is_flag=True)
-    def do_ls(
-        self, dir: str, refresh: bool, recursive: bool, show_jobs: bool, as_json: bool
-    ) -> None:
+    def do_ls(self, dir: str, refresh: bool, recursive: bool, as_json: bool) -> None:
         "List the current directory content"
         try:
             width, height = shutil.get_terminal_size((80, 40))
@@ -164,13 +163,10 @@ class Repl(cmd.Cmd):
                 if recursive:
                     arg_folder = Folder.find_by_path(self.state.cwd, dir)
                     assert arg_folder is not None  # should be a folder
-                    self.state.refresh_jobs(arg_folder.jobs_recursive())
-                    # refresh folder jobs
-                    for folder in folders:
-                        self.state.refresh_jobs(folder.jobs_recursive())
-                    folders, jobs = self.state.ls(dir, refresh=False)
-                    if show_jobs:
-                        jobs = sum([f.jobs_recursive() for f in folders], [])
+                    jobs = arg_folder.jobs_recursive()
+
+                if refresh:
+                    jobs = cast(list, self.state.refresh_jobs(jobs))
 
             if len(folders) > 0:
                 folder_name_length = max([len(f.name) for f in folders])
@@ -308,8 +304,8 @@ class Repl(cmd.Cmd):
         self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
     @parse_arguments
-    @click.argument("dest")
     @click.argument("src")
+    @click.argument("dest")
     def do_mv(self, src: str, dest: str) -> None:
         items: List[Union[Job, Folder]] = self.state.mv(src, dest)
         names = []
@@ -450,8 +446,28 @@ class Repl(cmd.Cmd):
         width, _ = shutil.get_terminal_size((80, 40))
         hw = width // 2
         click.echo("=" * hw + " STDOUT " + "=" * (width - hw - 8))
-        for line in tail("-f", job.data["stdout"], n=number_of_lines, _iter=True):
+
+        def show(line: str) -> None:  # pragma: no cover
             sys.stdout.write(line)
+
+        try:
+            proc = tail(
+                "-n",
+                number_of_lines,
+                "-f",
+                job.data["stdout"],
+                _bg=True,
+                _bg_exc=False,
+                _out=show,
+            )
+            try:
+                proc.wait()
+            except KeyboardInterrupt:  # pragma: no cover
+                proc.terminate()
+                proc.wait()
+
+        except sh.SignalException_SIGTERM:  # pragma: no cover
+            pass
 
     @parse_arguments
     @click.argument("job_str")
