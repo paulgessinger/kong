@@ -544,6 +544,11 @@ def test_mkdir_create_parent(state):
     state.mkdir("beta", create_parent=True)
     assert Folder.find_by_path(state.cwd, "/beta") is not None
 
+    state.mkdir("basic", create_parent=True)
+    assert Folder.find_by_path(state.cwd, "/basic") is not None
+
+    state.mkdir("/basic2", create_parent=True)
+    assert Folder.find_by_path(state.cwd, "/basic2") is not None
 
 def test_rm_folder(state, db):
     root = Folder.get_root()
