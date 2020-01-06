@@ -133,7 +133,6 @@ class Config:
                 self.data = yaml.safe_load(f)
 
         self.data = config_schema.validate(self.data)
-        print(self.data)
 
         self.notifications = NotificationManager(self)
 
