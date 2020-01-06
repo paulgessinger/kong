@@ -219,9 +219,7 @@ class HTCondorDriver(BatchDriverBase):
 
     def __init__(self, config: Config, htcondor: Optional[HTCondorInterface] = None):
         DriverBase.__init__(self, config)
-        self.htcondor_config = htcondor_schema.validate(
-            self.config.data.get("htcondor_driver", {})
-        )
+        self.htcondor_config =self.config.data["htcondor_driver"]
         self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
 
     def create_job(

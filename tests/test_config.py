@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import Mock, ANY
 
 import pytest
+import os
 from schema import SchemaError
 
 from kong.config import Config, Notifier, NotificationManager, slurm_schema
@@ -93,5 +94,40 @@ def test_slurm_schema():
     cfg = slurm_schema.validate({"sacct_delta": "10 weeks"})
     assert cfg["sacct_delta"] == timedelta(weeks=10)
 
+    cfg = slurm_schema.validate({"sacct_delta": "50 weeks"})
+    assert cfg["sacct_delta"] == timedelta(weeks=50)
+
     with pytest.raises(SchemaError):
         slurm_schema.validate({"sacct_delta": "blablurz"})
+
+def test_slurm_schema_file(app_env):
+    app_dir, config_path, tmp_path = app_env
+    os.makedirs(app_dir)
+
+    with open(config_path, "w") as fh:
+        fh.write("""
+slurm_driver:
+    sacct_delta: blablurz
+        """.strip())
+
+    with pytest.raises(SchemaError):
+        Config()
+
+    with open(config_path, "w") as fh:
+        fh.write("""
+slurm_driver:
+    sacct_delta: 10 weeks
+        """.strip())
+
+    cfg = Config()
+    assert cfg.data["slurm_driver"]["sacct_delta"] == timedelta(weeks=10)
+
+    with open(config_path, "w") as fh:
+        fh.write("""
+slurm_driver:
+    sacct_delta: 50 weeks
+        """.strip())
+
+    cfg = Config()
+    print(cfg.data)
+    assert cfg.data["slurm_driver"]["sacct_delta"] == timedelta(weeks=50)

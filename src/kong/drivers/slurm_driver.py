@@ -181,9 +181,7 @@ class SlurmDriver(BatchDriverBase):
     def __init__(self, config: Config, slurm: Optional[SlurmInterface] = None):
         self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
-        self.slurm_config = slurm_schema.validate(
-            self.config.data.get("slurm_driver", {})
-        )
+        self.slurm_config = self.config.data["slurm_driver"]
 
     def create_job(
         self,
