@@ -101,7 +101,7 @@ class State:
         return cls(cfg, cwd)
 
     def refresh_jobs(self, jobs: List[Job]) -> Sequence[Job]:
-        logger.debug("Refresing %d jobs", len(jobs))
+        logger.debug("Refreshing %d jobs", len(jobs))
         first_job: Job = jobs[0]
         # try bulk refresh first
         first_job.ensure_driver_instance(self.config)
@@ -267,6 +267,9 @@ class State:
                 return found_folder
 
         location: Optional[Folder] = None
+
+        if path.startswith("/"):
+            path = path[1:]
 
         head, tail = os.path.split(path)
 

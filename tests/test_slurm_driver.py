@@ -1,6 +1,6 @@
 import os
 import shutil
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 from typing import Collection, Iterator
 from unittest.mock import Mock, ANY, call
 
@@ -71,10 +71,13 @@ def test_sacct_parse(driver, monkeypatch, state):
         mock = Mock(return_value=sacct_output.split("\n"))
         m.setattr(driver.slurm, "_sacct", mock)
 
-        res = list(driver.slurm.sacct([]))
+        td = timedelta(days = 10)
+        res = list(driver.slurm.sacct([], td))
+
+        starttime = date.today() - td
 
         mock.assert_called_once_with(
-            brief=True, noheader=True, parsable2=True, starttime=ANY, _iter=True
+            brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
         )
 
         ref = [
@@ -283,6 +286,12 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
         ),
     ]
 
+    other_job = driver.create_job(
+        command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+    )
+    other_job.status = Job.Status.COMPLETED
+    other_job.save()
+
     jobs[0].status = Job.Status.FAILED
     jobs[0].save()
 
@@ -321,6 +330,10 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
     for job in jobs:
         job.reload()
         assert job.status == Job.Status.CREATED
+
+    # bug: all jobs where reset to created. Check this is not the case anymore
+    other_job.reload()
+    assert other_job.status != Job.Status.CREATED
 
 
 def test_resubmit_bulk_invalid_status(driver, state, monkeypatch):
@@ -612,7 +625,7 @@ def test_wait(driver, state, monkeypatch):
             self.state_idx = 0
             self.jobs = []
 
-        def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
+        def sacct(self, jobs: Collection["Job"], start_delta: timedelta) -> Iterator[SlurmAccountingItem]:
             values = [
                 [
                     SlurmAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0)

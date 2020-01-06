@@ -1,11 +1,14 @@
 import os
+from datetime import timedelta
+
+import pytimeparse
 import typing
 import socket
 import getpass
 
 import click
 import yaml
-from schema import And, Optional, Schema
+from schema import And, Optional, Schema, Use
 import notifiers  # type: ignore
 
 
@@ -19,6 +22,9 @@ slurm_schema = Schema(
         Optional("account", default="account"): And(str, len),
         Optional("node_size", default=1): And(int, lambda i: i > 0),
         Optional("default_queue", default="queue"): And(str, len),
+        Optional("sacct_delta", default="4 weeks"): Use(
+            lambda s: timedelta(seconds=pytimeparse.parse(s))
+        ),
     }
 )
 

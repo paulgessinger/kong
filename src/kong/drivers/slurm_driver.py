@@ -61,7 +61,9 @@ class SlurmAccountingItem:
 
 class SlurmInterface(ABC):
     @abstractmethod
-    def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
+    def sacct(
+        self, jobs: Collection["Job"], start_delta: timedelta
+    ) -> Iterator[SlurmAccountingItem]:
         raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
@@ -85,16 +87,18 @@ class ShellSlurmInterface(SlurmInterface):
         self._sbatch = sh.Command("sbatch")
         self._scancel = sh.Command("scancel")
 
-    def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
+    def sacct(
+        self, jobs: Collection["Job"], start_delta: timedelta
+    ) -> Iterator[SlurmAccountingItem]:
 
         logger.debug("Getting job info for %d jobs", len(jobs))
-        starttime = date.today() - timedelta(weeks=3)
+        starttime = date.today() - start_delta
 
         args = dict(
             brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
         )
 
-        if len(jobs) > 0:
+        if len(jobs) > 0 and len(jobs) < 20:
             if all(j.batch_job_id is None for j in jobs):
                 logger.debug("no jobs given that are known to the scheduder")
                 return []
@@ -291,7 +295,7 @@ class SlurmDriver(BatchDriverBase):
 
         def proc() -> Iterable[Job]:
             job_not_found = 0
-            for item in self.slurm.sacct(jobs):
+            for item in self.slurm.sacct(jobs, self.slurm_config["sacct_delta"]):
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
                     job_not_found += 1
@@ -299,6 +303,7 @@ class SlurmDriver(BatchDriverBase):
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
                 job.updated_at = now
+                assert job.status != Job.Status.CREATED, "Job updated to created?"
                 yield job
             if job_not_found > 0:
                 logger.info(
