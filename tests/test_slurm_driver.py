@@ -283,6 +283,12 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
         ),
     ]
 
+    other_job = driver.create_job(
+        command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
+    )
+    other_job.status = Job.Status.COMPLETED
+    other_job.save()
+
     jobs[0].status = Job.Status.FAILED
     jobs[0].save()
 
@@ -321,6 +327,10 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
     for job in jobs:
         job.reload()
         assert job.status == Job.Status.CREATED
+
+    # bug: all jobs where reset to created. Check this is not the case anymore
+    other_job.reload()
+    assert other_job.status != Job.Status.CREATED
 
 
 def test_resubmit_bulk_invalid_status(driver, state, monkeypatch):

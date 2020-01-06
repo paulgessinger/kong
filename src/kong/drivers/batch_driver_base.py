@@ -210,13 +210,21 @@ class BatchDriverBase(DriverBase):
 
         # update status
         with database.atomic():
-            Job.update(
-                status=Job.Status.CREATED, updated_at=datetime.datetime.now()
-            ).execute()
 
-        # jobs = Job.select().where(
-        #     Job.job_id.in_([j.job_id for j in jobs])  # type: ignore
-        # )
+            with database.atomic():
+                now = datetime.datetime.now()
+                def jobit():
+                    for job in jobs:
+                        job.status = Job.Status.CREATED
+                        job.updated_at = now
+                        yield job
+
+                Job.bulk_update(
+                    jobit(),
+                    fields=[Job.status, Job.updated_at],
+                    batch_size=self.batch_size,
+                )
+
         jobs = Job.bulk_select(
             Job.job_id, [j.job_id for j in jobs], batch_size=self.select_batch_size
         )

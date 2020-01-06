@@ -88,13 +88,13 @@ class ShellSlurmInterface(SlurmInterface):
     def sacct(self, jobs: Collection["Job"]) -> Iterator[SlurmAccountingItem]:
 
         logger.debug("Getting job info for %d jobs", len(jobs))
-        starttime = date.today() - timedelta(weeks=3)
+        starttime = date.today() - timedelta(weeks=4)
 
         args = dict(
             brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
         )
 
-        if len(jobs) > 0:
+        if len(jobs) > 0 and len(jobs) < 20:
             if all(j.batch_job_id is None for j in jobs):
                 logger.debug("no jobs given that are known to the scheduder")
                 return []
@@ -299,6 +299,7 @@ class SlurmDriver(BatchDriverBase):
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
                 job.updated_at = now
+                assert job.status != Job.Status.CREATED, "Job updated to created?"
                 yield job
             if job_not_found > 0:
                 logger.info(
