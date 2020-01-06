@@ -213,7 +213,8 @@ class BatchDriverBase(DriverBase):
 
             with database.atomic():
                 now = datetime.datetime.now()
-                def jobit():
+
+                def jobit() -> Iterable[Job]:
                     for job in jobs:
                         job.status = Job.Status.CREATED
                         job.updated_at = now
