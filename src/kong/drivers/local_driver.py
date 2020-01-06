@@ -208,7 +208,7 @@ class LocalDriver(DriverBase):
                 job.save()
 
         except psutil.NoSuchProcess:
-            logger.debug("Job %s with pid %d doesn't exist, chck exit code", job, pid)
+            logger.debug("Job %s with pid %d doesn't exist, check exit code", job, pid)
             check_exit_code()
             if save:
                 job.save()
