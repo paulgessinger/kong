@@ -24,7 +24,7 @@ from jinja2 import Environment, DictLoader
 from .batch_driver_base import BatchDriverBase
 from . import InvalidJobStatus
 from ..logger import logger
-from ..config import Config, htcondor_schema
+from ..config import Config
 from ..db import database
 from ..model import Job, Folder
 from ..util import make_executable, parse_timedelta
@@ -219,7 +219,7 @@ class HTCondorDriver(BatchDriverBase):
 
     def __init__(self, config: Config, htcondor: Optional[HTCondorInterface] = None):
         DriverBase.__init__(self, config)
-        self.htcondor_config =self.config.data["htcondor_driver"]
+        self.htcondor_config = self.config.data["htcondor_driver"]
         self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
 
     def create_job(

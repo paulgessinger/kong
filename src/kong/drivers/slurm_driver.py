@@ -11,7 +11,7 @@ from jinja2 import Environment, DictLoader
 from kong.drivers.batch_driver_base import BatchDriverBase
 from ..drivers import InvalidJobStatus
 from ..logger import logger
-from ..config import Config, slurm_schema
+from ..config import Config
 from ..db import database
 from ..model import Job, Folder
 from ..util import make_executable, format_timedelta, parse_timedelta
