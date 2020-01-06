@@ -1,4 +1,8 @@
+from datetime import timedelta
 from unittest.mock import Mock, ANY
+
+import pytest
+from schema import SchemaError
 
 from kong.config import Config, Notifier, NotificationManager, slurm_schema
 
@@ -82,3 +86,12 @@ def test_notificationmanager(monkeypatch):
 def test_slurm_schema():
     assert slurm_schema.is_valid({"node_size": 2})
     assert not slurm_schema.is_valid({"node_size": -1})
+
+    defs = slurm_schema.validate({})
+    assert "sacct_delta" in defs
+
+    cfg = slurm_schema.validate({"sacct_delta": "10 weeks"})
+    assert cfg["sacct_delta"] == timedelta(weeks=10)
+
+    with pytest.raises(SchemaError):
+        slurm_schema.validate({"sacct_delta": "blablurz"})
