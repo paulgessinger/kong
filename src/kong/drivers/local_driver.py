@@ -305,6 +305,7 @@ class LocalDriver(DriverBase):
         p = multiprocessing.Process(target=LocalDriver.spawn_child, args=(cmd, pid))
         p.start()
         p.join()
+        logger.debug("Double fork child: terminating")
         assert pid.value != 0, "Got invalid pid 0"
         logger.debug("Got pid: %d", pid.value)
         job.data["pid"] = pid.value
@@ -313,7 +314,6 @@ class LocalDriver(DriverBase):
         if save:
             job.save()
 
-        logger.debug("Double fork child: terminating")
 
         logger.debug("Submitted job as %s", job)
 
