@@ -22,7 +22,7 @@ slurm_schema = Schema(
         Optional("account", default="account"): And(str, len),
         Optional("node_size", default=1): And(int, lambda i: i > 0),
         Optional("default_queue", default="queue"): And(str, len),
-        Optional("sacct_delta", default="4 weeks"): Use(
+        Optional("sacct_delta", default=timedelta(weeks=4)): Use(
             lambda s: timedelta(seconds=pytimeparse.parse(s))
         ),
     }

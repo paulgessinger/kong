@@ -11,7 +11,7 @@ from jinja2 import Environment, DictLoader
 from kong.drivers.batch_driver_base import BatchDriverBase
 from ..drivers import InvalidJobStatus
 from ..logger import logger
-from ..config import Config, slurm_schema
+from ..config import Config
 from ..db import database
 from ..model import Job, Folder
 from ..util import make_executable, format_timedelta, parse_timedelta
@@ -181,9 +181,7 @@ class SlurmDriver(BatchDriverBase):
     def __init__(self, config: Config, slurm: Optional[SlurmInterface] = None):
         self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
-        self.slurm_config = slurm_schema.validate(
-            self.config.data.get("slurm_driver", {})
-        )
+        self.slurm_config = self.config.data["slurm_driver"]
 
     def create_job(
         self,
