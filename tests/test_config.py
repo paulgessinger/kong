@@ -90,6 +90,7 @@ def test_slurm_schema():
 
     defs = slurm_schema.validate({})
     assert "sacct_delta" in defs
+    assert isinstance(defs["sacct_delta"], timedelta)
 
     cfg = slurm_schema.validate({"sacct_delta": "10 weeks"})
     assert cfg["sacct_delta"] == timedelta(weeks=10)
