@@ -1,6 +1,7 @@
 import os
 import tempfile
 import time
+from datetime import timedelta
 
 import pytest
 from unittest import mock
@@ -531,9 +532,15 @@ def test_wait(repl, monkeypatch):
     monkeypatch.setattr(repl, "state", state)
 
     repl.onecmd("wait * --no-notify --recursive --poll-interval 50")
-
     state.wait.assert_called_once_with(
-        "*", notify=False, recursive=True, poll_interval=50
+        "*", notify=False, recursive=True, poll_interval=50, update_interval=None
+    )
+
+    state.wait.reset_mock()
+
+    repl.onecmd("wait * --notify --recursive --poll-interval 50 --notify-interval 30m")
+    state.wait.assert_called_once_with(
+        "*", notify=True, recursive=True, poll_interval=50, update_interval=timedelta(minutes=30)
     )
 
 

@@ -1,4 +1,6 @@
 import datetime
+import humanfriendly
+from datetime import timedelta
 from fnmatch import fnmatch
 import os
 import re
@@ -21,7 +23,7 @@ from contextlib import contextmanager
 from click import style
 from kong.model.job import color_dict
 
-from .util import Progress, Spinner, exhaust
+from .util import Progress, Spinner, exhaust, strip_colors
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config
@@ -565,6 +567,7 @@ class State:
         notify: bool = True,
         timeout: Optional[int] = None,
         poll_interval: Optional[int] = None,
+        update_interval: Optional[timedelta] = None,
     ) -> Iterable[List[Job]]:
         jobs: List[Job]
         jobs = self._extract_jobs(jobspec, recursive=recursive)
@@ -573,6 +576,12 @@ class State:
         first_job.ensure_driver_instance(self.config)
         driver = first_job.driver_instance
         orig_jobs = jobs[:]
+
+        wait_start = datetime.datetime.now()
+        last_update = datetime.datetime.now()
+
+        if update_interval is not None and notify:
+            print(f"Will notify every {humanfriendly.format_timespan(update_interval)}")
 
         try:
             with Spinner(text=f"Waiting for {len(jobs)} jobs") as s:
@@ -594,6 +603,17 @@ class State:
                         for k, v in counts.items()
                     ]
                     s.text = f"Waiting for {len(jobs)} jobs: {', '.join(out)}"
+
+                    if notify and update_interval is not None:
+                        now = datetime.datetime.now()
+                        delta = now - last_update
+                        if delta > update_interval:
+                            last_update = now
+                            self.config.notifications.notify(
+                                title="kong: Job wait progress",
+                                message=f"Progress after {humanfriendly.format_timespan(now-wait_start)}:\n{strip_colors(', '.join(out))}",
+                            )
+
                     yield cur_jobs
 
             orig_jobs = list(driver.bulk_sync_status(orig_jobs))
