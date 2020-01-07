@@ -1,4 +1,5 @@
 import datetime
+import multiprocessing
 import tempfile
 import os
 from contextlib import contextmanager
@@ -190,7 +191,7 @@ class LocalDriver(DriverBase):
             proc = psutil.Process(pid)
             if proc.is_running():
                 # is running, but is it zombie waiting to be reaped?
-                if proc.status() == psutil.STATUS_ZOMBIE:
+                if proc.status() == psutil.STATUS_ZOMBIE:  # pragma: no cover
                     logger.debug(
                         "Job %s with pid %s is running but zombie, reaping", job, pid
                     )
@@ -280,6 +281,14 @@ class LocalDriver(DriverBase):
                 batch_size=self.batch_size,
             )
 
+    @classmethod
+    def spawn_child(
+        cls, cmd: List[str], pid: multiprocessing.Value
+    ) -> None:  # pragma: no cover
+        os.setsid()  # deamonize so we detach from handlers, avoid zombie state
+        proc = Popen(cmd, stdin=None, stdout=None, stderr=None, close_fds=True)
+        pid.value = proc.pid
+
     @checked_job
     def submit(self, job: Job, save: bool = True) -> None:
         self.sync_status(job)
@@ -289,12 +298,21 @@ class LocalDriver(DriverBase):
         cmd = ["/usr/bin/env", "bash", job.data["jobscript"]]
         logger.debug("About to submit job with command: %s", str(cmd))
 
-        proc = Popen(cmd, stdin=None, stdout=None, stderr=None, close_fds=True)
+        pid = multiprocessing.Value("i", 0)
 
-        job.data["pid"] = proc.pid
+        logger.debug("Double fork child: spawning process")
+        p = multiprocessing.Process(target=LocalDriver.spawn_child, args=(cmd, pid))
+        p.start()
+        p.join()
+        logger.debug("Double fork child: terminating")
+        assert pid.value != 0, "Got invalid pid 0"
+        logger.debug("Got pid: %d", pid.value)
+        job.data["pid"] = pid.value
         job.status = Job.Status.SUBMITTED
+
         if save:
             job.save()
+
         logger.debug("Submitted job as %s", job)
 
     @checked_job  # type: ignore
@@ -329,11 +347,15 @@ class LocalDriver(DriverBase):
             )
             return job
 
-        proc = psutil.Process(pid=job.data["pid"])
         try:
-            proc.wait(timeout=timeout)
-        except psutil.TimeoutExpired as e:
-            raise TimeoutError(str(e))
+            proc = psutil.Process(pid=job.data["pid"])
+            try:
+                proc.wait(timeout=timeout)
+            except psutil.TimeoutExpired as e:
+                raise TimeoutError(str(e))
+        except psutil.NoSuchProcess:
+            logger.debug("Wait encountered non-existing pid, we're done")
+
         return cast(Job, self.sync_status(job))
 
     def wait_gen(

@@ -385,13 +385,13 @@ def test_run_job_already_completed(driver, state):
 @skip_lxplus
 def test_run_job_timeout(driver, state):
     root = Folder.get_root()
-    j1 = driver.create_job(command="sleep 0.3", folder=root)
+    j1 = driver.create_job(command="sleep 1", folder=root)
     j1.submit()
 
     with pytest.raises(TimeoutError):
         driver.wait(j1, timeout=0.1)
     assert j1.status == Job.Status.RUNNING
-    time.sleep(0.3)
+    time.sleep(1)
     driver.wait(j1, timeout=0.1)
     assert j1.status == Job.Status.COMPLETED
 
