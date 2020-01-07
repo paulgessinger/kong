@@ -1,6 +1,5 @@
 import datetime
 import multiprocessing
-import sys
 import tempfile
 import os
 from contextlib import contextmanager
@@ -314,7 +313,6 @@ class LocalDriver(DriverBase):
         if save:
             job.save()
 
-
         logger.debug("Submitted job as %s", job)
 
     @checked_job  # type: ignore
@@ -355,7 +353,7 @@ class LocalDriver(DriverBase):
                 proc.wait(timeout=timeout)
             except psutil.TimeoutExpired as e:
                 raise TimeoutError(str(e))
-        except psutil.NoSuchProcess as e:
+        except psutil.NoSuchProcess:
             logger.debug("Wait encountered non-existing pid, we're done")
 
         return cast(Job, self.sync_status(job))
