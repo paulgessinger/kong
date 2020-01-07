@@ -7,6 +7,7 @@ import os
 import sys
 import time
 
+import humanfriendly
 import sh
 from typing import Any, Callable, List, Optional, Union, Iterable, cast
 import shutil
@@ -491,11 +492,29 @@ class Repl(cmd.Cmd):
     @click.option("--notify/--no-notify", default=True)
     @click.option("--recursive", "-R", is_flag=True)
     @click.option("--poll-interval", "-i", type=int, default=None)
+    @click.option("--notify-interval", "-n", type=str, default="30m")
     def do_wait(
-        self, job_arg: str, notify: bool, recursive: bool, poll_interval: int
+        self,
+        job_arg: str,
+        notify: bool,
+        recursive: bool,
+        poll_interval: Optional[int],
+        notify_interval: Optional[int],
     ) -> None:
+
+        if notify:
+            update_interval = datetime.timedelta(
+                seconds=humanfriendly.parse_timespan(notify_interval)
+            )
+        else:
+            update_interval = None
+
         self.state.wait(
-            job_arg, notify=notify, recursive=recursive, poll_interval=poll_interval
+            job_arg,
+            notify=notify,
+            recursive=recursive,
+            poll_interval=poll_interval,
+            update_interval=update_interval,
         )
 
     def do_exit(self, arg: str) -> bool:
