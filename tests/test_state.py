@@ -1,6 +1,8 @@
 import os
 import time
 import uuid
+from datetime import timedelta
+
 from conftest import skip_lxplus
 
 import pytest
@@ -987,9 +989,26 @@ def test_wait(state, monkeypatch):
     assert nm.notify.call_count == 0
     assert driver.wait.call_count == 1
 
+    driver.wait.reset_mock()
     exhaust(state.wait("*", notify=True, progress=True))
     assert nm.notify.call_count == 1
-    assert driver.wait.call_count == 2
+    assert driver.wait.call_count == 1
+
+    nm.notify.reset_mock()
+    driver.wait.reset_mock()
+    def waiter(*args, **kwargs):
+        for _ in range(2):
+            yield jobs[0]
+            time.sleep(0.2)
+
+    driver.wait.side_effect = waiter
+    exhaust(state.wait("*", notify=True, progress=True, update_interval=timedelta(seconds=0.15)))
+    assert nm.notify.call_count == 2
+    assert "progress" in nm.notify.mock_calls[0][2]["title"]
+    assert "complete" in nm.notify.mock_calls[-1][2]["title"]
+    assert driver.wait.call_count == 1
+
+
 
 
 def test_wait_timeout(state, monkeypatch):

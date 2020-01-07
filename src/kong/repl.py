@@ -492,17 +492,18 @@ class Repl(cmd.Cmd):
     @click.option("--notify/--no-notify", default=True)
     @click.option("--recursive", "-R", is_flag=True)
     @click.option("--poll-interval", "-i", type=int, default=None)
-    @click.option("--notify-interval", "-n", type=str, default="30m")
+    @click.option("--notify-interval", "-n", type=str, default=None)
     def do_wait(
         self,
         job_arg: str,
         notify: bool,
         recursive: bool,
         poll_interval: Optional[int],
-        notify_interval: Optional[int],
+        notify_interval: Optional[str],
     ) -> None:
 
-        if notify:
+        update_interval: Optional[datetime.timedelta]
+        if notify and notify_interval is not None:
             update_interval = datetime.timedelta(
                 seconds=humanfriendly.parse_timespan(notify_interval)
             )

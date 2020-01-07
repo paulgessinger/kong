@@ -611,7 +611,7 @@ class State:
                             last_update = now
                             self.config.notifications.notify(
                                 title="kong: Job wait progress",
-                                message=f"Progress after {humanfriendly.format_timespan((now-wait_start).total_seconds())}: {strip_colors(', '.join(out))}",
+                                message=f"Progress after {humanfriendly.format_timespan(now-wait_start)}:\n{strip_colors(', '.join(out))}",
                             )
 
                     yield cur_jobs
