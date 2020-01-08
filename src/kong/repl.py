@@ -4,7 +4,9 @@ import shlex
 import cmd
 import readline
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import wait, ThreadPoolExecutor
 
@@ -19,7 +21,7 @@ from click import style
 from kong.model.job import color_dict
 from .table import format_table
 
-from .util import shorten_path, Spinner
+from .util import shorten_path, Spinner, chdir
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -209,6 +211,9 @@ class Repl(cmd.Cmd):
                 rows = []
                 for idx, folder in enumerate(folders):
                     folder_jobs = folder.jobs_recursive()
+
+                    # if show_sizes:
+
                     # accumulate counts
                     # @TODO: SLOW! Optimize to query
                     counts = {k: 0 for k in Job.Status}
@@ -626,6 +631,38 @@ class Repl(cmd.Cmd):
             poll_interval=poll_interval,
             update_interval=update_interval,
         )
+
+    @parse_arguments
+    @click.argument("path")
+    @click.option("--output", "-o", is_flag=True)
+    @click.option("--log", "-l", is_flag=True)
+    def do_shell(self, path: str, output: bool, log: bool) -> None:
+        jobs = self.state.get_jobs(path)
+        assert len(jobs) == 1, "Only supported for single jobs"
+        job = jobs[0]
+
+        if (not output and not log) or output:
+            jpath = job.data["output_dir"]
+        else:
+            jpath = job.data["log_dir"]
+
+        from traitlets.config import Config  # type: ignore
+
+        c = Config()
+
+        c.InteractiveShellApp.exec_lines = [
+            "%rehashx",
+        ]
+        c.InteractiveShell.colors = "neutral"
+        c.InteractiveShell.confirm_exit = False
+
+        from IPython.terminal.embed import InteractiveShellEmbed
+
+        with chdir(jpath):
+            click.echo(f"Switching to {jpath}")
+            state = self.state
+            embed = InteractiveShellEmbed(config=c)
+            embed()
 
     def do_exit(self, arg: str) -> bool:
         """Exit the repl"""

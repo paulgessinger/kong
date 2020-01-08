@@ -5,6 +5,7 @@ import shutil
 import stat
 from concurrent.futures._base import Executor, wait
 from datetime import timedelta
+
 from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
 import contextlib
@@ -157,3 +158,13 @@ def get_size(path: str, ex: Optional[Executor] = None) -> int:
         size = sum(f.result() for f in futures)
 
     return size
+
+@contextlib.contextmanager
+def chdir(path: str) -> Iterator[None]:
+    cur = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(cur)
+
