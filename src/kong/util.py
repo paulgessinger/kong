@@ -141,6 +141,7 @@ def chunks(l: List[T], n: int) -> Iterable[List[T]]:
 def exhaust(generator: Iterable[Any]) -> None:
     deque(generator, maxlen=0)
 
+
 def get_size(path: str, ex: Optional[Executor] = None) -> int:
     size = 0
     futures = []
