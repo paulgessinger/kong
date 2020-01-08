@@ -2,6 +2,7 @@ import os
 import shutil
 import stat
 import subprocess
+from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
@@ -260,6 +261,7 @@ def test_progress(monkeypatch):
 @pytest.yield_fixture
 def cleaned_tmpdir(tmpdir):
     sub = tmpdir / "subdir"
+    sub = Path("/tmp/pytest_size")
     shutil.rmtree(sub)
     sub.mkdir()
     yield sub
@@ -300,3 +302,5 @@ def test_get_size(cleaned_tmpdir):
     assert size == du_size, "du is consistent with stat"
 
     assert get_size(tmpdir) == size
+    with ThreadPoolExecutor() as ex:
+        assert get_size(tmpdir, ex) == size

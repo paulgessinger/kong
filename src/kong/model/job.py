@@ -1,4 +1,5 @@
 import datetime
+from concurrent.futures._base import Executor
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
@@ -13,6 +14,7 @@ from ..drivers.driver_base import DriverBase
 from ..config import Config
 from ..model.folder import Folder
 from . import BaseModel
+from ..util import get_size
 
 
 class EnumField(pw.IntegerField):
@@ -176,6 +178,9 @@ class Job(BaseModel):
 
     def __str__(self) -> str:
         return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"
+
+    def size(self, ex: Optional[Executor] = None) -> int:
+        return get_size(self.data["output_dir"], ex=ex)
 
 
 color_dict = {

@@ -6,6 +6,7 @@ import readline
 import os
 import sys
 import time
+from concurrent.futures import wait, ThreadPoolExecutor
 
 import humanfriendly
 import sh
@@ -18,7 +19,7 @@ from click import style
 from kong.model.job import color_dict
 from .table import format_table
 
-from .util import rjust, shorten_path, Spinner
+from .util import shorten_path, Spinner
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -163,12 +164,17 @@ class Repl(cmd.Cmd):
         is_flag=True,
         help="Recursively select all jobs from target directory",
     )
-    def do_ls(self, dir: str, refresh: bool, recursive: bool) -> None:
+    @click.option("--show-sizes", "-s", is_flag=True)
+    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_sizes: bool) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
-            width, height = shutil.get_terminal_size((80, 40))
+            ex: Optional[ThreadPoolExecutor] = None
+            if show_sizes:
+                ex = ThreadPoolExecutor()
 
-            with Spinner("Getting info", persist=False, enabled=refresh or recursive):
+            with Spinner(
+                "Collecting job info", persist=False, enabled=refresh or recursive
+            ):
                 folders, jobs = self.state.ls(dir, refresh=refresh)
 
                 if recursive:
@@ -179,10 +185,46 @@ class Repl(cmd.Cmd):
                 if refresh:
                     jobs = cast(list, self.state.refresh_jobs(jobs))
 
+            def get_size(job: Job) -> int:
+                return job.size(cast(ThreadPoolExecutor, ex))
+
+            def get_folder_size(folder: Folder) -> int:
+                # print("get folder size: ", folder.path)
+                return sum(
+                    cast(ThreadPoolExecutor, ex).map(get_size, folder.jobs_recursive())
+                )
+
+            folder_sizes: List[int] = []
+            jobs_sizes: List[int] = []
+            if show_sizes:
+                ex_ = cast(ThreadPoolExecutor, ex)
+                with Spinner("Calculating output sizes", persist=False):
+                    folder_size_futures = []
+                    for folder in folders:
+                        folder_size_futures.append(ex_.submit(get_folder_size, folder))
+
+                    job_size_futures = []
+                    for job in jobs:
+                        job_size_futures.append(ex_.submit(get_size, job))
+
+                    wait(folder_size_futures)
+                    folder_sizes = [f.result() for f in folder_size_futures]
+                    wait(job_size_futures)
+                    jobs_sizes = [f.result() for f in job_size_futures]
+
             if len(folders) > 0:
-                headers = ("name", "job counts")
+                headers = ["name"]
+                align = ["l"]
+
+                if show_sizes:
+                    headers.append("output size")
+                    align.append("r")
+
+                headers += ["job counts"]
+                align += ["r+"]
+
                 rows = []
-                for folder in folders:
+                for idx, folder in enumerate(folders):
                     folder_jobs = folder.jobs_recursive()
                     # accumulate counts
                     # @TODO: SLOW! Optimize to query
@@ -195,38 +237,73 @@ class Repl(cmd.Cmd):
                     for k, c in counts.items():
                         output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
 
-                    rows.append((folder.name, output))
+                    row = [folder.name]
+                    if show_sizes:
+                        row.append(humanfriendly.format_size(folder_sizes[idx]))
+                    row += [output]
 
-                click.echo(format_table(headers, rows, align=("l+", "r")))
+                    rows.append(tuple(row))
+
+                click.echo(format_table(tuple(headers), rows, align=tuple(align)))
+
+            if len(folders) > 0 and len(jobs) > 0:
+                print()
 
             if len(jobs) > 0:
-                headers = (
+                headers = [
                     "job id",
+                ]
+                align = ["l"]
+
+                if show_sizes:
+                    headers.append("output size")
+                    align.append("l")
+
+                headers += [
                     "batch job id",
                     "created",
                     "updated",
                     "status",
-                )
+                ]
+                align += ["r+", "l", "l", "l"]
 
                 def dtfmt(dt: datetime.datetime) -> str:
                     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-
                 rows = []
-                for job in jobs:
+                for idx, job in enumerate(jobs):
                     job_id = str(job.job_id)
                     batch_job_id = str(job.batch_job_id)
                     _, status_name = str(job.status).split(".", 1)
                     color = color_dict[job.status]
-                    row = (job_id, batch_job_id, dtfmt(job.created_at), dtfmt(job.updated_at), status_name)
+                    row = [job_id]
+                    if show_sizes:
+                        row.append(humanfriendly.format_size(jobs_sizes[idx]))
+
+                    row += [
+                        batch_job_id,
+                        dtfmt(job.created_at),
+                        dtfmt(job.updated_at),
+                        status_name,
+                    ]
 
                     rows.append(tuple(click.style(c, fg=color) for c in row))
 
-                click.echo(format_table(headers, rows, align=("l", "r+", "l", "l", "l")))
+                click.echo(format_table(tuple(headers), rows, align=tuple(align)))
 
+                if show_sizes:
+                    click.echo(
+                        "Size of jobs listed above: "
+                        + click.style(
+                            humanfriendly.format_size(sum(jobs_sizes)), bold=True
+                        )
+                    )
 
         except pw.DoesNotExist:
             click.secho(f"Folder {dir} does not exist", fg="red")
+        finally:
+            if ex is not None:
+                ex.shutdown()
 
     @parse_arguments
     @click.argument("path")

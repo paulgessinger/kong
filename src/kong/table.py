@@ -59,7 +59,7 @@ def _format_row(
 
 
 def format_table(
-    headers: Tuple[str],
+    headers: Tuple[str, ...],
     rows: List[Tuple[str, ...]],
     align: Tuple[str, ...],
     width: Optional[int] = None,
