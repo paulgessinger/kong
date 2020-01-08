@@ -288,18 +288,7 @@ def test_get_size(cleaned_tmpdir):
         with file.open("wb") as fh:
             fh.write(b"X" * 1024)
 
-    size = sum(f.stat().st_blocks for f in files) * 512
-    du_size = (
-        int(
-            subprocess.check_output(["du", "-ks", tmpdir])
-            .strip()
-            .split(b"\t")[0]
-            .strip()
-        )
-        * 1024
-    )
-
-    assert size == du_size, "du is consistent with stat"
+    size = sum(os.path.getsize(f) for f in files)
 
     assert get_size(tmpdir) == size
     with ThreadPoolExecutor() as ex:
