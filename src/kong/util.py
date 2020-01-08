@@ -139,3 +139,9 @@ def chunks(l: List[T], n: int) -> Iterable[List[T]]:
 
 def exhaust(generator: Iterable[Any]) -> None:
     deque(generator, maxlen=0)
+
+def get_size(path: str) -> int:
+    size = 0
+    for d, _, files in os.walk(path):
+        size += sum([os.stat(os.path.join(d, f)).st_blocks for f in files])
+    return size * 512

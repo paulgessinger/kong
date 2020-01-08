@@ -1,7 +1,10 @@
 import os
+import shutil
 import stat
+import subprocess
 from datetime import timedelta
 from io import StringIO
+from pathlib import Path
 from unittest.mock import Mock, ANY
 
 import click
@@ -21,6 +24,7 @@ from kong.util import (
     chunks,
     Spinner,
     Progress,
+    get_size,
 )
 
 
@@ -251,3 +255,48 @@ def test_progress(monkeypatch):
     for i in Progress(range(10)):
         pass
     assert tqdm.call_count == 1
+
+
+@pytest.yield_fixture
+def cleaned_tmpdir(tmpdir):
+    sub = tmpdir / "subdir"
+    shutil.rmtree(sub)
+    sub.mkdir()
+    yield sub
+
+
+def test_get_size(cleaned_tmpdir):
+    tmpdir = cleaned_tmpdir
+
+    A = tmpdir / "A"
+    B = tmpdir / "B"
+    C = B / "C"
+
+    A.mkdir()
+    B.mkdir()
+    C.mkdir()
+
+    files = (
+        [A / f"file_{i}" for i in range(4)]
+        + [B / f"file_{i}" for i in range(8)]
+        + [C / f"file_{i}" for i in range(2)]
+    )
+
+    for file in files:
+        with file.open("wb") as fh:
+            fh.write(b"X" * 1024)
+
+    size = sum(f.stat().st_blocks for f in files) * 512
+    du_size = (
+        int(
+            subprocess.check_output(["du", "-s", tmpdir])
+            .strip()
+            .split(b"\t")[0]
+            .strip()
+        )
+        * 512
+    )
+
+    assert size == du_size, "du is consistent with stat"
+
+    assert get_size(tmpdir) == size
