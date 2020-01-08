@@ -291,12 +291,12 @@ def test_get_size(cleaned_tmpdir):
     size = sum(f.stat().st_blocks for f in files) * 512
     du_size = (
         int(
-            subprocess.check_output(["du", "-s", tmpdir])
+            subprocess.check_output(["du", "-ks", tmpdir])
             .strip()
             .split(b"\t")[0]
             .strip()
         )
-        * 512
+        * 1024
     )
 
     assert size == du_size, "du is consistent with stat"
