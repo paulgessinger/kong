@@ -260,7 +260,8 @@ def test_progress(monkeypatch):
 
 @pytest.yield_fixture
 def cleaned_tmpdir(tmpdir):
-    sub = tmpdir / "subdir"
+    sub = Path(tmpdir) / "subdir"
+    sub.mkdir(exist_ok=True)
     shutil.rmtree(sub)
     sub.mkdir()
     yield sub
