@@ -100,7 +100,7 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     with monkeypatch.context() as m:
         mock = Mock()
         m.setattr(state, "refresh_jobs", mock)
-        repl.onecmd("ls -r /")
+        repl.onecmd("ls -R /")
         assert mock.call_count == 1  # called once
 
 
@@ -462,14 +462,14 @@ def test_rm(state, repl, db, capsys, monkeypatch):
     with monkeypatch.context() as m:
         confirm = Mock(return_value=False)
         m.setattr("click.confirm", confirm)
-        repl.onecmd("rm -R alpha")
+        repl.onecmd("rm -r alpha")
         confirm.assert_called_once()
 
     assert root.subfolder("alpha") is not None
     with monkeypatch.context() as m:
         confirm = Mock(return_value=True)
         m.setattr("click.confirm", confirm)
-        repl.onecmd("rm -R alpha")
+        repl.onecmd("rm -r alpha")
         confirm.assert_called_once()
     assert root.subfolder("alpha") is None
     out, err = capsys.readouterr()
@@ -511,19 +511,21 @@ def test_rm_job(state, repl, db, capsys, monkeypatch):
 
 def test_cwd(state, repl, tree, capsys):
     root = tree
-    repl.onecmd("cwd")
-    out, err = capsys.readouterr()
-    assert out.strip() == "/"
+    for cmd in ("cwd", "pwd"):
+        state.cwd = root
+        repl.onecmd(cmd)
+        out, err = capsys.readouterr()
+        assert out.strip() == "/"
 
-    state.cwd = root / "f1"
-    repl.onecmd("cwd")
-    out, err = capsys.readouterr()
-    assert out.strip() == "/f1"
+        state.cwd = root / "f1"
+        repl.onecmd(cmd)
+        out, err = capsys.readouterr()
+        assert out.strip() == "/f1"
 
-    state.cwd = root / "f2" / "gamma"
-    repl.onecmd("cwd")
-    out, err = capsys.readouterr()
-    assert out.strip() == "/f2/gamma"
+        state.cwd = root / "f2" / "gamma"
+        repl.onecmd(cmd)
+        out, err = capsys.readouterr()
+        assert out.strip() == "/f2/gamma"
 
 
 def test_wait(repl, monkeypatch):
@@ -628,26 +630,6 @@ def test_create_job(repl, state, tree, capsys):
     assert str(j1.job_id) in out
     assert j1.batch_job_id in out
 
-    cores = 16
-    repl.do_create_job(f"-c {cores} '{cmd}'")
-    assert len(root.jobs) == 2
-    j2 = root.jobs[-1]
-    assert j2.command == cmd
-    assert j2.status == Job.Status.CREATED
-    assert j2.cores == cores
-    out, err = capsys.readouterr()
-    assert str(j2.job_id) in out
-    assert j2.batch_job_id in out
-
-    repl.do_create_job(f"--cores {cores} -- {cmd}")
-    assert len(root.jobs) == 3
-    j3 = root.jobs[-1]
-    assert j3.command == cmd
-    assert j3.status == Job.Status.CREATED
-    assert j3.cores == cores
-    out, err = capsys.readouterr()
-    assert str(j3.job_id) in out
-    assert j3.batch_job_id in out
 
     repl.do_create_job("--help")
     out, err = capsys.readouterr()
@@ -662,6 +644,27 @@ def test_create_job(repl, state, tree, capsys):
 
     j4 = root.jobs[-1]
     assert j4.command == "exe --and --some arguments --and options"
+
+def test_create_job_extra_arguments(repl, state, tree, monkeypatch):
+    root = tree
+
+    cmd = "sleep 1"
+    cores = 16
+
+    monkeypatch.setattr(state, "create_job", Mock())
+    repl.onecmd(f"create_job -a cores={cores} '{cmd}'")
+    assert state.create_job.call_count == 1
+    kwargs = state.create_job.call_args[1]
+    assert kwargs["cores"] == cores
+
+    state.create_job.reset_mock()
+    repl.onecmd(f"create_job -a ARGA=hurz --argument ARGB=blurz -a ARGC=42 '{cmd}'")
+    assert state.create_job.call_count == 1
+    kwargs = state.create_job.call_args[1]
+    print(kwargs)
+    assert kwargs["ARGA"] == "hurz"
+    assert kwargs["ARGB"] == "blurz"
+    assert kwargs["ARGC"] == 42
 
 
 @skip_lxplus
@@ -742,14 +745,14 @@ def test_resubmit_job(repl, state, capsys, monkeypatch):
 
 
 @skip_lxplus
-def test_status_update(repl, state, capsys):
+def test_update(repl, state, capsys):
     root = Folder.get_root()
 
-    repl.onecmd("status")
+    repl.onecmd("update")
     out, err = capsys.readouterr()
     assert "usage" in out
 
-    repl.onecmd("status 42")
+    repl.onecmd("update 42")
     out, err = capsys.readouterr()
     assert "not find" in out
 
@@ -760,32 +763,24 @@ def test_status_update(repl, state, capsys):
         out, err = capsys.readouterr()
 
     update()
-    repl.onecmd(f"status {j1.job_id}")
-    out, err = capsys.readouterr()
-    assert "CREATED" in out
+
+    j1.reload()
+    assert j1.status == Job.Status.CREATED
 
     j1.submit()
+    assert j1.status == Job.Status.SUBMITTED
 
     time.sleep(0.1)
 
-    repl.onecmd(f"status {j1.job_id}")
-    out, err = capsys.readouterr()
-    assert "SUBMITTED" in out
-
     update()
-    repl.onecmd(f"status {j1.job_id}")
-    out, err = capsys.readouterr()
-    assert "RUNNING" in out
+    j1.reload()
+    assert j1.status == Job.Status.RUNNING
 
     time.sleep(0.2)
 
-    repl.onecmd(f"status {j1.job_id}")
-    out, err = capsys.readouterr()
-    assert "RUNNING" in out
-
-    repl.onecmd(f"status -r {j1.job_id}")
-    out, err = capsys.readouterr()
-    assert "COMPLETED" in out
+    update()
+    j1.reload()
+    assert j1.status == Job.Status.COMPLETED
 
     repl.onecmd("update --nope")
     out, err = capsys.readouterr()
@@ -806,7 +801,7 @@ def test_info(state, repl, capsys, monkeypatch):
     with monkeypatch.context() as m:
         refresh = Mock()
         m.setattr(state, "refresh_jobs", refresh)
-        repl.onecmd("info 1 -r")
+        repl.onecmd("info 1 -R")
         out, err = capsys.readouterr()
         refresh.assert_called_once()
 

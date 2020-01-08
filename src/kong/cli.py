@@ -17,10 +17,14 @@ version = pkg_resources.get_distribution("kong-batch").version
 
 
 @click.group(invoke_without_command=True)
-@click.option("--version", "show_version", is_flag=True)
-@click.option("-v", "--verbose", "verbosity", count=True)
+@click.option("--version", "show_version", is_flag=True, help="Show version and exit")
+@click.option("-v", "--verbose", "verbosity", count=True, help="Increase the verbosity")
 @click.pass_context
 def main(ctx: Any, show_version: bool, verbosity: int) -> None:
+    """
+    Starts the main kong command loop. Will automatically perform setup the
+    first time it is invoked.
+    """
     if verbosity == 0:
         level = logging.WARNING
         global_level = logging.WARNING
@@ -77,12 +81,18 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
 @main.command("setup")
 @click.pass_obj
 def setup_command(state: State) -> None:
+    """Perform first time setup, or change values"""
     setup.setup(state.config)
 
 
 @main.command()
 @click.pass_obj
 def interactive(state: State) -> None:
+    """
+    Launch an interactive ipython instance with a kong.state.State object
+    already created. This is useful for fixing things in the database and such.
+    Most of the time, the main command loop invoked with `kong` should be sufficient, however.
+    """
     logger.debug("Launching IPython session")
     import IPython
 

@@ -9,7 +9,7 @@ import time
 
 import humanfriendly
 import sh
-from typing import Any, Callable, List, Optional, Union, Iterable, cast
+from typing import Any, Callable, List, Optional, Union, Iterable, cast, Dict, Tuple
 import shutil
 
 import click
@@ -150,11 +150,20 @@ class Repl(cmd.Cmd):
 
     @parse_arguments
     @click.argument("dir", default="", required=False)
-    @click.option("--refresh", "-r", is_flag=True)
-    @click.option("--recursive", "-R", is_flag=True)
-    @click.option("--json", "as_json", is_flag=True)
-    def do_ls(self, dir: str, refresh: bool, recursive: bool, as_json: bool) -> None:
-        "List the current directory content"
+    @click.option(
+        "--refresh",
+        "-R",
+        is_flag=True,
+        help="Synchronize status on all jobs selected for display",
+    )
+    @click.option(
+        "--recursive",
+        "-r",
+        is_flag=True,
+        help="Recursively select all jobs from target directory",
+    )
+    def do_ls(self, dir: str, refresh: bool, recursive: bool) -> None:
+        "List the directory content of DIR: jobs and folders"
         try:
             width, height = shutil.get_terminal_size((80, 40))
 
@@ -282,9 +291,14 @@ class Repl(cmd.Cmd):
 
     @parse_arguments
     @click.argument("path")
-    @click.option("--create-parent", "-p", is_flag=True)
+    @click.option(
+        "--create-parent",
+        "-p",
+        is_flag=True,
+        help="Create parent directories to 'path' if they don't exist",
+    )
     def do_mkdir(self, path: str, create_parent: bool) -> None:
-        "Create a directory at the current location"
+        "Create a directory at PATH"
         try:
             self.state.mkdir(path, create_parent=create_parent)
         except state.CannotCreateError:
@@ -295,19 +309,38 @@ class Repl(cmd.Cmd):
             )
 
     @parse_arguments
-    @click.argument("name", required=False, default="")
-    def do_cd(self, name: str = "") -> None:
+    @click.argument("path", required=False, default="")
+    def do_cd(self, path: str = "") -> None:
+        """
+        Change current working directory into PATH.
+
+        \b
+        Examples:
+            cd # root /
+            cd . # current directory
+            cd .. # parent directory
+            cd another/folder # some folder from this directory
+            cd ../another # path but starting from parent
+        """
         # find the folder
         try:
-            self.state.cd(name)
+            self.state.cd(path)
         except pw.DoesNotExist:
-            click.secho(f"Folder {name} does not exist", fg="red")
+            click.secho(f"Folder {path} does not exist", fg="red")
         self.prompt = f"({APP_NAME} > {shorten_path(self.state.cwd.path, 40)}) "
 
     @parse_arguments
     @click.argument("src")
     @click.argument("dest")
     def do_mv(self, src: str, dest: str) -> None:
+        """
+        Move SRC into DEST.
+
+        SRC can be either jobs or folders. If there are jobs in SRC, then
+        DEST needs to be a folder that exists. If SRC is exactly one folder, and DEST
+        does not exist, SRC will be renamed to DEST. If SRC is more than one folder,
+        DEST needs to exist, and SRC folders will be moved into DEST.
+        """
         items: List[Union[Job, Folder]] = self.state.mv(src, dest)
         names = []
         for item in items:
@@ -319,12 +352,24 @@ class Repl(cmd.Cmd):
         click.secho(f"Moved {', '.join(names)} -> {dest}")
 
     @parse_arguments
-    @click.argument("job_arg")
-    @click.option("--refresh", "-r", is_flag=True)
-    @click.option("--recursive", "-R", is_flag=True)
-    @click.option("--full", is_flag=True)
-    def do_info(self, job_arg: str, refresh: bool, recursive: bool, full: bool) -> None:
-        jobs = self.state.get_jobs(job_arg, recursive)
+    @click.argument("path")
+    @click.option(
+        "--refresh", "-R", is_flag=True, help="Do a refresh on all jobs found"
+    )
+    @click.option(
+        "--recursive",
+        "-r",
+        is_flag=True,
+        help="Go recursively through PATH to find jobs (if PATH is a folder)",
+    )
+    @click.option("--full", is_flag=True, help="Do not truncate job info if too long")
+    def do_info(self, path: str, refresh: bool, recursive: bool, full: bool) -> None:
+        """
+        Show information on jobs from PATH.
+
+        PATH can be a job id (range) or a folder.
+        """
+        jobs = self.state.get_jobs(path, recursive)
         if refresh:
             jobs = list(self.state.refresh_jobs(jobs))
 
@@ -356,18 +401,23 @@ class Repl(cmd.Cmd):
                 click.secho(f"- {k}: {v}")
 
     @parse_arguments
-    @click.argument("job")
-    @click.option("--recursive", "-R", is_flag=True)
-    def do_rm(self, job: str, recursive: bool) -> None:
+    @click.argument("path")
+    @click.option("--recursive", "-r", is_flag=True, help="Recursively delete")
+    def do_rm(self, path: str, recursive: bool) -> None:
+        """
+        Delete item at PATH.
+
+        If rm deletes jobs, cleanup routines will be run. Use `rm -r` to delete folders.
+        """
         try:
             if self.state.rm(
-                job, recursive=recursive, confirm=lambda s: click.confirm(s)
+                path, recursive=recursive, confirm=lambda s: click.confirm(s)
             ):
-                click.echo(f"{job} is gone")
+                click.echo(f"{path} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")
         except DoesNotExist:
-            click.secho(f"Folder {job} does not exist", fg="red")
+            click.secho(f"Folder {path} does not exist", fg="red")
 
     @parse_arguments
     def do_cwd(self) -> None:
@@ -375,64 +425,100 @@ class Repl(cmd.Cmd):
         click.echo(self.state.cwd.path)
 
     @parse_arguments
+    def do_pwd(self) -> None:
+        "Show the current location"
+        click.echo(self.state.cwd.path)
+
+    @parse_arguments
     @click.argument("command", nargs=-1)
-    @click.option("--cores", "-c", type=int, default=1)
-    def do_create_job(self, command: List[str], cores: int) -> None:
+    @click.option(
+        "-a",
+        "--argument",
+        "arguments_raw",
+        multiple=True,
+        help="Provide extra arguments like `--argument name=value`",
+    )
+    def do_create_job(self, command: List[str], arguments_raw: List[str]) -> None:
+        """
+        Create a job with command COMMAND for processing.
+        Additional arguments can be provided and are passed to the driver for verification.
+        """
         if len(command) == 0:
             click.secho("Please provide a command to run", fg="red")
             return
         command_str = " ".join(command)
 
-        job = self.state.create_job(command=command_str, cores=cores)
+        logger.debug("Raw extra arguments: %s", arguments_raw)
+        arg_str: Dict[str, str] = dict(
+            [cast(Tuple[str, str], s.split("=", 1)) for s in arguments_raw]
+        )
+
+        # cast to int for numeric values
+        # @TODO: This might need to be smarter at some point
+        arguments: Dict[str, Union[str, int]] = {}
+        for k, v in arg_str.items():
+            if v.isdigit():
+                arguments[k] = int(v)
+            else:
+                arguments[k] = v
+
+        logger.debug("Got extra arguments: %s", arguments)
+
+        job = self.state.create_job(command=command_str, **arguments)
         click.secho(f"Created job {job}")
 
     @parse_arguments
-    @click.argument("job")
-    @click.option("--recursive", "-R", is_flag=True)
-    def do_submit_job(self, job: str, recursive: bool) -> None:
-        self.state.submit_job(job, click.confirm, recursive=recursive)
+    @click.argument("path")
+    @click.option("--recursive", "-r", is_flag=True, help="Search recursively for jobs")
+    def do_submit_job(self, path: str, recursive: bool) -> None:
+        """
+        Submit job(s) at PATH.
+        """
+        self.state.submit_job(path, click.confirm, recursive=recursive)
 
     @parse_arguments
-    @click.argument("job")
-    @click.option("--recursive", "-R", is_flag=True)
-    def do_kill_job(self, job: str, recursive: bool) -> None:
-        self.state.kill_job(job, recursive=recursive, confirm=click.confirm)
+    @click.argument("path")
+    @click.option("--recursive", "-r", is_flag=True, help="Search recursively for jobs")
+    def do_kill_job(self, path: str, recursive: bool) -> None:
+        """Kill job(s) at PATH"""
+        self.state.kill_job(path, recursive=recursive, confirm=click.confirm)
 
     @parse_arguments
-    @click.argument("job")
-    @click.option("--recursive", "-R", is_flag=True)
-    @click.option("--failed", "-F", is_flag=True)
-    def do_resubmit_job(self, job: str, recursive: bool, failed: bool) -> None:
+    @click.argument("path")
+    @click.option("--recursive", "-r", is_flag=True, help="Search recursively for jobs")
+    @click.option(
+        "--failed", "-F", is_flag=True, help="Only resubmit jobs in status FAILED"
+    )
+    def do_resubmit_job(self, path: str, recursive: bool, failed: bool) -> None:
+        """Resubmit jobs at PATH."""
         self.state.resubmit_job(
-            job, click.confirm, recursive=recursive, failed_only=failed
+            path, click.confirm, recursive=recursive, failed_only=failed
         )
 
     @parse_arguments
-    @click.argument("job_arg")
-    @click.option("--refresh", "-r", is_flag=True)
-    def do_status(self, job_arg: str, refresh: bool) -> None:
-        """Print status of JOB"""
-        jobs = self.state.get_jobs(job_arg)
-
-        if refresh:
-            self.state.refresh_jobs(jobs)
-
-        for job in jobs:
-            click.echo(f"{job}")
-
-    @parse_arguments
-    @click.argument("job")
-    def do_update(self, job: str) -> None:
-        jobs = self.state.get_jobs(job)
+    @click.argument("path")
+    def do_update(self, path: str) -> None:
+        """Update the job at PATH."""
+        jobs = self.state.get_jobs(path)
         self.state.refresh_jobs(jobs)
 
     @parse_arguments
-    @click.argument("job_str")
-    @click.option("--number-of-lines", "-n", default=20, type=int)
-    def do_tail(self, job_str: str, number_of_lines: int) -> None:
+    @click.argument("path")
+    @click.option(
+        "--number-of-lines",
+        "-n",
+        default=20,
+        type=int,
+        help="How many lines to print when starting",
+    )
+    def do_tail(self, path: str, number_of_lines: int) -> None:
+        """
+        Tail the stdout of the job at PATH.
+        Will wait for the creation of the stdout file if it hasn't already been created.
+        """
         from sh import tail  # type: ignore
 
-        jobs = self.state.get_jobs(job_str)
+        jobs = self.state.get_jobs(path)
         assert len(jobs) == 1
         job = jobs[0]
 
@@ -471,9 +557,10 @@ class Repl(cmd.Cmd):
             pass
 
     @parse_arguments
-    @click.argument("job_str")
-    def do_less(self, job_str: str) -> None:
-        jobs = self.state.get_jobs(job_str)
+    @click.argument("path")
+    def do_less(self, path: str) -> None:
+        """Open program less on the stdout file of the job at PATH."""
+        jobs = self.state.get_jobs(path)
         assert len(jobs) == 1
         job = jobs[0]
 
@@ -488,22 +575,51 @@ class Repl(cmd.Cmd):
         click.echo_via_pager(reader())
 
     @parse_arguments
-    @click.argument("job_arg")
-    @click.option("--notify/--no-notify", default=True)
-    @click.option("--recursive", "-R", is_flag=True)
-    @click.option("--poll-interval", "-i", type=int, default=None)
-    @click.option("--notify-interval", "-n", type=str, default=None)
+    @click.argument("path")
+    @click.option(
+        "--notify/--no-notify",
+        default=True,
+        help="Send a notification when wait terminates",
+    )
+    @click.option("--recursive", "-r", is_flag=True, help="Search recursively for jobs")
+    @click.option(
+        "--poll-interval",
+        "-i",
+        type=int,
+        default=None,
+        help="Interval with which to poll for job status updates",
+    )
+    @click.option(
+        "--notify-interval",
+        "-n",
+        type=str,
+        default="30m",
+        help="Send periodic status updates with this interval",
+    )
     def do_wait(
         self,
-        job_arg: str,
+        path: str,
         notify: bool,
         recursive: bool,
         poll_interval: Optional[int],
         notify_interval: Optional[str],
     ) -> None:
+        """
+        Wait on the job(s) at PATH.
+
+        This command will periodically poll the driver for updates on the given jobs,
+        and will display a tally of the jobs' status.
+
+        Note: notifications will only be sent if a notification provider is configured in
+        the config file.
+        """
 
         update_interval: Optional[datetime.timedelta]
-        if notify and notify_interval is not None:
+        if (
+            notify
+            and notify_interval is not None
+            and notify_interval not in ("none", "None")
+        ):
             update_interval = datetime.timedelta(
                 seconds=humanfriendly.parse_timespan(notify_interval)
             )
@@ -511,7 +627,7 @@ class Repl(cmd.Cmd):
             update_interval = None
 
         self.state.wait(
-            job_arg,
+            path,
             notify=notify,
             recursive=recursive,
             poll_interval=poll_interval,
@@ -519,9 +635,11 @@ class Repl(cmd.Cmd):
         )
 
     def do_exit(self, arg: str) -> bool:
+        """Exit the repl"""
         return True
 
     def do_EOF(self, arg: str) -> bool:
+        """Helper command to handle Ctrl+D"""
         return self.do_exit(arg)
 
     def preloop(self) -> None:
