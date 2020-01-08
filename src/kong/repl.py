@@ -16,6 +16,7 @@ import click
 import peewee as pw
 from click import style
 from kong.model.job import color_dict
+from .table import format_table
 
 from .util import rjust, shorten_path, Spinner
 from .state import DoesNotExist
@@ -179,24 +180,8 @@ class Repl(cmd.Cmd):
                     jobs = cast(list, self.state.refresh_jobs(jobs))
 
             if len(folders) > 0:
-                folder_name_length = max([len(f.name) for f in folders])
-
                 headers = ("name", "job counts")
-
-                folder_name_length = max(folder_name_length, len(headers[0]))
-
-                click.echo(
-                    headers[0].ljust(folder_name_length)
-                    + " "
-                    + headers[1].rjust(width - folder_name_length - 1)
-                )
-
-                click.echo(
-                    "-" * folder_name_length
-                    + " "
-                    + "-" * (width - folder_name_length - 1)
-                )
-
+                rows = []
                 for folder in folders:
                     folder_jobs = folder.jobs_recursive()
                     # accumulate counts
@@ -209,16 +194,13 @@ class Repl(cmd.Cmd):
                     output = ""
                     for k, c in counts.items():
                         output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
-                    output = folder.name.ljust(folder_name_length) + rjust(
-                        output, width - folder_name_length
-                    )
 
-                    click.echo(output)
+                    rows.append((folder.name, output))
 
-                click.echo("")
+                click.echo(format_table(headers, rows, align=("l+", "r")))
 
             if len(jobs) > 0:
-                headers_jobs = (
+                headers = (
                     "job id",
                     "batch job id",
                     "created",
@@ -226,65 +208,22 @@ class Repl(cmd.Cmd):
                     "status",
                 )
 
-                name_length = max(
-                    max([len(str(j.job_id)) for j in jobs]), len(headers_jobs[0])
-                )
-
-                status_len = len("SUBMITTED")
-                status_len = max(status_len, len(headers_jobs[-1]))
-
                 def dtfmt(dt: datetime.datetime) -> str:
                     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-                datetime_len = len(dtfmt(jobs[0].updated_at))
 
-                bjobid_len = (
-                    width
-                    - name_length
-                    - status_len
-                    - 2 * datetime_len
-                    - len(headers_jobs)
-                )
-                bjobid_len = max(bjobid_len, len(headers_jobs[1]))
-
-                click.echo(
-                    headers_jobs[0].rjust(name_length)
-                    + " "
-                    + headers_jobs[1].rjust(bjobid_len)
-                    + " "
-                    + headers_jobs[2].ljust(datetime_len)
-                    + " "
-                    + headers_jobs[3].ljust(datetime_len)
-                    + " "
-                    + headers_jobs[4].ljust(status_len)
-                )
-                click.echo(
-                    "-" * name_length
-                    + " "
-                    + "-" * bjobid_len
-                    + " "
-                    + "-" * datetime_len
-                    + " "
-                    + "-" * datetime_len
-                    + " "
-                    + "-" * status_len
-                )
-
+                rows = []
                 for job in jobs:
-                    job_id = str(job.job_id).rjust(name_length)
-                    if job.batch_job_id is None:
-                        batch_job_id = " " * bjobid_len
-                    else:
-                        batch_job_id = job.batch_job_id.rjust(bjobid_len)
+                    job_id = str(job.job_id)
+                    batch_job_id = str(job.batch_job_id)
                     _, status_name = str(job.status).split(".", 1)
                     color = color_dict[job.status]
+                    row = (job_id, batch_job_id, dtfmt(job.created_at), dtfmt(job.updated_at), status_name)
 
-                    # table.append_row(())
+                    rows.append(tuple(click.style(c, fg=color) for c in row))
 
-                    click.secho(
-                        f"{job_id} {batch_job_id} {dtfmt(job.created_at)} {dtfmt(job.updated_at)} {status_name}",
-                        fg=color,
-                    )
+                click.echo(format_table(headers, rows, align=("l", "r+", "l", "l", "l")))
+
 
         except pw.DoesNotExist:
             click.secho(f"Folder {dir} does not exist", fg="red")
