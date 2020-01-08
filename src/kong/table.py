@@ -30,7 +30,7 @@ def _format_row(
     max_width: Optional[int] = None,
     padstr: str = " ",
 ) -> str:
-    assert len(cols) == len(aligns)
+    assert len(cols) == len(aligns), "Number of aligns must match columns"
     colstrs = ["" for _ in cols]
     stretch_col = None
     for idx, (col, width, align) in enumerate(zip(cols, widths, aligns)):
@@ -58,13 +58,14 @@ def _format_row(
     return " ".join(colstrs)
 
 
-def render_table(
+def format_table(
     headers: Tuple[str],
     rows: List[Tuple[str, ...]],
     align: Tuple[str, ...],
     width: Optional[int] = None,
 ) -> str:
-    if width is None and "s" in align:
+    assert len(headers) == len(align), "Number of aligns must match columns"
+    if width is None and any("+" in a for a in align):
         width, _ = shutil.get_terminal_size((80, 40))
 
     col_widths = [len(click.unstyle(h)) for h in headers]

@@ -2,7 +2,7 @@ import click
 import pytest
 from click import unstyle
 
-from kong.table import render_table, _do_align
+from kong.table import format_table, _do_align
 
 
 def test_no_stretch():
@@ -14,7 +14,7 @@ def test_no_stretch():
     ]
     align = ["r", "c", "l"]
 
-    s = render_table(headers, rows, align, width=None)
+    s = format_table(headers, rows, align, width=None)
     print(s)
 
     assert (
@@ -30,7 +30,7 @@ nebukadnezar  otto   kilo
         ]
     )
 
-    s = render_table(headers, rows, align, width=80)
+    s = format_table(headers, rows, align, width=80)
     print(s)
 
     assert (
@@ -55,7 +55,7 @@ def test_stretch():
         ["nebukadnezar", "otto", "kilo"],
     ]
     align = ["r+", "c", "l"]
-    s = render_table(headers, rows, align, width=80)
+    s = format_table(headers, rows, align, width=80)
     assert (
         s
         == """
@@ -73,7 +73,7 @@ def test_stretch():
         assert len(line) == 80
 
     align = ["l", "r+", "l"]
-    s = render_table(headers, rows, align, width=100)
+    s = format_table(headers, rows, align, width=100)
     assert (
         s
         == """
@@ -91,7 +91,7 @@ nebukadnezar                                                                    
         assert len(line) == 100
 
     align = ["r+", "r", "l"]
-    s = render_table(headers, rows, align, width=100)
+    s = format_table(headers, rows, align, width=100)
     print()
     print(s)
     assert (
@@ -116,7 +116,7 @@ nebukadnezar                                                                    
         ["nebukadnezar", "otto", "kilo"],
     ]
     align = ["l", "c+", "l"]
-    s = render_table(headers, rows, align, width=40)
+    s = format_table(headers, rows, align, width=40)
     print(s)
 
     assert (
@@ -145,7 +145,7 @@ def test_colors():
     ]
     align = ["r", "c", "l"]
 
-    s = render_table(headers, rows, align, width=None)
+    s = format_table(headers, rows, align, width=None)
     print()
     print(s)
 
@@ -164,7 +164,7 @@ nebukadnezar  otto   kilo
 
     align = ["r+", "c", "l"]
 
-    s = render_table(headers, rows, align, width=100)
+    s = format_table(headers, rows, align, width=100)
     print()
     print(s)
 
