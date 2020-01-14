@@ -45,7 +45,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
     repl.onecmd("ls --recursive")
     out, err = capsys.readouterr()
-    #assert all(f.name in out for f in state.cwd.children)
+    # assert all(f.name in out for f in state.cwd.children)
     all_jobs = [j.job_id for j in Job.select()]
     assert all(f"{j}" in out for j in all_jobs)
 
@@ -76,8 +76,8 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         state.ls.assert_called_once()
         state.refresh_jobs.assert_called_once()
 
-def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
 
+def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
     class DirectExecutor(Executor):
         def __init__(self, *args, **kwargs):
             pass
@@ -93,7 +93,9 @@ def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
         def __enter__(self):
             return self
 
-    monkeypatch.setattr("kong.repl.ThreadPoolExecutor", DirectExecutor) # disable threads
+    monkeypatch.setattr(
+        "kong.repl.ThreadPoolExecutor", DirectExecutor
+    )  # disable threads
     monkeypatch.setattr("kong.repl.Job.size", Mock(return_value=42))
     repl.onecmd("ls -s .")
     out, err = capsys.readouterr()
@@ -104,7 +106,9 @@ name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
 f1   168 bytes                      0       4         0       0      0         0
 f2   252 bytes                      0       6         0       0      0         0
 f3   0 bytes                        0       0         0       0      0         0
-"""[1:-1]
+"""[
+        1:-1
+    ]
     assert "\n".join(lines[2:7]) == exp
 
 
@@ -328,7 +332,6 @@ def test_mv_folder(state, repl, capsys):
 
     repl.onecmd("mv --help")
     out, err = capsys.readouterr()
-
 
     f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
 
@@ -578,7 +581,11 @@ def test_wait(repl, monkeypatch):
 
     repl.onecmd("wait * --notify --recursive --poll-interval 50 --notify-interval 30m")
     state.wait.assert_called_once_with(
-        "*", notify=True, recursive=True, poll_interval=50, update_interval=timedelta(minutes=30)
+        "*",
+        notify=True,
+        recursive=True,
+        poll_interval=50,
+        update_interval=timedelta(minutes=30),
     )
 
 
@@ -666,7 +673,6 @@ def test_create_job(repl, state, tree, capsys):
     assert str(j1.job_id) in out
     assert j1.batch_job_id in out
 
-
     repl.do_create_job("--help")
     out, err = capsys.readouterr()
     assert "Usage" in out
@@ -680,6 +686,7 @@ def test_create_job(repl, state, tree, capsys):
 
     j4 = root.jobs[-1]
     assert j4.command == "exe --and --some arguments --and options"
+
 
 def test_create_job_extra_arguments(repl, state, tree, monkeypatch):
     root = tree

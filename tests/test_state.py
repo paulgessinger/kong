@@ -552,6 +552,7 @@ def test_mkdir_create_parent(state):
     state.mkdir("/basic2", create_parent=True)
     assert Folder.find_by_path(state.cwd, "/basic2") is not None
 
+
 def test_rm_folder(state, db):
     root = Folder.get_root()
 
@@ -996,19 +997,22 @@ def test_wait(state, monkeypatch):
 
     nm.notify.reset_mock()
     driver.wait.reset_mock()
+
     def waiter(*args, **kwargs):
         for _ in range(2):
             yield jobs[0]
             time.sleep(0.2)
 
     driver.wait.side_effect = waiter
-    exhaust(state.wait("*", notify=True, progress=True, update_interval=timedelta(seconds=0.15)))
+    exhaust(
+        state.wait(
+            "*", notify=True, progress=True, update_interval=timedelta(seconds=0.15)
+        )
+    )
     assert nm.notify.call_count == 2
     assert "progress" in nm.notify.mock_calls[0][2]["title"]
     assert "complete" in nm.notify.mock_calls[-1][2]["title"]
     assert driver.wait.call_count == 1
-
-
 
 
 def test_wait_timeout(state, monkeypatch):

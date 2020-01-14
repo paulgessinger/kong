@@ -101,4 +101,3 @@ def test_interactive(app_env, cli, monkeypatch):
 
     cli.invoke(main, ["interactive"])
     mock.assert_called_once()
-

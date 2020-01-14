@@ -101,33 +101,40 @@ def test_slurm_schema():
     with pytest.raises(SchemaError):
         slurm_schema.validate({"sacct_delta": "blablurz"})
 
+
 def test_slurm_schema_file(app_env):
     app_dir, config_path, tmp_path = app_env
     os.makedirs(app_dir)
 
     with open(config_path, "w") as fh:
-        fh.write("""
+        fh.write(
+            """
 slurm_driver:
     sacct_delta: blablurz
-        """.strip())
+        """.strip()
+        )
 
     with pytest.raises(SchemaError):
         Config()
 
     with open(config_path, "w") as fh:
-        fh.write("""
+        fh.write(
+            """
 slurm_driver:
     sacct_delta: 10 weeks
-        """.strip())
+        """.strip()
+        )
 
     cfg = Config()
     assert cfg.data["slurm_driver"]["sacct_delta"] == timedelta(weeks=10)
 
     with open(config_path, "w") as fh:
-        fh.write("""
+        fh.write(
+            """
 slurm_driver:
     sacct_delta: 50 weeks
-        """.strip())
+        """.strip()
+        )
 
     cfg = Config()
     print(cfg.data)

@@ -41,6 +41,7 @@ def test_driver_base_all_methods(driver):
         except NotImplementedError:
             pass
 
+
 def test_init(noabc, state):
     DriverBase(None)
     DriverBase(state.config)
@@ -94,22 +95,23 @@ def test_wait(driver, monkeypatch):
     driver.wait("*", progress=False)
     assert wait_gen.call_count == 1
 
+
 def test_make_log_path(driver, monkeypatch):
-        monkeypatch.setitem(driver.config.data, "jobdir", "JOB_BASE")
+    monkeypatch.setitem(driver.config.data, "jobdir", "JOB_BASE")
 
-        job = Mock()
+    job = Mock()
 
-        job.job_id = 123456
-        assert driver.make_log_path(job).endswith("JOB_BASE/12/34/123456")
+    job.job_id = 123456
+    assert driver.make_log_path(job).endswith("JOB_BASE/12/34/123456")
 
-        job.job_id = 994784367
-        assert driver.make_log_path(job).endswith("JOB_BASE/99/47/994784367")
+    job.job_id = 994784367
+    assert driver.make_log_path(job).endswith("JOB_BASE/99/47/994784367")
 
-        job.job_id = 456
-        assert driver.make_log_path(job).endswith("JOB_BASE/00/04/000456")
+    job.job_id = 456
+    assert driver.make_log_path(job).endswith("JOB_BASE/00/04/000456")
 
-        job.job_id = 3854
-        assert driver.make_log_path(job).endswith("JOB_BASE/00/38/003854")
+    job.job_id = 3854
+    assert driver.make_log_path(job).endswith("JOB_BASE/00/38/003854")
 
 
 def test_make_output_path(driver, monkeypatch):

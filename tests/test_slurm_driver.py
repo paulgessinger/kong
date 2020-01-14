@@ -71,7 +71,7 @@ def test_sacct_parse(driver, monkeypatch, state):
         mock = Mock(return_value=sacct_output.split("\n"))
         m.setattr(driver.slurm, "_sacct", mock)
 
-        td = timedelta(days = 10)
+        td = timedelta(days=10)
         res = list(driver.slurm.sacct([], td))
 
         starttime = date.today() - td
@@ -625,7 +625,9 @@ def test_wait(driver, state, monkeypatch):
             self.state_idx = 0
             self.jobs = []
 
-        def sacct(self, jobs: Collection["Job"], start_delta: timedelta) -> Iterator[SlurmAccountingItem]:
+        def sacct(
+            self, jobs: Collection["Job"], start_delta: timedelta
+        ) -> Iterator[SlurmAccountingItem]:
             values = [
                 [
                     SlurmAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0)
