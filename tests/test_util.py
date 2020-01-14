@@ -1,7 +1,11 @@
 import os
+import shutil
 import stat
+import subprocess
+from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import timedelta
 from io import StringIO
+from pathlib import Path
 from unittest.mock import Mock, ANY
 
 import click
@@ -21,6 +25,7 @@ from kong.util import (
     chunks,
     Spinner,
     Progress,
+    get_size,
 )
 
 
@@ -251,3 +256,40 @@ def test_progress(monkeypatch):
     for i in Progress(range(10)):
         pass
     assert tqdm.call_count == 1
+
+
+@pytest.yield_fixture
+def cleaned_tmpdir(tmpdir):
+    sub = Path(tmpdir) / "subdir"
+    sub.mkdir(exist_ok=True)
+    shutil.rmtree(sub)
+    sub.mkdir()
+    yield sub
+
+
+def test_get_size(cleaned_tmpdir):
+    tmpdir = cleaned_tmpdir
+
+    A = tmpdir / "A"
+    B = tmpdir / "B"
+    C = B / "C"
+
+    A.mkdir()
+    B.mkdir()
+    C.mkdir()
+
+    files = (
+        [A / f"file_{i}" for i in range(4)]
+        + [B / f"file_{i}" for i in range(8)]
+        + [C / f"file_{i}" for i in range(2)]
+    )
+
+    for file in files:
+        with file.open("wb") as fh:
+            fh.write(b"X" * 1024)
+
+    size = sum(os.path.getsize(f) for f in files)
+
+    assert get_size(tmpdir) == size
+    with ThreadPoolExecutor() as ex:
+        assert get_size(tmpdir, ex) == size

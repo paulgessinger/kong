@@ -3,6 +3,7 @@ import re
 import os
 import shutil
 import stat
+from concurrent.futures._base import Executor, wait
 from datetime import timedelta
 from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
@@ -139,3 +140,20 @@ def chunks(l: List[T], n: int) -> Iterable[List[T]]:
 
 def exhaust(generator: Iterable[Any]) -> None:
     deque(generator, maxlen=0)
+
+
+def get_size(path: str, ex: Optional[Executor] = None) -> int:
+    size = 0
+    futures = []
+    for d, _, files in os.walk(path):
+        if ex is None:
+            size += sum([os.path.getsize(os.path.join(d, f)) for f in files])
+        else:
+            for f in files:
+                futures.append(ex.submit(os.path.getsize, os.path.join(d, f)))
+
+    if ex is not None:
+        wait(futures)
+        size = sum(f.result() for f in futures)
+
+    return size

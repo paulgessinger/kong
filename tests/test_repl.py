@@ -1,6 +1,7 @@
 import os
 import tempfile
 import time
+from concurrent.futures import Executor, Future
 from datetime import timedelta
 
 import pytest
@@ -44,7 +45,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
     repl.onecmd("ls --recursive")
     out, err = capsys.readouterr()
-    #assert all(f.name in out for f in state.cwd.children)
+    # assert all(f.name in out for f in state.cwd.children)
     all_jobs = [j.job_id for j in Job.select()]
     assert all(f"{j}" in out for j in all_jobs)
 
@@ -67,10 +68,48 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         job = state.create_job(command="sleep 1")
         job.batch_job_id = None
 
-        m.setattr(state, "refresh_jobs", Mock())
+        m.setattr(state, "refresh_jobs", Mock(return_value=[]))
         m.setattr(state, "ls", Mock(return_value=([], [job])))
 
         repl.onecmd("ls -R /")
+
+        state.ls.assert_called_once()
+        state.refresh_jobs.assert_called_once()
+
+
+def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
+    class DirectExecutor(Executor):
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def submit(self, fn, *args, **kwargs):
+            future = Future()
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except Exception as e:
+                future.set_exception(e)
+            return future
+
+        def __enter__(self):
+            return self
+
+    monkeypatch.setattr(
+        "kong.repl.ThreadPoolExecutor", DirectExecutor
+    )  # disable threads
+    monkeypatch.setattr("kong.repl.Job.size", Mock(return_value=42))
+    repl.onecmd("ls -s .")
+    out, err = capsys.readouterr()
+    lines = out.strip().split("\n")
+    exp = """
+name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
+---- ------------------------ ------- ------- --------- ------- ------ ---------
+f1   168 bytes                      0       4         0       0      0         0
+f2   252 bytes                      0       6         0       0      0         0
+f3   0 bytes                        0       0         0       0      0         0
+"""[
+        1:-1
+    ]
+    assert "\n".join(lines[2:7]) == exp
 
 
 @skip_lxplus
@@ -87,15 +126,16 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     # without refresh
     repl.do_ls(".")
     out, err = capsys.readouterr()
-    assert "CREATED" not in out
-    assert "COMPLETED" not in out
-    assert "SUBMITTED" in out
+    lines = out.split("\n")[:-1]
+    assert all("SUBMITTED" in l for l in lines[-3:])
+    assert all("COMPLETED" not in l for l in lines[-3:])
 
     # with refresh
     repl.do_ls(". --refresh")
     out, err = capsys.readouterr()
-    assert "SUBMITTED" not in out
-    assert "COMPLETED" in out
+    lines = out.split("\n")[:-1]
+    assert all("SUBMITTED" not in l for l in lines[-3:])
+    assert all("COMPLETED" in l for l in lines[-3:])
 
     with monkeypatch.context() as m:
         mock = Mock()
@@ -292,7 +332,6 @@ def test_mv_folder(state, repl, capsys):
 
     repl.onecmd("mv --help")
     out, err = capsys.readouterr()
-
 
     f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
 
@@ -542,7 +581,11 @@ def test_wait(repl, monkeypatch):
 
     repl.onecmd("wait * --notify --recursive --poll-interval 50 --notify-interval 30m")
     state.wait.assert_called_once_with(
-        "*", notify=True, recursive=True, poll_interval=50, update_interval=timedelta(minutes=30)
+        "*",
+        notify=True,
+        recursive=True,
+        poll_interval=50,
+        update_interval=timedelta(minutes=30),
     )
 
 
@@ -630,7 +673,6 @@ def test_create_job(repl, state, tree, capsys):
     assert str(j1.job_id) in out
     assert j1.batch_job_id in out
 
-
     repl.do_create_job("--help")
     out, err = capsys.readouterr()
     assert "Usage" in out
@@ -644,6 +686,7 @@ def test_create_job(repl, state, tree, capsys):
 
     j4 = root.jobs[-1]
     assert j4.command == "exe --and --some arguments --and options"
+
 
 def test_create_job_extra_arguments(repl, state, tree, monkeypatch):
     root = tree
