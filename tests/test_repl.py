@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import time
 from concurrent.futures import Executor, Future
@@ -81,6 +82,27 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
         state.ls.assert_called_once()
         assert state.refresh_jobs.call_count == 1
+
+def test_ls_status(state, repl, capsys):
+    j1 = state.create_job(command="sleep 1")
+    j2 = state.create_job(command="sleep 1")
+    j3 = state.create_job(command="sleep 1")
+
+    j2.status = Job.Status.FAILED
+    j2.save()
+
+    repl.onecmd("ls")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 6
+
+    repl.onecmd("ls -S CREATED")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 5
+
+    repl.onecmd("ls -S FAILED")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 4
+
 
 
 def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
@@ -598,6 +620,7 @@ def test_wait(repl, state, monkeypatch):
     )
 
 
+
 def test_exit(repl):
     assert repl.do_exit("") == True
     assert repl.do_EOF("") == True
@@ -850,8 +873,21 @@ def test_update(repl, state, capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert "no such option" in out
 
+    j2 = state.create_job(command="sleep 0.2")
+
+    repl.onecmd("update -r .")
+    out, err = capsys.readouterr()
+    lines = out.strip("").split("\n")
+    # assert lines[2] == "bla"
+    assert re.match(r"\s*0U\s*1C\s*0S\s*0R\s*0F\s*1C", lines[2]) is not None
+
 
 def test_info(state, repl, capsys, monkeypatch):
+    repl.onecmd("info") # missing arg
+    out, err = capsys.readouterr()
+    assert "usage" in out
+
+
     job = state.create_job(command="sleep 1")
 
     repl.onecmd("info 1")
