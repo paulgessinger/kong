@@ -46,41 +46,6 @@ def complete_path(cwd: Folder, path: str) -> List[str]:
     return options
 
 
-def add_completion(*names: str) -> Callable[[type], type]:
-    def decorator(cls: type) -> type:
-        for name in names:
-            method_name = f"complete_{name}"
-
-            def handler(
-                self: type, text: str, line: str, begidx: int, endidx: int
-            ) -> List[str]:
-                logger.debug(
-                    "%s: text: %s, line: %s, begidx: %d, endidx: %d",
-                    method_name,
-                    text,
-                    line,
-                    begidx,
-                    endidx,
-                )
-
-                # find component
-                parts = shlex.split(line)
-                base: Optional[str] = None
-                for i, part in enumerate(parts):  # pragma: no branch
-                    prelength = len(" ".join(parts[: i + 1]))
-                    if prelength >= begidx:
-                        base = part
-                        break
-                assert base is not None, "Error extracting active part"
-
-                return complete_path(self.state.cwd, base)  # type: ignore
-
-            setattr(cls, method_name, handler)
-        return cls
-
-    return decorator
-
-
 def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
     _, prog_name = fn.__name__.split("_", 1)
 
@@ -109,18 +74,6 @@ def parse_arguments(fn: Any) -> Callable[[Any, str], None]:
     return wrapped
 
 
-@add_completion(
-    "ls",
-    "mkdir",
-    "mv",
-    "rm",
-    "cd",
-    "submit_job",
-    "kill_job",
-    "info",
-    "resubmit_job",
-    "wait",
-)
 class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
@@ -133,6 +86,23 @@ class Repl(cmd.Cmd):
         if line != "":
             logger.debug("called '%s'", line)
         return line
+
+    def completedefault(self: type, text: str, line: str, begidx: int, endidx: int):
+        logger.debug(
+            "text: %s, line: %s, begidx: %d, endidx: %d", text, line, begidx, endidx,
+        )
+
+        # find component
+        parts = shlex.split(line)
+        base: Optional[str] = None
+        for i, part in enumerate(parts):  # pragma: no branch
+            prelength = len(" ".join(parts[: i + 1]))
+            if prelength >= begidx:
+                base = part
+                break
+        assert base is not None, "Error extracting active part"
+
+        return complete_path(self.state.cwd, base)  # type: ignore
 
     def onecmd(self, *args: str) -> bool:
         try:
