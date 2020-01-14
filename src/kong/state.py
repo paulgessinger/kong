@@ -624,13 +624,17 @@ class State:
             out = [f"{k.name[:1]}{v}" for k, v in counts.items()]
 
             if notify:
+                if counts[Job.Status.FAILED] > 0:
+                    result = "FAILURE"
+                else:
+                    result = "COMPLETED"
                 self.config.notifications.notify(
-                    title="kong: Job wait complete",
+                    title=f"kong: Job wait {result}",
                     message=f"Successfully waited for {len(jobs)} job(s) to finish:\n{', '.join(out)}",
                 )
         except TimeoutError:
             if notify:
                 self.config.notifications.notify(
-                    title="kong: Job wait timeout",
+                    title="kong: Job wait TIMEOUT",
                     message=f"Timeout waiting for {len(jobs)} job(s) after {timeout}s",
                 )
