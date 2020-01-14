@@ -170,13 +170,7 @@ class Repl(cmd.Cmd):
         is_flag=True,
         help="Collect size of job outputs. Note: this can potentially take a while.",
     )
-    def do_ls(
-        self,
-        dir: str,
-        refresh: bool,
-        recursive: bool,
-        show_sizes: bool,
-    ) -> None:
+    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_sizes: bool) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
             ex: Optional[ThreadPoolExecutor] = None
@@ -229,13 +223,11 @@ class Repl(cmd.Cmd):
 
                 if show_sizes:
                     headers.append("output size")
-                    # align.append("r")
                     align = ["l", "l+"]
 
                 for s in Job.Status:
                     headers.append(click.style(s.name, fg=color_dict[s]))
                     align.append("r")
-
 
                 rows = []
                 for idx, folder in enumerate(folders):
@@ -265,9 +257,7 @@ class Repl(cmd.Cmd):
                 print()
 
             if len(jobs) > 0:
-                headers = [
-                    "job id",
-                ]
+                headers = ["job id"]
                 align = ["l"]
 
                 if show_sizes:

@@ -1,6 +1,7 @@
 import os
 import tempfile
 import time
+from concurrent.futures import Executor, Future
 from datetime import timedelta
 
 import pytest
@@ -67,15 +68,44 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         job = state.create_job(command="sleep 1")
         job.batch_job_id = None
 
-        m.setattr(state, "refresh_jobs", Mock())
+        m.setattr(state, "refresh_jobs", Mock(return_value=[]))
         m.setattr(state, "ls", Mock(return_value=([], [job])))
 
         repl.onecmd("ls -R /")
 
-def test_ls_size(repl, state, capsys, sample_jobs):
+        state.ls.assert_called_once()
+        state.refresh_jobs.assert_called_once()
+
+def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
+
+    class DirectExecutor(Executor):
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def submit(self, fn, *args, **kwargs):
+            future = Future()
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except Exception as e:
+                future.set_exception(e)
+            return future
+
+        def __enter__(self):
+            return self
+
+    monkeypatch.setattr("kong.repl.ThreadPoolExecutor", DirectExecutor) # disable threads
+    monkeypatch.setattr("kong.repl.Job.size", Mock(return_value=42))
     repl.onecmd("ls -s .")
     out, err = capsys.readouterr()
-    print(out)
+    lines = out.strip().split("\n")
+    exp = """
+name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
+---- ------------------------ ------- ------- --------- ------- ------ ---------
+f1   168 bytes                      0       4         0       0      0         0
+f2   252 bytes                      0       6         0       0      0         0
+f3   0 bytes                        0       0         0       0      0         0
+"""[1:-1]
+    assert "\n".join(lines[2:7]) == exp
 
 
 @skip_lxplus
