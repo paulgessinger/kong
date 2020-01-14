@@ -325,10 +325,13 @@ class State:
                     jobs += list(folder.jobs_recursive())
             except ValueError:
                 pass
+
             try:
                 jobs += list(self.get_jobs(name))
             except ValueError:
                 pass
+
+            jobs = list(set(jobs))
 
             if len(folders) == 0 and len(jobs) == 0:
                 raise DoesNotExist(f"No such folder or job: {name}")
