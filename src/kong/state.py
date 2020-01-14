@@ -575,7 +575,9 @@ class State:
         update_interval: Optional[timedelta] = None,
     ) -> Iterable[List[Job]]:
         jobs: List[Job]
-        jobs = self._extract_jobs(jobspec, recursive=recursive)
+        jobs = list(self._extract_jobs(jobspec, recursive=recursive))
+
+        logger.debug("Jobs for waiting: %s", jobs)
         assert len(jobs) > 0
         first_job = jobs[0]
         first_job.ensure_driver_instance(self.config)
