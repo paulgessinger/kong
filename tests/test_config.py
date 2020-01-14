@@ -11,6 +11,13 @@ from kong.config import Config, Notifier, NotificationManager, slurm_schema
 def test_config_creation(state):
     config = Config({})
 
+def test_attribute_access(state):
+    config = Config({"exist": 42})
+    assert config.exist == 42
+
+    with pytest.raises(AttributeError):
+        config.noexist
+
 
 def test_notifier(monkeypatch):
     notifier = Mock()
