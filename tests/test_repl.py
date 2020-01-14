@@ -144,49 +144,6 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
         assert mock.call_count == 1  # called once
 
 
-def test_complete_funcs(state, tree, repl, monkeypatch):
-    root = Folder.get_root()
-    cmpl = Mock()
-    monkeypatch.setattr("kong.repl.complete_path", cmpl)
-
-    for c in [
-        "ls",
-        "mkdir",
-        "mv",
-        "rm",
-        "cd",
-        "submit_job",
-        "kill_job",
-        "info",
-        "resubmit_job",
-    ]:
-        func = getattr(repl, f"complete_{c}")
-
-        func("hurz", "ls hurz", 4, 6)
-        cmpl.assert_called_once_with(root, "hurz")
-        cmpl.reset_mock()
-
-        func("hurz/", "ls hurz/", 8, 8)
-        cmpl.assert_called_once_with(root, "hurz/")
-        cmpl.reset_mock()
-
-        func("", "ls hurz/ blubb", 8, 8)
-        cmpl.assert_called_once_with(root, "hurz/")
-        cmpl.reset_mock()
-
-        func("blubb", "ls hurz/ blubb", 9, 13)
-        cmpl.assert_called_once_with(root, "blubb")
-        cmpl.reset_mock()
-
-        func("blubb", "ls hurz/ blubb/", 15, 15)
-        cmpl.assert_called_once_with(root, "blubb/")
-        cmpl.reset_mock()
-
-        func("blu", "ls hurz/blu", 8, 10)
-        cmpl.assert_called_once_with(root, "hurz/blu")
-        cmpl.reset_mock()
-
-
 def test_complete_path(state, tree, repl):
     root = Folder.get_root()
     alts = complete_path(root, "f")
@@ -202,6 +159,18 @@ def test_complete_path(state, tree, repl):
 
     alts = complete_path(root.subfolder("f2"), "a")
     assert alts == ["alpha/"]
+
+def test_completed_default(repl):
+    root = Folder.get_root()
+    root.add_folder("alpha")
+    root.add_folder("beta_delta")
+    root.add_folder("beta_gamma")
+
+    assert repl.completedefault("al", "ls al", 3, 5) == ["alpha/"]
+    assert repl.completedefault("be", "ls alpha be", 9, 11) == ["beta_delta/", "beta_gamma/"]
+    assert repl.completedefault("alp", "ls alp beta_delta", 3, 6) == ["alpha/"]
+    assert repl.completedefault("alp", "ls alp nope", 3, 6) == ["alpha/"]
+    assert repl.completedefault("be", "ls be", 3, 5) == ["beta_delta/", "beta_gamma/"]
 
 
 def test_mkdir(state, repl, db, capsys, monkeypatch):
