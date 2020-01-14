@@ -125,6 +125,8 @@ class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
 
+    _raise: bool = False
+
     def __init__(self, state: state.State) -> None:
         self.state = state
         super().__init__()
@@ -148,6 +150,8 @@ class Repl(cmd.Cmd):
         except (BaseException, Exception) as e:
             logger.debug("Exception occured", exc_info=True)
             click.secho(f"{e}", fg="red")
+            if self._raise:
+                raise e
         return False
 
     @parse_arguments
