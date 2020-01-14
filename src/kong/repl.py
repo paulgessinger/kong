@@ -87,7 +87,14 @@ class Repl(cmd.Cmd):
             logger.debug("called '%s'", line)
         return line
 
-    def completedefault(self: type, text: str, line: str, begidx: int, endidx: int):
+    # For whatever reason, Cmd.completedefault has this signature...
+    def completedefault(self, *args: Any) -> List[str]:
+        # forward to typed implementation
+        return self.completedefault_impl(*args)
+
+    def completedefault_impl(
+        self, text: str, line: str, begidx: int, endidx: int
+    ) -> List[str]:
         logger.debug(
             "text: %s, line: %s, begidx: %d, endidx: %d", text, line, begidx, endidx,
         )
