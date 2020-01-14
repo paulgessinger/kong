@@ -92,15 +92,16 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     # without refresh
     repl.do_ls(".")
     out, err = capsys.readouterr()
-    assert "CREATED" not in out
-    assert "COMPLETED" not in out
-    assert "SUBMITTED" in out
+    lines = out.split("\n")[:-1]
+    assert all("SUBMITTED" in l for l in lines[-3:])
+    assert all("COMPLETED" not in l for l in lines[-3:])
 
     # with refresh
     repl.do_ls(". --refresh")
     out, err = capsys.readouterr()
-    assert "SUBMITTED" not in out
-    assert "COMPLETED" in out
+    lines = out.split("\n")[:-1]
+    assert all("SUBMITTED" not in l for l in lines[-3:])
+    assert all("COMPLETED" in l for l in lines[-3:])
 
     with monkeypatch.context() as m:
         mock = Mock()
