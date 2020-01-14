@@ -164,8 +164,19 @@ class Repl(cmd.Cmd):
         is_flag=True,
         help="Recursively select all jobs from target directory",
     )
-    @click.option("--show-sizes", "-s", is_flag=True)
-    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_sizes: bool) -> None:
+    @click.option(
+        "--show-sizes",
+        "-s",
+        is_flag=True,
+        help="Collect size of job outputs. Note: this can potentially take a while.",
+    )
+    def do_ls(
+        self,
+        dir: str,
+        refresh: bool,
+        recursive: bool,
+        show_sizes: bool,
+    ) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
             ex: Optional[ThreadPoolExecutor] = None
@@ -214,14 +225,17 @@ class Repl(cmd.Cmd):
 
             if len(folders) > 0:
                 headers = ["name"]
-                align = ["l"]
+                align = ["l+"]
 
                 if show_sizes:
                     headers.append("output size")
+                    # align.append("r")
+                    align = ["l", "l+"]
+
+                for s in Job.Status:
+                    headers.append(click.style(s.name, fg=color_dict[s]))
                     align.append("r")
 
-                headers += ["job counts"]
-                align += ["r+"]
 
                 rows = []
                 for idx, folder in enumerate(folders):
@@ -240,7 +254,8 @@ class Repl(cmd.Cmd):
                     row = [folder.name]
                     if show_sizes:
                         row.append(humanfriendly.format_size(folder_sizes[idx]))
-                    row += [output]
+                    for k, c in counts.items():
+                        row.append(click.style(str(c), fg=color_dict[k]))
 
                     rows.append(tuple(row))
 
@@ -259,12 +274,7 @@ class Repl(cmd.Cmd):
                     headers.append("output size")
                     align.append("l")
 
-                headers += [
-                    "batch job id",
-                    "created",
-                    "updated",
-                    "status",
-                ]
+                headers += ["batch job id", "created", "updated", "status"]
                 align += ["r+", "l", "l", "l"]
 
                 def dtfmt(dt: datetime.datetime) -> str:

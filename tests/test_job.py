@@ -206,3 +206,11 @@ def test_bulk_select(state, monkeypatch):
     assert len(selected) == len(jobs)
     for exp, act in zip(jobs, selected):
         assert exp.job_id == act.job_id
+
+def test_size(state, monkeypatch):
+    job = state.create_job(command="sleep 1")
+    mock = Mock()
+    monkeypatch.setattr("kong.model.job.get_size", mock)
+    job.size()
+    assert mock.called_once_with(job.data["output_dir"], None)
+

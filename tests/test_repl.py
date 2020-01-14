@@ -72,6 +72,11 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
         repl.onecmd("ls -R /")
 
+def test_ls_size(repl, state, capsys, sample_jobs):
+    repl.onecmd("ls -s .")
+    out, err = capsys.readouterr()
+    print(out)
+
 
 @skip_lxplus
 def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
