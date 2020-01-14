@@ -78,6 +78,8 @@ class Repl(cmd.Cmd):
     intro = f"This is {APP_NAME} shell"
     prompt = f"({APP_NAME} > /) "
 
+    _raise: bool = False
+
     def __init__(self, state: state.State) -> None:
         self.state = state
         super().__init__()
@@ -125,6 +127,8 @@ class Repl(cmd.Cmd):
         except (BaseException, Exception) as e:
             logger.debug("Exception occured", exc_info=True)
             click.secho(f"{e}", fg="red")
+            if self._raise:
+                raise e
         return False
 
     @parse_arguments
@@ -147,7 +151,21 @@ class Repl(cmd.Cmd):
         is_flag=True,
         help="Collect size of job outputs. Note: this can potentially take a while.",
     )
-    def do_ls(self, dir: str, refresh: bool, recursive: bool, show_sizes: bool) -> None:
+    @click.option(
+        "--status",
+        "-S",
+        "status_filter_str",
+        type=click.Choice([s.name for s in Job.Status]),
+        help="Only list jobs with this status. Will still show other jobs in folder summaries",
+    )
+    def do_ls(
+        self,
+        dir: str,
+        refresh: bool,
+        recursive: bool,
+        show_sizes: bool,
+        status_filter_str: Optional[str],
+    ) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
             ex: Optional[ThreadPoolExecutor] = None
@@ -223,6 +241,7 @@ class Repl(cmd.Cmd):
                     row = [folder.name]
                     if show_sizes:
                         row.append(humanfriendly.format_size(folder_sizes[idx]))
+                    # row += [output]
                     for k, c in counts.items():
                         row.append(click.style(str(c), fg=color_dict[k]))
 
@@ -248,7 +267,17 @@ class Repl(cmd.Cmd):
                     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
                 rows = []
+                status_filter = (
+                    Job.Status[status_filter_str]
+                    if status_filter_str is not None
+                    else None
+                )
                 for idx, job in enumerate(jobs):
+
+                    if status_filter is not None:
+                        if job.status != status_filter:
+                            continue
+
                     job_id = str(job.job_id)
                     batch_job_id = str(job.batch_job_id)
                     _, status_name = str(job.status).split(".", 1)
@@ -489,11 +518,31 @@ class Repl(cmd.Cmd):
         )
 
     @parse_arguments
-    @click.argument("path")
-    def do_update(self, path: str) -> None:
+    @click.argument("path", default=".")
+    @click.option(
+        "--recursive/--no-recursive",
+        "-r/-f",
+        default=True,
+        help="Select jobs recursively",
+    )
+    def do_update(self, path: str, recursive: bool) -> None:
         """Update the job at PATH."""
-        jobs = self.state.get_jobs(path)
-        self.state.refresh_jobs(jobs)
+        with Spinner("Updating jobs"):
+            jobs = self.state.get_jobs(path, recursive=recursive)
+            self.state.refresh_jobs(jobs)
+        counts = {k: 0 for k in Job.Status}
+
+        click.echo(f"{len(jobs)} job(s) updated")
+
+        if len(jobs) > 1:
+            for job in jobs:
+                counts[job.status] += 1
+
+            output = ""
+            for k, c in counts.items():
+                output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
+
+            click.echo(output)
 
     @parse_arguments
     @click.argument("path")

@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import time
 from concurrent.futures import Executor, Future
@@ -8,6 +9,7 @@ import pytest
 from unittest import mock
 from unittest.mock import Mock, ANY, MagicMock
 import peewee as pw
+from click import UsageError
 from conftest import skip_lxplus
 
 from kong.model import Folder, Job
@@ -16,12 +18,16 @@ import kong
 
 import logging
 
+from kong.state import DoesNotExist
+
 kong.logger.logger.setLevel(logging.DEBUG)
 
 
 @pytest.fixture
 def repl(state):
-    return Repl(state)
+    r = Repl(state)
+    r._raise = True
+    return r
 
 
 def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
@@ -59,7 +65,8 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     assert all(f.name in out for f in state.cwd.children)
     assert all(f"{j.job_id}" in out for j in state.cwd.jobs)
 
-    repl.onecmd("ls --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("ls --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
@@ -74,7 +81,28 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         repl.onecmd("ls -R /")
 
         state.ls.assert_called_once()
-        state.refresh_jobs.assert_called_once()
+        assert state.refresh_jobs.call_count == 1
+
+def test_ls_status(state, repl, capsys):
+    j1 = state.create_job(command="sleep 1")
+    j2 = state.create_job(command="sleep 1")
+    j3 = state.create_job(command="sleep 1")
+
+    j2.status = Job.Status.FAILED
+    j2.save()
+
+    repl.onecmd("ls")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 6
+
+    repl.onecmd("ls -S CREATED")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 5
+
+    repl.onecmd("ls -S FAILED")
+    out, err = capsys.readouterr()
+    assert len(out.strip().split("\n")) == 4
+
 
 
 def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
@@ -138,10 +166,10 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     assert all("COMPLETED" in l for l in lines[-3:])
 
     with monkeypatch.context() as m:
-        mock = Mock()
+        mock = Mock(return_value=[])
         m.setattr(state, "refresh_jobs", mock)
         repl.onecmd("ls -R /")
-        assert mock.call_count == 1  # called once
+        assert mock.call_count == 2 # called once for folders, once for jobs
 
 
 def test_complete_path(state, tree, repl):
@@ -342,12 +370,14 @@ def test_mv_folder(state, repl, capsys):
 
     # try move to nonexistant
     repl.onecmd("cd /")
-    repl.onecmd("mv f2/f1 /nope/blub")
+    with pytest.raises(ValueError):
+        repl.onecmd("mv f2/f1 /nope/blub")
     out, err = capsys.readouterr()
     assert "/nope" in out and "not exist" in out
 
     # try to move nonexistant
-    repl.onecmd("mv ../nope f1")
+    with pytest.raises(DoesNotExist):
+        repl.onecmd("mv ../nope f1")
     out, err = capsys.readouterr()
     assert "../nope" in out and "No such" in out
 
@@ -395,7 +425,8 @@ def test_mv_job(state, repl, capsys):
     state.cd(root)
 
     # renaming does not work
-    repl.onecmd(f"mv {j5.job_id} 42")
+    with pytest.raises(ValueError):
+        repl.onecmd(f"mv {j5.job_id} 42")
     out, err = capsys.readouterr()
     assert "42" in out and "not exist" in out
 
@@ -450,7 +481,8 @@ def test_mv_bulk_folder(state, repl):
 
 
 def test_mv_error(state, repl, capsys, monkeypatch):
-    repl.onecmd("mv --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("mv --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
@@ -536,26 +568,26 @@ def test_cwd(state, repl, tree, capsys):
         assert out.strip() == "/f2/gamma"
 
 
-def test_wait(repl, monkeypatch):
-    state = Mock()
-    state.wait = Mock(return_value=iter([]))
-    monkeypatch.setattr(repl, "state", state)
+def test_wait(repl, state, monkeypatch):
+    wait = Mock(return_value=iter([]))
+    monkeypatch.setattr(state, "wait", wait)
 
     repl.onecmd("wait * --no-notify --recursive --poll-interval 50")
-    state.wait.assert_called_once_with(
+    wait.assert_called_once_with(
         "*", notify=False, recursive=True, poll_interval=50, update_interval=None
     )
 
-    state.wait.reset_mock()
+    wait.reset_mock()
 
     repl.onecmd("wait * --notify --recursive --poll-interval 50 --notify-interval 30m")
-    state.wait.assert_called_once_with(
+    wait.assert_called_once_with(
         "*",
         notify=True,
         recursive=True,
         poll_interval=50,
         update_interval=timedelta(minutes=30),
     )
+
 
 
 def test_exit(repl):
@@ -596,12 +628,15 @@ def test_onecmd(repl, monkeypatch, capsys):
 
     m = Mock(side_effect=TypeError("MESSAGE"))
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
-    repl.onecmd("whatever")
+    with pytest.raises(TypeError):
+        repl.onecmd("whatever")
     out, err = capsys.readouterr()
     assert "MESSAGE" in out
     m = Mock(side_effect=RuntimeError())
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
-    repl.onecmd("whatever")  # swallows other exceptions
+    with monkeypatch.context() as m:
+        m.setattr(repl, "_raise", False) # disable debug mode for this check
+        repl.onecmd("whatever")  # swallows other exceptions
 
 
 def test_cmdloop(repl, monkeypatch, capsys):
@@ -646,7 +681,8 @@ def test_create_job(repl, state, tree, capsys):
     out, err = capsys.readouterr()
     assert "Usage" in out
 
-    repl.onecmd("create_job --nope 5 sleep 2")  # wrong option --core
+    with pytest.raises(UsageError):
+        repl.onecmd("create_job --nope 5 sleep 2")  # wrong option --core
     out, err = capsys.readouterr()
     assert "no such" in out
 
@@ -702,7 +738,8 @@ def test_submit_job(repl, state, capsys, monkeypatch):
 
     out, err = capsys.readouterr()
 
-    repl.onecmd("submit_job --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("submit_job --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
@@ -724,7 +761,8 @@ def test_kill_job(repl, state, capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert j1.get_status() == Job.Status.FAILED
 
-    repl.onecmd("kill_job --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("kill_job --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
@@ -751,20 +789,25 @@ def test_resubmit_job(repl, state, capsys, monkeypatch):
     j1.reload()
     assert j1.status == Job.Status.SUBMITTED
 
-    repl.onecmd("resubmit_job --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("resubmit_job --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
 
 @skip_lxplus
-def test_update(repl, state, capsys):
+def test_update(repl, state, capsys, monkeypatch):
     root = Folder.get_root()
 
     repl.onecmd("update")
     out, err = capsys.readouterr()
-    assert "usage" in out
 
-    repl.onecmd("update 42")
+    repl.onecmd("update --help")
+    out, err = capsys.readouterr()
+    assert "Usage" in out
+
+    with pytest.raises(DoesNotExist):
+        repl.onecmd("update 42")
     out, err = capsys.readouterr()
     assert "not find" in out
 
@@ -794,12 +837,26 @@ def test_update(repl, state, capsys):
     j1.reload()
     assert j1.status == Job.Status.COMPLETED
 
-    repl.onecmd("update --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd("update --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
 
+    j2 = state.create_job(command="sleep 0.2")
+
+    repl.onecmd("update -r .")
+    out, err = capsys.readouterr()
+    lines = out.strip("").split("\n")
+    # assert lines[2] == "bla"
+    assert re.match(r"\s*0U\s*1C\s*0S\s*0R\s*0F\s*1C", lines[2]) is not None
+
 
 def test_info(state, repl, capsys, monkeypatch):
+    repl.onecmd("info") # missing arg
+    out, err = capsys.readouterr()
+    assert "usage" in out
+
+
     job = state.create_job(command="sleep 1")
 
     repl.onecmd("info 1")
@@ -811,7 +868,7 @@ def test_info(state, repl, capsys, monkeypatch):
         assert v in out
 
     with monkeypatch.context() as m:
-        refresh = Mock()
+        refresh = Mock(return_value=[])
         m.setattr(state, "refresh_jobs", refresh)
         repl.onecmd("info 1 -R")
         out, err = capsys.readouterr()
@@ -834,7 +891,7 @@ def test_tail(state, repl, capsys, monkeypatch):
     job = state.create_job(command="sleep 1")
 
     with monkeypatch.context() as m:
-        tail = Mock(return_value=["LINENO1", "LINENO2"])
+        tail = Mock()
         m.setattr("sh.tail", tail)
         m.setattr("time.sleep", Mock())
         m.setattr("os.path.exists", Mock(side_effect=[False, False, True]))
@@ -843,9 +900,10 @@ def test_tail(state, repl, capsys, monkeypatch):
         repl.onecmd(f"tail {job.job_id}")
         out, err = capsys.readouterr()
         spinner.assert_called_once()
+        assert tail.call_count == 1
 
     with monkeypatch.context() as m:
-        tail = Mock(return_value=["LINENO1", "LINENO2"])
+        tail = Mock()
         m.setattr("sh.tail", tail)
         m.setattr("os.path.exists", Mock(side_effect=[True]))
         spinner = MagicMock()
@@ -853,11 +911,12 @@ def test_tail(state, repl, capsys, monkeypatch):
         repl.onecmd(f"tail {job.job_id}")
         out, err = capsys.readouterr()
         assert spinner.call_count == 0
+        assert tail.call_count == 1
 
-    with monkeypatch.context() as m:
+    with pytest.raises(UsageError):
         repl.onecmd(f"tail --nope")
-        out, err = capsys.readouterr()
-        assert "no such option" in out
+    out, err = capsys.readouterr()
+    assert "no such option" in out
 
 
 def test_less(state, repl, capsys, monkeypatch):
@@ -884,6 +943,7 @@ def test_less(state, repl, capsys, monkeypatch):
             pager.assert_called_once()
             assert "".join(lines) == content
 
-    repl.onecmd(f"less --nope")
+    with pytest.raises(UsageError):
+        repl.onecmd(f"less --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
