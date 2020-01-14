@@ -1011,7 +1011,7 @@ def test_wait(state, monkeypatch):
     )
     assert nm.notify.call_count == 2
     assert "progress" in nm.notify.mock_calls[0][2]["title"]
-    assert "complete" in nm.notify.mock_calls[-1][2]["title"]
+    assert "COMPLETE" in nm.notify.mock_calls[-1][2]["title"]
     assert driver.wait.call_count == 1
 
 
@@ -1039,3 +1039,25 @@ def test_wait_timeout(state, monkeypatch):
         assert nm.notify.call_count == 0
         state.wait("*", notify=True)
         assert nm.notify.call_count == 1
+
+def test_wait_failure(state, monkeypatch):
+    root = Folder.get_root()
+    j1 = state.create_job(command="sleep 0.1")
+
+    j1.status = Job.Status.FAILED
+    j1.save()
+
+    jarr = [[j1]]
+
+    wait = Mock(return_value=iter(jarr))
+    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver.wait", wait)
+    monkeypatch.setattr("kong.state.Spinner", MagicMock())
+
+    with monkeypatch.context() as m:
+        nm = MagicMock()
+        m.setattr(state.config, "notifications", nm)
+        state.wait("*", notify=False)
+        assert nm.notify.call_count == 0
+        state.wait("*", notify=True)
+        assert nm.notify.call_count == 1
+        assert "FAILURE" in nm.notify.mock_calls[0][2]["title"]
