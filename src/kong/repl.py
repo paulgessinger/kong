@@ -537,11 +537,31 @@ class Repl(cmd.Cmd):
         )
 
     @parse_arguments
-    @click.argument("path")
-    def do_update(self, path: str) -> None:
+    @click.argument("path", default=".")
+    @click.option(
+        "--recursive/--no-recursive",
+        "-r/-f",
+        default=True,
+        help="Select jobs recursively",
+    )
+    def do_update(self, path: str, recursive: bool) -> None:
         """Update the job at PATH."""
-        jobs = self.state.get_jobs(path)
-        self.state.refresh_jobs(jobs)
+        with Spinner("Updating jobs"):
+            jobs = self.state.get_jobs(path, recursive=recursive)
+            self.state.refresh_jobs(jobs)
+        counts = {k: 0 for k in Job.Status}
+
+        click.echo(f"{len(jobs)} job(s) updated")
+
+        if len(jobs) > 1:
+            for job in jobs:
+                counts[job.status] += 1
+
+            output = ""
+            for k, c in counts.items():
+                output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
+
+            click.echo(output)
 
     @parse_arguments
     @click.argument("path")
