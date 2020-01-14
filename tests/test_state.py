@@ -1014,6 +1014,7 @@ def test_wait(state, monkeypatch):
     assert "complete" in nm.notify.mock_calls[-1][2]["title"]
     assert driver.wait.call_count == 1
 
+
 def test_wait_recursive(state, monkeypatch):
 
     #driver = Mock(wraps=LocalDriver)
@@ -1035,6 +1036,11 @@ def test_wait_recursive(state, monkeypatch):
         j.save()
 
     state.wait(".")
+
+    exhaust(j1.driver_instance.wait_gen([j1, j2]))
+
+    with pytest.raises(TypeError):
+        exhaust(j1.driver_instance.wait_gen(64))
 
 def test_wait_timeout(state, monkeypatch):
     root = Folder.get_root()
