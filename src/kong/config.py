@@ -137,4 +137,6 @@ class Config:
         self.notifications = NotificationManager(self)
 
     def __getattr__(self, key: str) -> typing.Any:
+        if key not in self.data:
+            raise AttributeError()
         return self.data[key]

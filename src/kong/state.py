@@ -104,6 +104,9 @@ class State:
 
     def refresh_jobs(self, jobs: List[Job]) -> Sequence[Job]:
         logger.debug("Refreshing %d jobs", len(jobs))
+        if len(jobs) == 0:
+            return jobs
+
         first_job: Job = jobs[0]
         # try bulk refresh first
         first_job.ensure_driver_instance(self.config)
@@ -319,13 +322,16 @@ class State:
                         f"{name} matches {len(folders)} folder(s). Use recursive to delete"
                     )
                 for folder in folders:
-                    jobs += folder.jobs_recursive()
+                    jobs += list(folder.jobs_recursive())
             except ValueError:
                 pass
+
             try:
-                jobs += self.get_jobs(name)
+                jobs += list(self.get_jobs(name))
             except ValueError:
                 pass
+
+            jobs = list(set(jobs))
 
             if len(folders) == 0 and len(jobs) == 0:
                 raise DoesNotExist(f"No such folder or job: {name}")
@@ -434,10 +440,12 @@ class State:
                     return jobs
                 else:
                     folder = Folder.find_by_path(self.cwd, name)
-                    if not recursive or folder is None:
+                    if folder is None:
                         raise ValueError(f"{name} jobspec is not understood")
-
-                    jobs = folder.jobs_recursive()
+                    if recursive:
+                        jobs = folder.jobs_recursive()
+                    else:
+                        jobs = folder.jobs
         elif isinstance(name, Job):
             jobs = [name]
         else:
@@ -570,7 +578,9 @@ class State:
         update_interval: Optional[timedelta] = None,
     ) -> Iterable[List[Job]]:
         jobs: List[Job]
-        jobs = self._extract_jobs(jobspec, recursive=recursive)
+        jobs = list(self._extract_jobs(jobspec, recursive=recursive))
+
+        logger.debug("Jobs for waiting: %s", jobs)
         assert len(jobs) > 0
         first_job = jobs[0]
         first_job.ensure_driver_instance(self.config)

@@ -360,12 +360,16 @@ class LocalDriver(DriverBase):
 
     def wait_gen(
         self,
-        jobs: Union[Job, List[Job]],
+        job: Union[Job, List[Job]],
         poll_interval: Optional[int] = None,
         timeout: Optional[int] = None,
     ) -> Iterable[List[Job]]:
-        if not isinstance(jobs, list):
-            jobs = [jobs]
+        if isinstance(job, Job):
+            jobs = [job]
+        elif isinstance(job, list):
+            jobs = job
+        else:
+            raise TypeError("Argument is neither job nor list of jobs")
 
         logger.debug("Waiting for %s jobs", len(jobs))
         for job in jobs:
