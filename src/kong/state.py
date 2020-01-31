@@ -135,7 +135,7 @@ class State:
 
         if refresh and len(jobs) > 0:
             if recursive:
-                jobs = list(self.refresh_jobs(folder.jobs_recursive()))
+                jobs = list(self.refresh_jobs(list(folder.jobs_recursive())))
             else:
                 jobs = list(self.refresh_jobs(jobs))
 
@@ -365,7 +365,7 @@ class State:
             # jobs: List[Job] = []
             if not recursive:
                 raise CannotRemoveIsFolder(f"Cannot remove {folder} non-recursively")
-            jobs = folder.jobs_recursive()
+            jobs = list(folder.jobs_recursive())
             if confirm(f"Delete folder {folder.path} and {len(jobs)} jobs?"):
                 if len(jobs) > 0:
                     first_job = jobs[0]
@@ -443,7 +443,7 @@ class State:
                     if folder is None:
                         raise ValueError(f"{name} jobspec is not understood")
                     if recursive:
-                        jobs = folder.jobs_recursive()
+                        jobs = list(folder.jobs_recursive())
                     else:
                         jobs = folder.jobs
         elif isinstance(name, Job):
@@ -462,7 +462,7 @@ class State:
             # get folders, extract jobs from those
             folders = self.get_folders(name)
             logger.debug("Recursive, found %s folders", len(folders))
-            jobs = sum([f.jobs_recursive() for f in folders], [])
+            jobs = sum([list(f.jobs_recursive()) for f in folders], [])
         else:
             jobs = self._extract_jobs(name)
 
@@ -489,7 +489,7 @@ class State:
             # get folders, extract jobs from thos
             folders = self.get_folders(name)
             logger.debug("Recursive, found %s folders", len(folders))
-            jobs = sum([f.jobs_recursive() for f in folders], [])
+            jobs = sum([list(f.jobs_recursive()) for f in folders], [])
         else:
             jobs = self._extract_jobs(name)
 

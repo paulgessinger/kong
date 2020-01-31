@@ -1,4 +1,4 @@
-from typing import Any, TypeVar, Type, List, Optional, Iterable
+from typing import Any, TypeVar, Type, List, Optional, Iterable, Tuple
 
 
 class Field:
@@ -30,6 +30,10 @@ class Model:
     @classmethod
     def update(cls, **kwargs: Any) -> Any: ...
 
+    @classmethod
+    def raw(cls, sql: str) -> Iterable[T]:
+        ...
+
 class SqliteDatabase:
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def init(self, *args: Any) -> None: ...
@@ -39,3 +43,6 @@ class SqliteDatabase:
 class DoesNotExist(BaseException): ...
 class IntegrityError(BaseException): ...
 
+
+class sqlite3:
+    sqlite_version_info: Tuple[int, int, int]

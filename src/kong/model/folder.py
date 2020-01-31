@@ -1,8 +1,10 @@
 import os
 import datetime
-from typing import Any, cast, Optional, TYPE_CHECKING, List
+
+from typing import Any, cast, Optional, TYPE_CHECKING, List, Iterable
 
 import peewee as pw
+from peewee import sqlite3
 
 from ..logger import logger
 from ..db import AutoIncrementField
@@ -97,9 +99,67 @@ class Folder(BaseModel):
     def subfolder(self, name: str) -> Optional["Folder"]:
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
 
-    def jobs_recursive(self) -> List["Job"]:
-        # @TODO: Optimize, hierarchical expression?
-        jobs: List[Job] = list(self.jobs)
-        for child in self.children:
-            jobs += child.jobs_recursive()
-        return jobs
+    def folders_recursive(self) -> Iterable["Folder"]:
+        crit = (3, 8, 3)
+        if sqlite3.sqlite_version_info < crit:  # pragma: no cover
+            logger.debug(
+                "sqlite3 version %s < %s: use slow python recursion",
+                sqlite3.sqlite_version_info,
+                crit,
+            )
+            folders: List["Folder"] = []
+            for child in self.children:
+                folders += child.folders_recursive()
+            return folders
+
+        else:
+            logger.debug(
+                "sqlite3 version %s >= %s: use CTE", sqlite3.sqlite_version_info, crit
+            )
+            sql = """
+    WITH RECURSIVE
+      children(n) AS (
+        VALUES({folder_id})
+        UNION
+        SELECT folder_id FROM folder, children
+         WHERE folder.parent_id=children.n
+      )
+    SELECT * FROM folder where folder_id in children AND folder_id != {folder_id};
+    """.format(
+                folder_id=self.folder_id
+            )
+
+            return Folder.raw(sql)
+
+    def jobs_recursive(self) -> Iterable["Job"]:
+        crit = (3, 8, 3)
+        if sqlite3.sqlite_version_info < crit:  # pragma: no cover
+            logger.debug(
+                "sqlite3 version %s < %s: use slow python recursion",
+                sqlite3.sqlite_version_info,
+                crit,
+            )
+            jobs: List["Job"] = list(self.jobs)
+            for child in self.children:
+                jobs += child.jobs_recursive()
+            return jobs
+        else:
+            logger.debug(
+                "sqlite3 version %s >= %s: use CTE", sqlite3.sqlite_version_info, crit
+            )
+            sql = """
+            WITH RECURSIVE
+              children(n) AS (
+                VALUES({folder_id})
+                UNION
+                SELECT folder_id FROM folder, children
+                 WHERE folder.parent_id=children.n
+              )
+            SELECT * FROM job where folder_id in children;
+            """.format(
+                folder_id=self.folder_id
+            )
+
+            from .job import Job
+
+            return Job.raw(sql)

@@ -174,6 +174,17 @@ def test_fancy_operator(db):
     assert root / "f1" / "f2" / "f3" == f3
     assert root / "f1" / "f2" / "f4" == f4
 
+def test_folders_recursive(db, state):
+    root = Folder.get_root()
+    f1 = root.add_folder("f1")
+    f2 = f1.add_folder("f2")
+    f3 = f1.add_folder("f3")
+    f4 = root.add_folder("f4")
+
+    folders = root.folders_recursive()
+
+    assert set(folders) == set([f1, f2, f3, f4])
+
 
 def test_jobs_recursive(db, state):
     root = Folder.get_root()

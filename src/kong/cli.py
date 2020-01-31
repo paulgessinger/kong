@@ -4,6 +4,7 @@ from typing import Any
 
 import click
 import coloredlogs
+from peewee import sqlite3
 
 from . import config
 from . import setup
@@ -64,6 +65,8 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     else:
         logger.debug("Setup executed already")
     logger.debug("Setup completed")
+
+    logger.debug("sqlite3 version: %s", ".".join(map(str, sqlite3.sqlite_version_info)))
 
     inst = State.get_instance()
 
