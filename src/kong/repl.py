@@ -180,7 +180,7 @@ class Repl(cmd.Cmd):
                 if recursive:
                     arg_folder = Folder.find_by_path(self.state.cwd, dir)
                     assert arg_folder is not None  # should be a folder
-                    jobs = arg_folder.jobs_recursive()
+                    jobs = list(arg_folder.jobs_recursive())
 
                 if refresh:
                     jobs = cast(list, self.state.refresh_jobs(jobs))
