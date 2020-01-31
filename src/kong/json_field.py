@@ -1,7 +1,7 @@
 from typing import Dict, cast
 
 import peewee as pw
-import sqlite3
+from peewee import sqlite3
 import json
 
 if sqlite3.sqlite_version_info < (3, 9, 0):  # type: ignore
