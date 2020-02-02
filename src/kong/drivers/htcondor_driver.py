@@ -5,6 +5,8 @@ import os
 import re
 from abc import ABC, abstractmethod
 from datetime import timedelta
+
+import humanfriendly
 from typing import (
     Any,
     Iterator,
@@ -23,6 +25,7 @@ from jinja2 import Environment, DictLoader
 
 from .batch_driver_base import BatchDriverBase
 from . import InvalidJobStatus
+from .. import config as config_mod
 from ..logger import logger
 from ..config import Config
 from ..db import database
@@ -100,7 +103,7 @@ class HTCondorInterface(ABC):
         raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
-    def condor_history(self) -> Iterator[HTCondorAccountingItem]:
+    def condor_history(self, log_file: str) -> Iterator[HTCondorAccountingItem]:
         raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
@@ -145,12 +148,13 @@ class ShellHTCondorInterface(HTCondorInterface):
         assert self._condor_q is not None
         return self._parse_output(str(self._condor_q(*args)))
 
-    def condor_history(self) -> Iterator[HTCondorAccountingItem]:
+    def condor_history(self, log_file: str) -> Iterator[HTCondorAccountingItem]:
 
         logger.debug("Getting job infos")
 
         args = [
-            self.config["user"],
+            "-userlog",
+            log_file,
             "-attributes",
             ",".join(["ClusterId", "ProcId", "JobStatus", "ExitCode"]),
             "-json",
@@ -221,6 +225,19 @@ class HTCondorDriver(BatchDriverBase):
         DriverBase.__init__(self, config)
         self.htcondor_config = self.config.data["htcondor_driver"]
         self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
+        log_dir = os.path.join(config_mod.APP_DIR, "htcondor_log")
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_file = os.path.join(log_dir, "htcondor.log")
+
+        if os.path.exists(self.log_file):
+            log_size = os.path.getsize(self.log_file)
+            if log_size > 50 * 1e6:
+                logger.warning(
+                    "HTCondor log file at %s is large: %s. Consider deleting it,"
+                    + "Finished but unsynced jobs will not be able to be updated after this.",
+                    self.log_file,
+                    humanfriendly.format_size(log_size),
+                )
 
     def create_job(
         self,
@@ -256,7 +273,6 @@ class HTCondorDriver(BatchDriverBase):
         os.makedirs(log_dir, exist_ok=True)
 
         stdout = os.path.abspath(os.path.join(log_dir, "stdout.txt"))
-        htcondor_out = os.path.abspath(os.path.join(log_dir, "htcondor_out.txt"))
 
         batchfile = os.path.join(log_dir, "batchfile.sh")
         jobscript = os.path.join(log_dir, "jobscript.sh")
@@ -270,7 +286,7 @@ class HTCondorDriver(BatchDriverBase):
 
         job.data = dict(
             stdout=stdout,
-            htcondor_out=htcondor_out,
+            htcondor_out=self.log_file,
             jobscript=jobscript,
             batchfile=batchfile,
             output_dir=output_dir,
@@ -288,7 +304,7 @@ class HTCondorDriver(BatchDriverBase):
             jobscript=jobscript,
             command=command,
             stdout=stdout,
-            htcondor_out=htcondor_out,
+            htcondor_out=self.log_file,
             internal_job_id=job.job_id,
             log_dir=log_dir,
             output_dir=output_dir,
@@ -324,7 +340,7 @@ class HTCondorDriver(BatchDriverBase):
         def proc() -> Iterable[Job]:
             job_not_found = 0
             for item in itertools.chain(
-                self.htcondor.condor_q(), self.htcondor.condor_history()
+                self.htcondor.condor_q(), self.htcondor.condor_history(self.log_file)
             ):
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
