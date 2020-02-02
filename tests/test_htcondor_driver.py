@@ -125,7 +125,7 @@ def test_condor_q_empty(driver, monkeypatch, state):
 def test_condor_history_empty(driver, monkeypatch, state):
     mock = Mock(return_value="")
     monkeypatch.setattr(driver.htcondor, "_condor_history", mock)
-    res = list(driver.htcondor.condor_history())
+    res = list(driver.htcondor.condor_history("nope"))
     assert res == []
 
 
@@ -208,9 +208,10 @@ def test_condor_history(driver, monkeypatch, state):
         mock = Mock(return_value=condor_history_output)
         m.setattr(driver.htcondor, "_condor_history", mock)
 
-        res = list(driver.htcondor.condor_history())
+        res = list(driver.htcondor.condor_history("blubb"))
 
         mock.assert_called_once_with(
+            "-userlog",
             ANY,
             "-attributes",
             "ClusterId,ProcId,JobStatus,ExitCode",
@@ -654,7 +655,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
         jobs = driver.bulk_sync_status(jobs)
 
-        driver.htcondor.condor_history.assert_called_once_with()
+        driver.htcondor.condor_history.assert_called_once_with(ANY)
         condor_q.assert_called_once_with()
 
     for job in jobs:
@@ -675,7 +676,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         m.setattr(driver.htcondor, "condor_q", Mock(return_value=[]))
 
         jobs = driver.bulk_sync_status(jobs)
-        condor_history.assert_called_once_with()
+        condor_history.assert_called_once_with(ANY)
         driver.htcondor.condor_q.assert_called_once_with()
 
     for job in jobs[:6]:
@@ -797,7 +798,7 @@ def test_wait(driver, state, monkeypatch):
             self.state_idx += 1
             return v
 
-        def condor_history(self) -> Iterator[HTCondorAccountingItem]:
+        def condor_history(self, log_file: str) -> Iterator[HTCondorAccountingItem]:
             return []
 
         def condor_submit(self, job: Job) -> int:
