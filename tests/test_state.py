@@ -1038,10 +1038,10 @@ def test_wait_recursive(state, monkeypatch):
 
     state.wait(".")
 
-    exhaust(j1.driver_instance._wait_gen([j1, j2]))
+    exhaust(j1.driver_instance.wait_gen([j1, j2]))
 
     with pytest.raises(TypeError):
-        exhaust(j1.driver_instance._wait_gen(64))
+        exhaust(j1.driver_instance.wait_gen(64))
 
 def test_wait_timeout(state, monkeypatch):
     root = Folder.get_root()
