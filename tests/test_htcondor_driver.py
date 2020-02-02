@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 from datetime import timedelta
 from typing import Collection, Iterator
 from unittest.mock import Mock, ANY, call
@@ -125,8 +126,18 @@ def test_condor_q_empty(driver, monkeypatch, state):
 def test_condor_history_empty(driver, monkeypatch, state):
     mock = Mock(return_value="")
     monkeypatch.setattr(driver.htcondor, "_condor_history", mock)
-    res = list(driver.htcondor.condor_history("nope"))
+    with tempfile.NamedTemporaryFile() as f:
+        res = list(driver.htcondor.condor_history(f.name))
     assert res == []
+    assert mock.call_count == 1
+
+def test_condor_history_no_userlog(driver, monkeypatch, state):
+    mock = Mock(return_value="")
+    monkeypatch.setattr(driver.htcondor, "_condor_history", mock)
+    monkeypatch.setattr("os.path.exists", Mock(return_value=False))
+    assert list(driver.htcondor.condor_history("blub")) == []
+    assert mock.call_count == 0
+
 
 
 def test_condor_history(driver, monkeypatch, state):
@@ -207,6 +218,7 @@ def test_condor_history(driver, monkeypatch, state):
     with monkeypatch.context() as m:
         mock = Mock(return_value=condor_history_output)
         m.setattr(driver.htcondor, "_condor_history", mock)
+        m.setattr("os.path.exists", Mock(return_value=True))
 
         res = list(driver.htcondor.condor_history("blubb"))
 

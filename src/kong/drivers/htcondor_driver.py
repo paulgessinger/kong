@@ -152,6 +152,12 @@ class ShellHTCondorInterface(HTCondorInterface):
 
         logger.debug("Getting job infos")
 
+        if not os.path.exists(log_file):
+            logger.debug(
+                "Userlog file does not exist. There will be no output, don't call"
+            )
+            return iter([])
+
         args = [
             "-userlog",
             log_file,
