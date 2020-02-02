@@ -224,7 +224,7 @@ class HTCondorDriver(BatchDriverBase):
     def __init__(self, config: Config, htcondor: Optional[HTCondorInterface] = None):
         DriverBase.__init__(self, config)
         self.htcondor_config = self.config.data["htcondor_driver"]
-        self.htcondor = htcondor or ShellHTCondorInterface(self.config)
+        self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
         log_dir = os.path.join(config_mod.APP_DIR, "htcondor_log")
         os.makedirs(log_dir, exist_ok=True)
         self.log_file = os.path.join(log_dir, "htcondor.log")

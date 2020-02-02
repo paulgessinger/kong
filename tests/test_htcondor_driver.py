@@ -238,6 +238,31 @@ def test_condor_history(driver, monkeypatch, state):
             assert a == b
 
 
+def test_driver_create(state, monkeypatch):
+    # set some config values
+    data = state.config.data.copy()
+    data["htcondor_driver"] = dict()
+    state.config = Config(data)
+
+    monkeypatch.setattr(HTCondorInterface, "__abstractmethods__", set())
+    monkeypatch.setattr(ShellHTCondorInterface, "__init__", Mock(return_value=None))
+
+    sif = ShellHTCondorInterface()
+    sif.config = state.config.htcondor_driver
+
+    monkeypatch.setattr("os.path.exists", Mock(return_value=True))
+    monkeypatch.setattr("os.path.getsize", Mock(return_value=40*1e6))
+    warning = Mock()
+    monkeypatch.setattr("kong.drivers.htcondor_driver.logger.warning", warning)
+
+    assert warning.call_count == 0
+
+    driver = HTCondorDriver(state.config, sif)
+
+    monkeypatch.setattr("os.path.getsize", Mock(return_value=60*1e6))
+    driver = HTCondorDriver(state.config, sif)
+    warning.assert_called_once()
+
 def test_condor_submit_rm(driver, monkeypatch, state):
     condor_submit_output = """
 Submitting job(s).
