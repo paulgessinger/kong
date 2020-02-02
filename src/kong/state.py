@@ -21,7 +21,6 @@ import peewee as pw
 from contextlib import contextmanager
 
 from click import style
-from kong.model.job import color_dict
 
 from .util import Progress, Spinner, exhaust, strip_colors
 from .drivers import DriverMismatch, get_driver
@@ -29,7 +28,8 @@ from .drivers.driver_base import DriverBase
 from . import config
 from .db import database
 from . import model
-from .model import Folder, Job
+from .model.folder import Folder
+from .model.job import Job, color_dict
 from .logger import logger
 
 
@@ -37,6 +37,7 @@ class CannotCreateError(RuntimeError):
     """
     Raised whenever something cannot be created.
     """
+
     pass
 
 
@@ -44,6 +45,7 @@ class CannotRemoveRoot(RuntimeError):
     """
     Raised when the root folder is attempted to be deleted.
     """
+
     pass
 
 
@@ -51,6 +53,7 @@ class DoesNotExist(RuntimeError):
     """
     Raised whenever a query does not resolve to an existing resource.
     """
+
     pass
 
 
@@ -58,6 +61,7 @@ class CannotRemoveIsFolder(RuntimeError):
     """
     Raised if non-recursive removal of a folder is requested.
     """
+
     pass
 
 
@@ -73,9 +77,19 @@ def YES(_: str) -> bool:
 class State:
     """
     The state class provides a stateful interface to the kong database.
-    This is modeled closely after the interactive pseudo-shell from :class:`kong.repl.Repl`,
-    but is pure python. (Actually, :class:`kong.repl.Repl` is implemented entirely on top of
-    :class:`kong.state.State`, with argument parsing and result printing)
+    This is modeled closely after the interactive pseudo-shell from
+    :class:`kong.repl.Repl`, but is pure python. (Actually, :class:`kong.repl.Repl`
+    is implemented entirely on top of :class:`kong.state.State`, with argument
+    parsing and result printing)
+
+    Many functions accept a `JobSpec` parameter. This can be one of:
+
+    * A job id (i.e. 1234)
+    * A job range in the form 1111..9999, which will select job ids within
+      the range **inclusively**
+    * A path to a folder (i.e. /a/b/c). If this is the case, most methods
+      have a `recursive` argument to instruct collection of jobs from the
+      folder and it's descendants.
     """
 
     def __init__(self, config: config.Config, cwd: Folder) -> None:
@@ -83,12 +97,8 @@ class State:
         Initializer for the state class. Takes an instance of :class:`kong.config.Config`
         and a current working directory to start out in.
 
-        Parameters
-        ----------
-        config
-            The config to initialize with
-        cwd: kong.model.Folder
-            Current working directory to start in
+        :param config: The config to initialize with
+        :param cwd: Current working directory to start in
         """
         self.config = config
         self.cwd = cwd
@@ -101,13 +111,8 @@ class State:
         """
         Contextmanager to temporarily change the current working directory.
 
-        Parameters
-        ----------
-        folder: kong.model.Folder|str
-            Folder instance or path string to change into
-
+        :param folder: Folder instance or path string to change into
         """
-
         prev = self.cwd
 
         if isinstance(folder, Folder):
@@ -130,8 +135,7 @@ class State:
         Create an instance of :class:`kong.state.State`, by reading the default config, and preparing the database.
         The returned state object can be used for stateful work with the kong database.
 
-        Returns:
-            kong.state.State: A state object
+        :return: state object
         """
         cfg = config.Config()
         logger.debug("Initialized config: %s", cfg.data)
@@ -143,13 +147,20 @@ class State:
 
         # ensure database is set up
         database.connect()
-        database.create_tables([getattr(model, m) for m in model.__all__])
+        database.create_tables([Job, Folder])
 
         cwd = Folder.get_root()
 
         return cls(cfg, cwd)
 
     def refresh_jobs(self, jobs: List[Job]) -> Sequence[Job]:
+        """
+        Refresh a list of jobs and retrieve their current status.
+
+        :param jobs: List of jobs to refresh
+        :return: Updated job instances
+        """
+
         logger.debug("Refreshing %d jobs", len(jobs))
         if len(jobs) == 0:
             return jobs
@@ -175,10 +186,10 @@ class State:
         """
         Lists the current directory content.
 
-        :param path: The path to list the content for.
-        :param refresh:  Flag to indicate whether job statuses should be refreshed.
-        :param recursive: Descent into the folder hierarchy to find all jobs and list them.
-        :return: Both folders and jobs that were found in the instructed manner.
+        :param path: The path to list the content for
+        :param refresh: FLag to indicate whether job statuses should be refreshed
+        :param recursive: Descend into the folder hierarchy to find all jobs to list
+        :return: List of folders and list of jobs found
         """
 
         logger.debug("%s", list(self.cwd.children))
@@ -202,6 +213,7 @@ class State:
 
         :param target: String path or folder instance to change into.
         """
+
         if isinstance(target, str):
             if target == "":
                 folder = Folder.get_root()
@@ -282,10 +294,9 @@ class State:
         self, source: Union[str, Job, Folder], dest: Union[str, Folder]
     ) -> List[Union[Job, Folder]]:
         """
-        Move a folder or job
-        :param source:
-        :param dest:
-        :return:
+        :param source: The object to move, can be a path, job object or folder object
+        :param dest: The object to move to. If `source` is a job, this can be a folder. If `source` is a folder, and `dest` is a folder, `source` will be moved *into* `dest`. If `dest` does not exist, `source` will be renamed to `dest`.
+        :return: List of moved objects
         """
         # source might be: a job or a folder
         if isinstance(source, Folder):
@@ -329,6 +340,15 @@ class State:
     def mkdir(
         self, path: str, exist_ok: bool = False, create_parent: bool = False
     ) -> Optional[Folder]:
+        """
+        Make a directory at the given path
+
+        :param path: The relative or absolute path to create
+        :param exist_ok: If `True`, there will be no error if the folder already exists.
+        :param create_parent: Create all parent directories of `path` if they don't exist
+        :return: The folder if one was created
+        """
+
         logger.debug("mkdir %s", path)
         found_folder = Folder.find_by_path(self.cwd, path)
         if found_folder is not None:
@@ -373,6 +393,15 @@ class State:
         recursive: bool = False,
         confirm: Confirmation = lambda _: True,
     ) -> bool:
+        """
+        Remove jobs or folders.
+
+        :param name: A path, job or folder
+        :param recursive: Recursively delete from `path`. Needed to remove a directory
+        :param confirm: Callback to confirm. Defaults to `True`, i.e. will confirm automatically
+        :return: Whether the object at `path` was removed or not.
+        """
+
         jobs: List[Job] = []
         if isinstance(name, str):
             # string name, could be both
@@ -447,6 +476,14 @@ class State:
             raise TypeError("Invalid rm target type given")
 
     def create_job(self, *args: Any, **kwargs: Any) -> Job:
+        """
+        Create a job with the default driver. Passes through any arguments to the driver
+
+        :param args: Positional arguments
+        :param kwargs: Keyword arguments
+        :return: The created Job
+        """
+
         if "folder" in kwargs:
             raise ValueError("To submit to explicit folder, use driver directly")
         if "driver" in kwargs:
@@ -522,6 +559,13 @@ class State:
     def submit_job(
         self, name: JobSpec, confirm: Confirmation = YES, recursive: bool = False
     ) -> None:
+        """
+        Submit one or more jobs using the driver it was created with. This will cause it to execute.
+
+        :param name: Path or job id
+        :param confirm: Confirmation callback. Defaults to YES
+        :param recursive: If `True`, will recursively select jobs for submission. Required if `path` is a n actual path.
+        """
 
         jobs: List[Job]
         if recursive and isinstance(name, str):
@@ -550,7 +594,16 @@ class State:
     def kill_job(
         self, name: JobSpec, recursive: bool = False, confirm: Confirmation = YES
     ) -> None:
+        """
+        Terminate execution of one or more jobs.
+
+        :param name: Path or job id
+        :param confirm: Confirmation callback. Defaults to YES
+        :param recursive: If `True`, will recursively select jobs for termination. Required if `path` is a n actual path.
+        """
+
         jobs: List[Job]
+
         if recursive and isinstance(name, str):
             # get folders, extract jobs from thos
             folders = self.get_folders(name)
@@ -573,6 +626,16 @@ class State:
         recursive: bool = False,
         failed_only: bool = False,
     ) -> None:
+
+        """
+        Resubmit one or more jobs. This causes them to run with the same settings as before.
+
+        :param name: Path or job id
+        :param confirm: Confirmation callback. Defaults to YES
+        :param recursive: If `True`, will recursively select jobs for resubmission. Required if `path` is a n actual path.
+        :param failed_only: If `True` only select jobs in the FAILED state for resubmission.
+        """
+
         jobs: List[Job]
         jobs = self._extract_jobs(name, recursive=recursive)
 
@@ -598,9 +661,23 @@ class State:
         driver.bulk_submit(job_iter())
 
     def get_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
+        """
+        Helper method to select jobs from a path, range or instance.
+
+        :param name: Identifies one or more jobs
+        :param recursive: Select jobs recursively, i.e. follow folders and collect all jobs on the way
+        :return: A list with all collected jobs.
+        """
         return self._extract_jobs(name, recursive)
 
     def get_folders(self, pattern: str) -> List[Folder]:
+        """
+        Helper method to select jobs from a pattern.
+
+        :param pattern: Glob like pattern to select folders.
+        :return: List of selected folders
+        """
+
         head, tail = os.path.split(pattern)
         if "*" in tail:
             logger.debug("Pattern: %s, will glob", tail)
@@ -625,16 +702,42 @@ class State:
             return [folder]
 
     def wait(
-        self, *args: Any, progress: bool = False, **kwargs: Any
+        self,
+        jobspec: JobSpec,
+        recursive: bool = False,
+        notify: bool = True,
+        timeout: Optional[int] = None,
+        poll_interval: Optional[int] = None,
+        update_interval: Optional[timedelta] = None,
+        progress: bool = False,
     ) -> Optional[Iterable[List[Job]]]:
-        it = self.wait_gen(*args, **kwargs)
+        """
+        Wait for completion of a number of job
+
+        :param jobspec: Selector for jobs, string path, job instance or folder instance
+        :param recursive: Select jobs recursively
+        :param notify: Notify on completion of wait
+        :param timeout: Error out after a certain time
+        :param poll_interval: How often to poll the driver for updates
+        :param update_interval: How often to send update notificationa
+        :param progress: If `True`, return progress information as an iterable
+        :return: An iterable if `progress` is `True`, else `None`.
+        """
+        it = self._wait_gen(
+            jobspec=jobspec,
+            recursive=recursive,
+            notify=notify,
+            timeout=timeout,
+            poll_interval=poll_interval,
+            update_interval=update_interval,
+        )
         if progress:
             return it
         else:
             exhaust(it)
             return None
 
-    def wait_gen(
+    def _wait_gen(
         self,
         jobspec: JobSpec,
         recursive: bool = False,

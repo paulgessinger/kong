@@ -84,10 +84,7 @@ class Notifier:
         self._kwargs = kwargs
 
     def notify(
-        self,
-        message: str,
-        title: typing.Optional[str] = None,
-        **kwargs: typing.Any,
+        self, message: str, title: typing.Optional[str] = None, **kwargs: typing.Any,
     ) -> notifiers.core.Response:
         """
         Send a notification through this notificer instance
@@ -120,6 +117,7 @@ class NotificationManager:
     """
     Class to group and handle multiple notifiers/providers. Will always send to all of them.
     """
+
     notifiers: typing.List[Notifier]
 
     def __init__(self, config: "Config"):
@@ -171,6 +169,7 @@ class Config:
     """
     Class to handle loading the config data from disk.
     """
+
     def __init__(
         self, data: typing.Optional[typing.Dict[str, typing.Any]] = None
     ) -> None:

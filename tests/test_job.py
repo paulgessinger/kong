@@ -8,7 +8,8 @@ from kong import config
 from kong.drivers.local_driver import LocalDriver
 import kong.drivers
 from kong.drivers import DriverMismatch
-from kong.model import Job, Folder
+from kong.model.job import Job
+from kong.model.folder import Folder
 import peewee as pw
 
 

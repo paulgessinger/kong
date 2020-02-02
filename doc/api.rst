@@ -1,28 +1,15 @@
 API
 ===
 
-.. automodule:: kong
-    :members:
-
-.. autofunction:: kong.get_instance
-
-
-.. autoclass:: kong.config.Config
-    :members:
+State
+-----
 
 .. autoclass:: kong.state.State
     :members:
 
-.. .. autoclass:: kong.repl.Repl
+.. autoclass:: kong.config.Config
     :members:
 
+.. autoclass:: kong.model.folder.Folder
 
-.. automodule:: kong.drivers
-    :members:
-
-
-Models
-------
-
-.. automodule:: kong.model
-    :members:
+.. autoclass:: kong.model.job.Job

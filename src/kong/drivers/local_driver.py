@@ -23,7 +23,8 @@ import psutil
 
 from ..util import rmtree
 from ..db import database
-from ..model import Folder, Job
+from ..model.folder import Folder
+from ..model.job import Job
 from ..logger import logger
 from . import InvalidJobStatus
 from .driver_base import DriverBase, checked_job

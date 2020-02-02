@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 from kong.cli import main
 import kong
-from kong.model import Folder
+from kong.model.folder import Folder
 from kong import logger
 
 

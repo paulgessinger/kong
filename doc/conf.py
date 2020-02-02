@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'kong'
-copyright = '2019, Paul Gessinger'
+copyright = '2020, Paul Gessinger'
 author = 'Paul Gessinger'
 
 
@@ -33,7 +33,11 @@ extensions = [
     'sphinx.ext.coverage', 
     'sphinx.ext.napoleon', 
     'sphinx_autodoc_typehints',
+    #'scanpydoc.elegant_typehints'
 ]
+
+qualname_overrides = {
+}
 
 autodoc_default_options = {
     'undoc-members': True,
@@ -42,8 +46,8 @@ autodoc_default_options = {
 
 napoleon_use_param = True
 
-#set_type_checking_flag = True
-typehints_fully_qualified = True
+set_type_checking_flag = False
+typehints_fully_qualified = False
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -65,4 +69,6 @@ html_theme = "sphinx_rtd_theme"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = [
+    #'_static'
+]

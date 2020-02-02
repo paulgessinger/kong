@@ -20,7 +20,8 @@ from ..logger import logger
 from ..config import Config
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..model import Job, Folder
+    from ..model.job import Job
+    from ..model.folder import Folder
 
 
 def checked_job(f: Any) -> Any:

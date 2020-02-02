@@ -23,7 +23,8 @@ from .util import shorten_path, Spinner
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
-from .model import Job, Folder
+from .model.job import Job
+from .model.folder import Folder
 from . import state
 
 history_file = os.path.join(APP_DIR, "history")

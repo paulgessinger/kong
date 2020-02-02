@@ -9,7 +9,8 @@ from unittest.mock import Mock
 
 from kong.db import database
 from kong import model
-from kong.model import Folder, Job
+from kong.model.folder import Folder
+from kong.model.job import Job
 import kong.setup
 import kong
 
@@ -23,7 +24,7 @@ skip_lxplus = pytest.mark.skipif(
 def db():
     database.init(":memory:")
     database.connect()
-    database.create_tables([getattr(model, m) for m in model.__all__])
+    database.create_tables([Job, Folder])
     yield database
     database.close()
 

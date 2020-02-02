@@ -4,7 +4,7 @@ import pytest
 import peewee as pw
 
 from kong.db import database
-from kong.model import Folder
+from kong.model.folder import Folder
 
 import logging
 

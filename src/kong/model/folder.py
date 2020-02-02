@@ -163,3 +163,6 @@ class Folder(BaseModel):
             from .job import Job
 
             return Job.raw(sql)
+
+
+from .job import Job  # needed for doc

@@ -15,6 +15,7 @@ if sqlite3.sqlite_version_info < (3, 9, 0):  # type: ignore
         """
         Polyfill class to provide a JSON field
         """
+
         def db_value(self, value: Dict) -> str:
             """
             Convert a value to a string for storage in a `CharField`

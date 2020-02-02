@@ -6,7 +6,7 @@ thisdir = os.path.dirname(__file__)
 with open(os.path.join(thisdir, "README.md")) as fh:
     long_desc = fh.read()
 
-dev_requires = ["black"]
+dev_requires = ["black", "sphinx-autodoc-typehints", "scanpydoc"]
 tests_require = ["pytest", "coverage", "pytest-cov", "mypy", "flake8", "tox"]
 setup(
     name="kong-batch",

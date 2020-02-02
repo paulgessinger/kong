@@ -13,7 +13,8 @@ from ..drivers import InvalidJobStatus
 from ..logger import logger
 from ..config import Config
 from ..db import database
-from ..model import Job, Folder
+from ..model.job import Job
+from ..model.folder import Folder
 from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
 
