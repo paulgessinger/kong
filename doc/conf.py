@@ -33,7 +33,6 @@ extensions = [
     'sphinx.ext.coverage', 
     'sphinx.ext.napoleon', 
     'sphinx_autodoc_typehints',
-    #'scanpydoc.elegant_typehints'
 ]
 
 qualname_overrides = {
