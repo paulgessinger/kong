@@ -14,6 +14,8 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
+from recommonmark.transform import AutoStructify
+
 
 # -- Project information -----------------------------------------------------
 
@@ -32,21 +34,24 @@ extensions = [
     'sphinx.ext.autodoc', 
     'sphinx.ext.coverage', 
     'sphinx.ext.napoleon', 
-    'sphinx_autodoc_typehints',
+    # 'sphinx_autodoc_typehints',
 ]
 
 qualname_overrides = {
 }
 
 autodoc_default_options = {
-    'undoc-members': True,
+    'no-undoc-members': True,
     "special-members": "__init__",
+    "autodoc_docstring_signature": True,
 }
 
 napoleon_use_param = True
 
 set_type_checking_flag = False
 typehints_fully_qualified = False
+always_document_param_types = False
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -71,3 +76,10 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = [
     #'_static'
 ]
+
+
+def setup(app):
+    app.add_config_value('recommonmark_config', {
+        'enable_eval_rst': True,
+    }, True)
+    app.add_transform(AutoStructify)
