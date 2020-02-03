@@ -5,6 +5,7 @@ import shutil
 import stat
 from concurrent.futures._base import Executor, wait
 from datetime import timedelta
+import click
 from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
 import contextlib
@@ -109,10 +110,24 @@ def Progress(*args: Any, **kwargs: Any) -> Iterable[T]:
 
 
 def shorten(string: str, length: int) -> str:
+    ANSIRE = '\x1b\\[(?:K|.*?m)'
+
     if length <= 4:
         raise ValueError("Shortening to <= 4 does not make sense")
-    if length >= len(string):
+    if length >= len(click.unstyle(string)):
         return string
+
+    m = re.match("^("+ANSIRE+').*('+ANSIRE+'$)', string)
+    if m is None:
+        # Not a single style, unstyle all
+        start = ""
+        end = ""
+    else:
+        start = m.group(1)
+        end = m.group(2)
+
+    string = click.unstyle(string)
+
     leftover = length - 3
 
     left_length = max(1, math.floor(leftover / 2))
@@ -120,7 +135,7 @@ def shorten(string: str, length: int) -> str:
     left = string[:left_length]
     right = string[-(length - left_length - 3) :]
 
-    return f"{left}...{right}"
+    return f"{start}{left}...{right}{end}"
 
 
 def shorten_path(path: str, last_length: Optional[int] = None) -> str:

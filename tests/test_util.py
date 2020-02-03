@@ -94,6 +94,21 @@ def test_shorten():
         shorten("abcdefgh", 4)  # doesn't make sense
 
 
+    s = click.style("abcabcabcabc", bold=True)
+    out = shorten(s, 6)
+    assert len(click.unstyle(out)) == 6
+    assert click.unstyle(out) == "a...bc"
+    assert out != click.unstyle(out)
+
+    # mixed, will be stripped
+    s = click.style("abcabcabcab", bold=True) + "c"
+    out = shorten(s, 6)
+    assert len(click.unstyle(out)) == 6
+    assert click.unstyle(out) == "a...bc"
+    assert out == click.unstyle(out)
+
+
+
 def test_shorten_path():
     assert (
         shorten_path("/a/very/long/path/with/many/segments") == "/a/v/l/p/w/m/segments"
