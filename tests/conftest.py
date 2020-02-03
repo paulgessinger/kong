@@ -100,7 +100,7 @@ def sample_jobs(tree, state):
     driver = state.default_driver
     jobs = []
     job = lambda f: jobs.append(
-        driver.create_job(command="sleep 0.1", folder=Folder.find_by_path(state.cwd, f))
+        driver.create_job(command="sleep 0.1", folder=Folder.find_by_path(f, state.cwd))
     )
     root = tree
 

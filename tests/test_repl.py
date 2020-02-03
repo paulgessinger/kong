@@ -61,7 +61,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     out, err = capsys.readouterr()
     assert "not exist" in out
 
-    state.cwd = Folder.find_by_path(state.cwd, "/f2")
+    state.cwd = Folder.find_by_path("/f2", state.cwd)
     repl.do_ls(".")
     out, err = capsys.readouterr()
     assert all(f.name in out for f in state.cwd.children)
@@ -185,7 +185,7 @@ def test_complete_path(state, tree, repl):
     alts = complete_path(root, "f2/")
     assert alts == ["alpha/", "beta/", "gamma/"]
 
-    state.cwd = Folder.find_by_path(state.cwd, "/f2")
+    state.cwd = Folder.find_by_path("/f2", state.cwd)
 
     alts = complete_path(root.subfolder("f2"), "a")
     assert alts == ["alpha/"]
@@ -264,14 +264,15 @@ def test_mkdir_create_parents(state, repl, capsys):
     repl.onecmd("mkdir /a1/b2/c3/d4")
     out, err = capsys.readouterr()
     assert "Cannot create folder" in out
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is None
+    assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is None
 
     repl.onecmd("mkdir -p /a1/b2/c3/d4")
     out, err = capsys.readouterr()
-    assert Folder.find_by_path(state.cwd, "/a1") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is not None
+    assert Folder.find_by_path("/a1", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2/c3", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is not None
+
 
 
 def test_cd(state, repl, db, capsys):

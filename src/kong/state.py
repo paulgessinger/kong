@@ -117,7 +117,7 @@ class State:
         if isinstance(folder, Folder):
             self.cwd = folder
         elif isinstance(folder, str):
-            _folder = Folder.find_by_path(self.cwd, folder)
+            _folder = Folder.find_by_path(folder, self.cwd)
             assert _folder is not None
             self.cwd = _folder
         else:
@@ -192,7 +192,7 @@ class State:
         """
 
         logger.debug("%s", list(self.cwd.children))
-        folder = Folder.find_by_path(self.cwd, path)
+        folder = Folder.find_by_path(path, self.cwd)
         if folder is None:
             raise pw.DoesNotExist()
 
@@ -217,7 +217,7 @@ class State:
             if target == "":
                 folder = Folder.get_root()
             else:
-                _folder = Folder.find_by_path(self.cwd, target)
+                _folder = Folder.find_by_path(target, self.cwd)
                 if _folder is None:
                     raise pw.DoesNotExist()
                 folder = _folder
@@ -233,7 +233,7 @@ class State:
             source.parent = dest
             source.save()
         elif isinstance(dest, str):
-            dest_folder = Folder.find_by_path(self.cwd, dest)
+            dest_folder = Folder.find_by_path(dest, self.cwd)
             if dest_folder is not None:
                 # dest exists!
                 # requested action: move source INTO dest
@@ -245,7 +245,7 @@ class State:
                 # head is new parent folder, tail is new name
                 head, tail = os.path.split(dest)
                 source.name = tail
-                dest_folder = Folder.find_by_path(self.cwd, head)
+                dest_folder = Folder.find_by_path(head, self.cwd)
                 if dest_folder is None:
                     raise ValueError(f"Target folder {head} does not exist")
 
@@ -259,7 +259,7 @@ class State:
         if isinstance(dest, Folder):
             dest_folder = dest
         elif isinstance(dest, str):
-            folder = Folder.find_by_path(self.cwd, dest)
+            folder = Folder.find_by_path(dest, self.cwd)
             assert folder is not None
             dest_folder = folder
         else:
@@ -276,7 +276,7 @@ class State:
         if isinstance(dest, Folder):
             dest_folder = dest
         elif isinstance(dest, str):
-            dest_folder = Folder.find_by_path(self.cwd, dest)
+            dest_folder = Folder.find_by_path(dest, self.cwd)
             if dest_folder is None:
                 raise ValueError(f"{dest} does not exists, and jobs cannot be renamed")
         else:
@@ -302,7 +302,7 @@ class State:
             self._mv_folder(source, dest)
             return [source]
         elif isinstance(source, str):
-            source_folder = Folder.find_by_path(self.cwd, source)
+            source_folder = Folder.find_by_path(source, self.cwd)
             if source_folder is not None:
                 self._mv_folder(source_folder, dest)
                 return [source_folder]
@@ -349,7 +349,7 @@ class State:
         """
 
         logger.debug("mkdir %s", path)
-        found_folder = Folder.find_by_path(self.cwd, path)
+        found_folder = Folder.find_by_path(path, self.cwd)
         if found_folder is not None:
             if not exist_ok:
                 raise CannotCreateError(f"Cannot create folder at {path}")
@@ -367,7 +367,7 @@ class State:
 
             def create(p: str) -> Folder:
                 head, tail = os.path.split(p)
-                loc = Folder.find_by_path(self.cwd, head)
+                loc = Folder.find_by_path(head, self.cwd)
                 if loc is None:
                     loc = create(head)
                 subf = loc.subfolder(tail)
@@ -377,7 +377,7 @@ class State:
 
             location = create(head)
         else:
-            location = Folder.find_by_path(self.cwd, head)
+            location = Folder.find_by_path(head, self.cwd)
 
         if location is None:
             raise CannotCreateError(f"Cannot create folder at '{path}'")
@@ -531,7 +531,7 @@ class State:
                     if start > end:
                         raise ValueError(f"Illegal job range: {tail}")
 
-                    folder = Folder.find_by_path(self.cwd, head)
+                    folder = Folder.find_by_path(head, self.cwd)
                     assert folder is not None
 
                     jobs = []
@@ -541,7 +541,7 @@ class State:
                         jobs.append(job)
                     return jobs
                 else:
-                    folder = Folder.find_by_path(self.cwd, name)
+                    folder = Folder.find_by_path(name, self.cwd)
                     if folder is None:
                         raise ValueError(f"{name} jobspec is not understood")
                     if recursive:
@@ -684,7 +684,7 @@ class State:
             if head == "":
                 folder = self.cwd
             else:
-                folder = Folder.find_by_path(self.cwd, head)
+                folder = Folder.find_by_path(head, self.cwd)
 
             if folder is None:
                 raise ValueError(f"No folder {head} found")
@@ -695,7 +695,7 @@ class State:
                 folders = [f for f in folder.children if fnmatch(f.name, tail)]
                 return folders
         else:
-            folder = Folder.find_by_path(self.cwd, pattern)
+            folder = Folder.find_by_path(pattern, self.cwd)
             if folder is None:
                 raise ValueError(f"No folder {pattern} found")
             return [folder]

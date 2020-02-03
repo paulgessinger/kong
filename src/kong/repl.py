@@ -33,11 +33,11 @@ history_file = os.path.join(APP_DIR, "history")
 def complete_path(cwd: Folder, path: str) -> List[str]:
     logger.debug("Completion of '%s'", path)
     if path.endswith("/"):
-        folder = Folder.find_by_path(cwd, path)
+        folder = Folder.find_by_path(path, cwd)
         prefix = ""
     else:
         head, prefix = os.path.split(path)
-        folder = Folder.find_by_path(cwd, head)
+        folder = Folder.find_by_path(head, cwd)
 
     assert folder is not None
     options = []
@@ -179,7 +179,7 @@ class Repl(cmd.Cmd):
                 folders, jobs = self.state.ls(dir, refresh=refresh)
 
                 if recursive:
-                    arg_folder = Folder.find_by_path(self.state.cwd, dir)
+                    arg_folder = Folder.find_by_path(dir, self.state.cwd)
                     assert arg_folder is not None  # should be a folder
                     jobs = list(arg_folder.jobs_recursive())
 
