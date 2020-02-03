@@ -15,6 +15,19 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class Folder(BaseModel):
+    """
+    Represents a folder in the internal hierarchy for organizing jobs.
+
+    :ivar folder_id: The ID of a folder instance
+    :ivar name: Name of this folder instance
+    :ivar parent: Points to the parent instance of this folder. Can be `None`
+                  for the root folder
+    :ivar created_at: Timestamp of creation of this folder instance
+    :ivar updated_at: When the instance was last updated.
+
+
+    """
+
     if TYPE_CHECKING:  # pragma: no cover
         folder_id: int
         parent: "Folder"
@@ -53,6 +66,11 @@ class Folder(BaseModel):
 
     @property
     def path(self) -> str:
+        """
+        The path to this folder
+
+        :return: The path
+        """
         if self.parent is None:
             return "/"
         # this will be slow, could optimize with CTE
@@ -60,6 +78,11 @@ class Folder(BaseModel):
 
     @classmethod
     def get_root(cls) -> "Folder":
+        """
+        Retrieve the root folder (/). There can be only one.
+
+        :return: Root folder instance
+        """
         folder = Folder.get_or_none(Folder.parent.is_null(), name="root")
         if folder is None:
             # bypass assertions
@@ -68,6 +91,14 @@ class Folder(BaseModel):
 
     @staticmethod
     def find_by_path(path: str, cwd: Optional["Folder"] = None) -> Optional["Folder"]:
+        """
+        Retrieve a folder instance by path
+
+        :param path: Path to the folder
+        :param cwd: Directory to start working from, defaults to root folder
+        :return: The found folder or `None` if the path doesn't exist
+        """
+
         assert isinstance(path, str)
 
         if cwd is None:
@@ -104,12 +135,29 @@ class Folder(BaseModel):
         return self.subfolder(name)
 
     def add_folder(self, name: str) -> "Folder":
+        """
+        Add a subfolder to this folder instance.
+
+        :param name: Name of the new folder name (without /)
+        :return: The new folder instance
+        """
         return Folder.create(name=name, parent=self)
 
     def subfolder(self, name: str) -> Optional["Folder"]:
+        """
+        Retrieve a direct subfolder of this folder instance
+
+        :param name: The unqualified name of the subfolder to retrieve.
+        :return: Folder instance if `name` exists, else `None`
+        """
         return Folder.get_or_none(Folder.parent == self, Folder.name == name)
 
     def folders_recursive(self) -> Iterable["Folder"]:
+        """
+        Recursively find all folders below this one.
+
+        :return: All folders in the hierarchy from this folder. (Excludes this folder)
+        """
         crit = (3, 8, 3)
         if sqlite3.sqlite_version_info < crit:  # pragma: no cover
             logger.debug(
@@ -142,6 +190,11 @@ class Folder(BaseModel):
             return Folder.raw(sql)
 
     def jobs_recursive(self) -> Iterable["Job"]:
+        """
+        Recursively get all jobs in this folder and descendants.
+
+        :return: Iterable over all jobs found, including jobs directly in this folder.
+        """
         crit = (3, 8, 3)
         if sqlite3.sqlite_version_info < crit:  # pragma: no cover
             logger.debug(

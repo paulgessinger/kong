@@ -62,7 +62,39 @@ class DriverField(pw.CharField):
 
 
 class Job(BaseModel):
+    """
+    Class representing a single job.
+
+    :ivar job_id: The ID of a job instance
+    :ivar batch_job_id: The job ID that the driver asigned. For batch systems,
+                        this is the internal ID of the batch system.
+    :ivar driver: Holds the driver class used to create the job
+    :ivar folder: The folder in which this job is located
+    :ivar command: The command string the job (will) execute
+    :ivar data: Arbitrary data store that drivers use to persist relevant information
+    :ivar status: Currently synced status of the job. This is only updated if
+                  the driver's sync method is used
+    :ivar created_at: When this job was created
+    :ivar updated_at: When this job was last updated
+    :ivar cores: Number of cores the job is supposed to run. Is not necessarily
+                 honored by all drivers.
+    :ivar memory: Amount of memory to allocate for the job. Is not necessarily
+                  honored by all drivers.
+    """
+
     class Status(IntFlag):
+        """
+        Status enum which lists the various status types
+        The exact meaning might vary from driver to driver.
+
+        :ivar UNKNOWN: Catch all status which cannot be mapped
+        :ivar CREATED: Job was created in the database, but not submitted yet
+        :ivar SUBMITTED: Job has been launched via a driver, but might not run yet
+        :ivar RUNNING: The job is currently executing
+        :ivar FAILED: The job terminated abnormally
+        :ivar COMPLEETD: The job completed successfully.
+        """
+
         UNKNOWN = 5
         CREATED = 0
         SUBMITTED = 1
@@ -107,6 +139,12 @@ class Job(BaseModel):
     _driver_instance: Optional[DriverBase] = None
 
     def ensure_driver_instance(self, arg: Union[DriverBase, Config]) -> None:
+        """
+        Makes sure a driver instance is available to this job.
+
+        :param arg: Either a config object or an explicit driver instance.
+        """
+
         if self._driver_instance is not None:
             return
         if isinstance(arg, Config):
@@ -120,6 +158,11 @@ class Job(BaseModel):
 
     @property
     def driver_instance(self) -> DriverBase:
+        """
+        Get the driver instance of this job. There might not be one (yet)
+
+        :return: Driver instance
+        """
         assert self._driver_instance is not None
         return self._driver_instance
 
@@ -132,34 +175,78 @@ class Job(BaseModel):
 
     @with_driver
     def remove(self, driver: DriverBase) -> None:
+        """
+        remove()
+
+        Remove this job using the driver instance attached to the job.
+        """
         driver.remove(self)
 
     @property
     def log_dir(self) -> str:
+        """
+        Get the log directory of this jobs
+
+        :return: The log directory
+        """
         return str(self.data["log_dir"])
 
     @property
     def output_dir(self) -> str:
+        """
+        Get the output directory of this job.
+
+        :return: The output directory
+        """
         return str(self.data["output_dir"])
 
     @with_driver
-    def submit(self, driver: DriverBase) -> Any:
+    def submit(self, driver: DriverBase) -> None:
+        """
+        submit()
+
+        Submit this job using the driver instance set on it.
+        """
         driver.submit(self)
 
     @with_driver
-    def resubmit(self, driver: DriverBase) -> Any:
+    def resubmit(self, driver: DriverBase) -> None:
+        """
+        resubmit()
+
+        Resubmit this job.
+        """
         driver.resubmit(self)
 
     @with_driver
     def wait(self, driver: DriverBase, timeout: Optional[int] = None) -> None:
+        """
+        wait(timeout: Optional[int] = None)
+
+        Wait for completion of this job
+
+        :param timeout: If set to a number, will raise a `TimeoutError` after that time
+        """
         driver.wait(self, timeout=timeout)
 
     @with_driver
     def kill(self, driver: DriverBase) -> None:
+        """
+        kill()
+
+        Kill this job.
+        """
         driver.kill(self)
 
     @with_driver
     def get_status(self, driver: DriverBase) -> Status:  # noqa: F821
+        """
+        get_status()
+
+        Get the current status of the job. Will synchronize first.
+
+        :return: The updated status.
+        """
         self.reload()
         driver.sync_status(self)
         return self.status
@@ -167,12 +254,22 @@ class Job(BaseModel):
     @with_driver  # type: ignore
     @contextmanager  # type: ignore
     def stdout(self, driver: DriverBase) -> Iterator[None]:
+        """
+        stdout()
+
+        Convenience context manager to open a read file handle to the job's stdout.
+        """
         with driver.stdout(self) as fh:
             yield fh
 
     @with_driver  # type: ignore
     @contextmanager  # type: ignore
     def stderr(self, driver: DriverBase) -> Iterator[None]:
+        """
+        stderr()
+
+        Convenience context manager to open a read file handle to the job's stderr.
+        """
         with driver.stderr(self) as fh:
             yield fh
 
@@ -180,6 +277,13 @@ class Job(BaseModel):
         return f"Job<{self.job_id}, {self.batch_job_id}, {str(self.status)}>"
 
     def size(self, ex: Optional[Executor] = None) -> int:
+        """
+        Retrieve the size of the job output.
+
+        :param ex: An executor like `concurrent.futures.Executor`. If `None`,
+                   will execute serially
+        :return: Job output size in bytes.
+        """
         return get_size(self.data["output_dir"], ex=ex)
 
 
