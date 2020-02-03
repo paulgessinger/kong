@@ -165,4 +165,5 @@ class Folder(BaseModel):
             return Job.raw(sql)
 
 
-from .job import Job  # needed for doc
+# Needed for RTD
+from .job import Job  # noqa: F402

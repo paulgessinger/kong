@@ -27,7 +27,6 @@ from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
 from . import config
 from .db import database
-from . import model
 from .model.folder import Folder
 from .model.job import Job, color_dict
 from .logger import logger
