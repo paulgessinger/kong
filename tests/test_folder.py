@@ -8,6 +8,8 @@ from kong.model.folder import Folder
 
 import logging
 
+from kong.model.job import Job
+
 logging.getLogger("kong").setLevel(logging.DEBUG)
 
 
@@ -209,3 +211,44 @@ def test_jobs_recursive(db, state):
     jobs = root.jobs_recursive()
     assert len(jobs) == 2
     assert all(a == b for a, b in zip(jobs, [j1, j2]))
+
+def test_job_stats(db, state):
+
+    root = Folder.get_root()
+
+    f1 = root.add_folder("f1")
+    f2 = f1.add_folder("f2")
+
+    state.cd(f1)
+    j1 = state.create_job(command="sleep 1")
+    j2 = state.create_job(command="sleep 1")
+    j3 = state.create_job(command="sleep 1")
+
+    state.cd(f2)
+    j4 = state.create_job(command="sleep 1")
+    j5 = state.create_job(command="sleep 1")
+    j6 = state.create_job(command="sleep 1")
+
+
+    j2.status = Job.Status.RUNNING
+    j2.save()
+    j3.status = Job.Status.RUNNING
+    j3.save()
+    j4.status = Job.Status.FAILED
+    j4.save()
+    j5.status = Job.Status.COMPLETED
+    j5.save()
+    j6.status = Job.Status.UNKNOWN
+    j6.save()
+
+    exp = {
+        Job.Status.RUNNING: 2,
+        Job.Status.SUBMITTED: 0,
+        Job.Status.FAILED: 1,
+        Job.Status.COMPLETED: 1,
+        Job.Status.UNKNOWN: 1,
+        Job.Status.CREATED: 1,
+    }
+
+    assert exp == f1.job_stats()
+    assert exp == root.job_stats()

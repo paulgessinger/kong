@@ -227,13 +227,7 @@ class Repl(cmd.Cmd):
 
                 rows = []
                 for idx, folder in enumerate(folders):
-                    folder_jobs = folder.jobs_recursive()
-                    # accumulate counts
-                    # @TODO: SLOW! Optimize to query
-                    counts = {k: 0 for k in Job.Status}
-
-                    for job in folder_jobs:
-                        counts[job.status] += 1
+                    counts = folder.job_stats()
 
                     output = ""
                     for k, c in counts.items():
