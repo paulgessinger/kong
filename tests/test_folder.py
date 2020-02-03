@@ -132,33 +132,43 @@ def test_find_by_path(db):
     f3 = f2.add_folder("f3")
     f4 = f2.add_folder("f4")
 
+
+    # Check it works with implicit CWD
+    assert Folder.find_by_path("/") == root
+    assert Folder.find_by_path("../blubb") == None
+    assert Folder.find_by_path("/f1") == f1
+    assert Folder.find_by_path("/f1/f2") == f2
+    assert Folder.find_by_path("/f1/f2/f3") == f3
+    assert Folder.find_by_path("/f1/f2/f4") == f4
+
     for f in [root, f1, f2, f3, f4]:
         # absolute paths work regardless of cwd
-        assert Folder.find_by_path(f, "/") == root
-        assert Folder.find_by_path(f, "/f1") == f1
-        assert Folder.find_by_path(f, "/f1/f2") == f2
-        assert Folder.find_by_path(f, "/f1/f2/f3") == f3
-        assert Folder.find_by_path(f, "/f1/f2/f4") == f4
+        assert Folder.find_by_path("/", f) == root
+        assert Folder.find_by_path("/f1", f) == f1
+        assert Folder.find_by_path("/f1/f2", f) == f2
+        assert Folder.find_by_path("/f1/f2/f3", f) == f3
+        assert Folder.find_by_path("/f1/f2/f4", f) == f4
         # self referential paths work everywhere
-        assert Folder.find_by_path(f, ".") == f
-        assert Folder.find_by_path(f, f.path) == f
-        assert Folder.find_by_path(f, f.path + "/") == f
+        assert Folder.find_by_path(".", f) == f
+        assert Folder.find_by_path(f.path, f) == f
+        assert Folder.find_by_path(f.path + "/", f) == f
 
         # for root, it's None
-        assert Folder.find_by_path(f, "..") == f.parent
+        assert Folder.find_by_path("..", f) == f.parent
 
-        assert Folder.find_by_path(f, "nope") is None
-        assert Folder.find_by_path(f, "../nope") is None
+        assert Folder.find_by_path("nope", f) is None
+        assert Folder.find_by_path("../nope", f) is None
 
-    assert Folder.find_by_path(root, "f1") == f1
-    assert Folder.find_by_path(f1, "../") == root
-    assert Folder.find_by_path(f1, "../f1") == f1
-    assert Folder.find_by_path(f1, "../f1/f2") == f2
-    assert Folder.find_by_path(f1, "f2") == f2
-    assert Folder.find_by_path(f2, "f3") == f3
-    assert Folder.find_by_path(f2, "f4") == f4
-    assert Folder.find_by_path(f3, "../f4") == f4
-    assert Folder.find_by_path(f4, "../f3") == f3
+    assert Folder.find_by_path("f1", root) == f1
+    assert Folder.find_by_path("f1") == f1
+    assert Folder.find_by_path("../", f1) == root
+    assert Folder.find_by_path("../f1", f1) == f1
+    assert Folder.find_by_path("../f1/f2", f1) == f2
+    assert Folder.find_by_path("f2", f1) == f2
+    assert Folder.find_by_path("f3", f2) == f3
+    assert Folder.find_by_path("f4", f2) == f4
+    assert Folder.find_by_path("../f4", f3) == f4
+    assert Folder.find_by_path("../f3", f4) == f3
 
 
 def test_fancy_operator(db):

@@ -74,7 +74,7 @@ def test_ls(tree, state, sample_jobs):
     with pytest.raises(pw.DoesNotExist):
         state.ls("/nope")
 
-    f2 = Folder.find_by_path(state.cwd, "/f2")
+    f2 = Folder.find_by_path("/f2", state.cwd)
     state.cwd = f2
     folders, jobs = state.ls(".")
     assert all(a == b for a, b in zip(folders, f2.children))
@@ -534,24 +534,24 @@ def test_mkdir_create_parent(state):
 
     with pytest.raises(CannotCreateError):
         state.mkdir("/a1/b2/c3/d4")
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is None
+    assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is None
 
     state.mkdir("/a1/b2/c3/d4", create_parent=True)
-    assert Folder.find_by_path(state.cwd, "/a1") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3") is not None
-    assert Folder.find_by_path(state.cwd, "/a1/b2/c3/d4") is not None
+    assert Folder.find_by_path("/a1", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2/c3", state.cwd) is not None
+    assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is not None
 
     state.mkdir("/a1/b2/c3/d5", create_parent=True)
 
     state.mkdir("beta", create_parent=True)
-    assert Folder.find_by_path(state.cwd, "/beta") is not None
+    assert Folder.find_by_path("/beta", state.cwd) is not None
 
     state.mkdir("basic", create_parent=True)
-    assert Folder.find_by_path(state.cwd, "/basic") is not None
+    assert Folder.find_by_path("/basic", state.cwd) is not None
 
     state.mkdir("/basic2", create_parent=True)
-    assert Folder.find_by_path(state.cwd, "/basic2") is not None
+    assert Folder.find_by_path("/basic2", state.cwd) is not None
 
 
 def test_rm_folder(state, db):

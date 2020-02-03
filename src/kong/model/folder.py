@@ -67,13 +67,18 @@ class Folder(BaseModel):
         return cast(Folder, folder)
 
     @staticmethod
-    def find_by_path(cwd: "Folder", path: str) -> Optional["Folder"]:
+    def find_by_path(path: str, cwd: Optional["Folder"] = None) -> Optional["Folder"]:
+        assert isinstance(path, str)
+
         if cwd is None:
-            return None
+            cwd = Folder.get_root()
+
+        assert isinstance(cwd, Folder)
+
         if path == "/":
             return Folder.get_root()
         if path.startswith("/"):
-            return Folder.find_by_path(Folder.get_root(), path[1:])
+            return Folder.find_by_path(path[1:], Folder.get_root())
         if path.endswith("/"):
             path = path[:-1]
         if path == "..":
@@ -86,9 +91,14 @@ class Folder(BaseModel):
         logger.debug("Resolve path %s in %s: %s, %s", path, cwd.path, head, tail)
 
         if head == "..":
-            return Folder.find_by_path(cwd.parent, tail)
+            if cwd.parent is None:
+                return None
+            return Folder.find_by_path(tail, cwd.parent)
         else:
-            return Folder.find_by_path(cast(Folder, cwd.subfolder(head)), tail)
+            next_cwd: Optional[Folder] = cwd.subfolder(head)
+            if next_cwd is None:
+                return None
+            return Folder.find_by_path(tail, next_cwd)
 
     def __truediv__(self, name: str) -> Optional["Folder"]:
         return self.subfolder(name)
