@@ -110,14 +110,14 @@ def Progress(*args: Any, **kwargs: Any) -> Iterable[T]:
 
 
 def shorten(string: str, length: int) -> str:
-    ANSIRE = '\x1b\\[(?:K|.*?m)'
+    ANSIRE = "\x1b\\[(?:K|.*?m)"
 
     if length <= 4:
         raise ValueError("Shortening to <= 4 does not make sense")
     if length >= len(click.unstyle(string)):
         return string
 
-    m = re.match("^("+ANSIRE+').*('+ANSIRE+'$)', string)
+    m = re.match("^(" + ANSIRE + ").*(" + ANSIRE + "$)", string)
     if m is None:
         # Not a single style, unstyle all
         start = ""
