@@ -20,7 +20,7 @@ from kong.drivers import InvalidJobStatus
 from kong.logger import logger
 from kong.util import rmtree, chunks
 from .driver_base import DriverBase, checked_job
-from ..model import Job
+from ..model.job import Job
 from ..db import database
 
 

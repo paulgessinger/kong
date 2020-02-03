@@ -163,3 +163,7 @@ class Folder(BaseModel):
             from .job import Job
 
             return Job.raw(sql)
+
+
+# Needed for RTD
+from .job import Job  # noqa: F402

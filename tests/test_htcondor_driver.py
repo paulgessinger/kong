@@ -16,7 +16,8 @@ from kong.drivers.htcondor_driver import (
     HTCondorAccountingItem,
     ShellHTCondorInterface,
 )
-from kong.model import Job, Folder
+from kong.model.job import Job
+from kong.model.folder import Folder
 from kong.util import is_executable
 
 

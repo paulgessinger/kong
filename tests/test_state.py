@@ -12,7 +12,8 @@ import peewee as pw
 import kong
 from kong.config import Config
 from kong.drivers.local_driver import LocalDriver
-from kong.model import Folder, Job
+from kong.model.folder import Folder
+from kong.model.job import Job
 import kong.drivers
 from kong.state import DoesNotExist, CannotCreateError, CannotRemoveIsFolder
 from kong.util import exhaust
@@ -39,7 +40,7 @@ def cfg(app_env, monkeypatch):
 
 def test_init(cfg, db):
     # this requires a database to be created externally
-    s = kong.state.State(cfg, kong.model.Folder.get_root())
+    s = kong.state.State(cfg, kong.model.folder.Folder.get_root())
     assert s is not None
 
 
@@ -50,7 +51,7 @@ def test_get_instance(cfg, monkeypatch):
     s = kong.state.State.get_instance()
     assert s is not None
     init.assert_called_once()
-    assert s.cwd == kong.model.Folder.get_root()
+    assert s.cwd == kong.model.folder.Folder.get_root()
 
 
 def test_module_get_instance(cfg, monkeypatch):
@@ -60,7 +61,7 @@ def test_module_get_instance(cfg, monkeypatch):
     s = kong.get_instance()
     assert s is not None
     init.assert_called_once()
-    assert s.cwd == kong.model.Folder.get_root()
+    assert s.cwd == kong.model.folder.Folder.get_root()
 
 
 def test_ls(tree, state, sample_jobs):

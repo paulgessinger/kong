@@ -12,7 +12,9 @@ import peewee as pw
 from click import UsageError
 from conftest import skip_lxplus
 
-from kong.model import Folder, Job
+from kong.model.folder import Folder
+from kong.model.job import Job
+
 from kong.repl import Repl, complete_path
 import kong
 

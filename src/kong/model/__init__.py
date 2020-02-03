@@ -6,8 +6,6 @@ import peewee as pw
 from ..util import chunks
 from .. import db
 
-__all__ = ["Folder", "Job"]
-
 T = TypeVar("T", bound="BaseModel")
 
 
@@ -28,7 +26,3 @@ class BaseModel(pw.Model):
     ) -> Iterable[T]:
         for chunk in chunks(values, batch_size):
             yield from cls.select().where(field.in_(chunk)).execute()  # type: ignore
-
-
-from .folder import Folder
-from .job import Job

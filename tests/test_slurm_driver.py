@@ -15,7 +15,8 @@ from kong.drivers.slurm_driver import (
     SlurmAccountingItem,
     ShellSlurmInterface,
 )
-from kong.model import Job, Folder
+from kong.model.folder import Folder
+from kong.model.job import Job
 from kong.util import is_executable, exhaust
 
 

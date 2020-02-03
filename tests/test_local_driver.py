@@ -10,8 +10,10 @@ from unittest.mock import Mock, call
 from kong.drivers import DriverMismatch, InvalidJobStatus
 from kong.drivers.local_driver import LocalDriver
 import kong
-from kong.model import Folder, Job
+from kong.model.folder import Folder
 from conftest import skip_lxplus
+
+from kong.model.job import Job
 
 
 @pytest.fixture
