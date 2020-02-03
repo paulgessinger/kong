@@ -1,7 +1,7 @@
 import os
 import datetime
 
-from typing import Any, cast, Optional, TYPE_CHECKING, List, Iterable, Dict
+from typing import Any, cast, Optional, TYPE_CHECKING, List, Iterable, Dict, Tuple
 
 import peewee as pw
 from peewee import sqlite3
@@ -232,7 +232,7 @@ class Folder(BaseModel):
                 counts[job.status] += 1
             return counts
         else:
-            sql ="""
+            sql = """
 WITH RECURSIVE
     children(n) AS (
        VALUES(?)
@@ -243,12 +243,16 @@ WITH RECURSIVE
 SELECT status, count() FROM job where folder_id in children GROUP BY status;
             """
 
-            cursor = database.execute_sql(sql, (int(self.folder_id),))
+            cursor = cast(
+                Iterable[Tuple[int, int]],
+                database.execute_sql(sql, (int(self.folder_id),)),
+            )
             counts = {k: 0 for k in Job.Status}
             for status, count in cursor:
                 counts[Job.Status(status)] = count
 
             return counts
+
 
 # Needed for RTD
 from .job import Job  # noqa: F402

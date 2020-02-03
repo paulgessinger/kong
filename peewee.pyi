@@ -31,7 +31,7 @@ class Model:
     def update(cls, **kwargs: Any) -> Any: ...
 
     @classmethod
-    def raw(cls, sql: str) -> Iterable[T]:
+    def raw(cls, sql: str, *args: Any) -> Iterable[T]:
         ...
 
 class SqliteDatabase:
