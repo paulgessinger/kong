@@ -181,9 +181,7 @@ class Repl(cmd.Cmd):
                 assert arg_folder is not None  # should be a folder
                 jobs = list(arg_folder.jobs_recursive())
 
-            with Spinner(
-                "Refreshing jobs", persist=False, enabled=refresh
-            ):
+            with Spinner("Refreshing jobs", persist=False, enabled=refresh):
 
                 if refresh:
                     jobs = cast(list, self.state.refresh_jobs(jobs))
