@@ -1,13 +1,13 @@
 import os
 import datetime
 
-from typing import Any, cast, Optional, TYPE_CHECKING, List, Iterable
+from typing import Any, cast, Optional, TYPE_CHECKING, List, Iterable, Dict, Tuple
 
 import peewee as pw
 from peewee import sqlite3
 
 from ..logger import logger
-from ..db import AutoIncrementField
+from ..db import AutoIncrementField, database
 from . import BaseModel
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -177,17 +177,15 @@ class Folder(BaseModel):
             sql = """
     WITH RECURSIVE
       children(n) AS (
-        VALUES({folder_id})
+        VALUES(?)
         UNION
         SELECT folder_id FROM folder, children
          WHERE folder.parent_id=children.n
       )
-    SELECT * FROM folder where folder_id in children AND folder_id != {folder_id};
-    """.format(
-                folder_id=self.folder_id
-            )
+    SELECT * FROM folder where folder_id in children AND folder_id != ?;
+    """
 
-            return Folder.raw(sql)
+            return Folder.raw(sql, int(self.folder_id), int(self.folder_id))
 
     def jobs_recursive(self) -> Iterable["Job"]:
         """
@@ -213,19 +211,47 @@ class Folder(BaseModel):
             sql = """
             WITH RECURSIVE
               children(n) AS (
-                VALUES({folder_id})
+                VALUES(?)
                 UNION
                 SELECT folder_id FROM folder, children
                  WHERE folder.parent_id=children.n
               )
             SELECT * FROM job where folder_id in children;
-            """.format(
-                folder_id=self.folder_id
-            )
+            """
 
             from .job import Job
 
-            return Job.raw(sql)
+            return Job.raw(sql, int(self.folder_id))
+
+    def job_stats(self) -> Dict["Job.Status", int]:
+        crit = (3, 8, 3)
+        if sqlite3.sqlite_version_info < crit:  # pragma: no cover
+            jobs = self.jobs_recursive()
+            counts = {k: 0 for k in Job.Status}
+            for job in jobs:
+                counts[job.status] += 1
+            return counts
+        else:
+            sql = """
+WITH RECURSIVE
+    children(n) AS (
+       VALUES(?)
+        UNION
+        SELECT folder_id FROM folder, children
+        WHERE folder.parent_id=children.n
+    )
+SELECT status, count() FROM job where folder_id in children GROUP BY status;
+            """
+
+            cursor = cast(
+                Iterable[Tuple[int, int]],
+                database.execute_sql(sql, (int(self.folder_id),)),
+            )
+            counts = {k: 0 for k in Job.Status}
+            for status, count in cursor:
+                counts[Job.Status(status)] = count
+
+            return counts
 
 
 # Needed for RTD

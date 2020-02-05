@@ -1,7 +1,7 @@
 """
 Singleton database instance
 """
-from typing import TYPE_CHECKING, Any, List, ContextManager
+from typing import TYPE_CHECKING, Any, List, ContextManager, Tuple, Iterable
 
 if not TYPE_CHECKING:
     from playhouse.sqlite_ext import SqliteExtDatabase, AutoIncrementField
@@ -47,6 +47,9 @@ else:  # pragma: no cover
             Type stub
             :return:
             """
+            ...
+
+        def execute_sql(self, query: str, params: Tuple[Any]) -> Iterable[Tuple[Any]]:
             ...
 
     class AutoIncrementField:
