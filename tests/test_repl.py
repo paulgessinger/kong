@@ -85,7 +85,9 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         state.ls.assert_called_once()
         assert state.refresh_jobs.call_count == 1
 
-def test_ls_status(state, repl, capsys):
+def test_ls_status(state, repl, capsys, monkeypatch):
+    monkeypatch.setattr("kong.repl.Spinner", MagicMock())
+
     j1 = state.create_job(command="sleep 1")
     j2 = state.create_job(command="sleep 1")
     j3 = state.create_job(command="sleep 1")
@@ -95,15 +97,15 @@ def test_ls_status(state, repl, capsys):
 
     repl.onecmd("ls")
     out, err = capsys.readouterr()
-    assert len(out.strip().split("\n")) == 6
+    assert len(out.strip().split("\n")) == 5
 
     repl.onecmd("ls -S CREATED")
     out, err = capsys.readouterr()
-    assert len(out.strip().split("\n")) == 5
+    assert len(out.strip().split("\n")) == 4
 
     repl.onecmd("ls -S FAILED")
     out, err = capsys.readouterr()
-    assert len(out.strip().split("\n")) == 4
+    assert len(out.strip().split("\n")) == 3
 
 
 
@@ -127,6 +129,7 @@ def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
         "kong.repl.ThreadPoolExecutor", DirectExecutor
     )  # disable threads
     monkeypatch.setattr("kong.repl.Job.size", Mock(return_value=42))
+    monkeypatch.setattr("kong.repl.Spinner", MagicMock())
     repl.onecmd("ls -s .")
     out, err = capsys.readouterr()
     lines = out.strip().split("\n")
@@ -139,7 +142,7 @@ f3   0 bytes                        0       0         0       0      0         0
 """[
         1:-1
     ]
-    assert "\n".join(lines[2:7]) == exp
+    assert "\n".join(lines[:6]).strip() == exp
 
 
 @skip_lxplus
@@ -950,3 +953,13 @@ def test_less(state, repl, capsys, monkeypatch):
         repl.onecmd(f"less --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
+
+
+def test_shell(repl, monkeypatch):
+    string = "HALLO HALLO 123"
+    cmd = f"echo '{string}'"
+
+    run = Mock()
+    monkeypatch.setattr("subprocess.run", run)
+    repl.onecmd(f"!{cmd}")
+    run.assert_called_once_with(cmd, shell=True, env=ANY)

@@ -148,6 +148,7 @@ stdout={{stdout}}
 ({{command}}) > $stdout 2>&1
 """.strip()
 
+
 batchfile_tpl_str = """
 #!/bin/bash
 #SBATCH -J {{name}}

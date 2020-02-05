@@ -4,6 +4,7 @@ import shlex
 import cmd
 import readline
 import os
+import subprocess
 import sys
 import time
 from concurrent.futures import wait, ThreadPoolExecutor
@@ -173,15 +174,14 @@ class Repl(cmd.Cmd):
             if show_sizes:
                 ex = ThreadPoolExecutor()
 
-            with Spinner(
-                "Collecting job info", persist=False, enabled=refresh or recursive
-            ):
-                folders, jobs = self.state.ls(dir, refresh=refresh)
+            folders, jobs = self.state.ls(dir, refresh=refresh)
 
-                if recursive:
-                    arg_folder = Folder.find_by_path(dir, self.state.cwd)
-                    assert arg_folder is not None  # should be a folder
-                    jobs = list(arg_folder.jobs_recursive())
+            if recursive:
+                arg_folder = Folder.find_by_path(dir, self.state.cwd)
+                assert arg_folder is not None  # should be a folder
+                jobs = list(arg_folder.jobs_recursive())
+
+            with Spinner("Refreshing jobs", persist=False, enabled=refresh):
 
                 if refresh:
                     jobs = cast(list, self.state.refresh_jobs(jobs))
@@ -214,16 +214,17 @@ class Repl(cmd.Cmd):
                     jobs_sizes = [f.result() for f in job_size_futures]
 
             if len(folders) > 0:
-                headers = ["name"]
-                align = ["l+"]
+                with Spinner("Collection folder information", persist=False):
+                    headers = ["name"]
+                    align = ["l+"]
 
-                if show_sizes:
-                    headers.append("output size")
-                    align = ["l", "l+"]
+                    if show_sizes:
+                        headers.append("output size")
+                        align = ["l", "l+"]
 
-                for s in Job.Status:
-                    headers.append(click.style(s.name, fg=color_dict[s]))
-                    align.append("r")
+                    for s in Job.Status:
+                        headers.append(click.style(s.name, fg=color_dict[s]))
+                        align.append("r")
 
                 rows = []
                 for idx, folder in enumerate(folders):
@@ -248,47 +249,48 @@ class Repl(cmd.Cmd):
                 print()
 
             if len(jobs) > 0:
-                headers = ["job id"]
-                align = ["l"]
+                with Spinner("Collection job information", persist=False):
+                    headers = ["job id"]
+                    align = ["l"]
 
-                if show_sizes:
-                    headers.append("output size")
-                    align.append("l")
-
-                headers += ["batch job id", "created", "updated", "status"]
-                align += ["r+", "l", "l", "l"]
-
-                def dtfmt(dt: datetime.datetime) -> str:
-                    return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-                rows = []
-                status_filter = (
-                    Job.Status[status_filter_str]
-                    if status_filter_str is not None
-                    else None
-                )
-                for idx, job in enumerate(jobs):
-
-                    if status_filter is not None:
-                        if job.status != status_filter:
-                            continue
-
-                    job_id = str(job.job_id)
-                    batch_job_id = str(job.batch_job_id)
-                    _, status_name = str(job.status).split(".", 1)
-                    color = color_dict[job.status]
-                    row = [job_id]
                     if show_sizes:
-                        row.append(humanfriendly.format_size(jobs_sizes[idx]))
+                        headers.append("output size")
+                        align.append("l")
 
-                    row += [
-                        batch_job_id,
-                        dtfmt(job.created_at),
-                        dtfmt(job.updated_at),
-                        status_name,
-                    ]
+                    headers += ["batch job id", "created", "updated", "status"]
+                    align += ["r+", "l", "l", "l"]
 
-                    rows.append(tuple(click.style(c, fg=color) for c in row))
+                    def dtfmt(dt: datetime.datetime) -> str:
+                        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                    rows = []
+                    status_filter = (
+                        Job.Status[status_filter_str]
+                        if status_filter_str is not None
+                        else None
+                    )
+                    for idx, job in enumerate(jobs):
+
+                        if status_filter is not None:
+                            if job.status != status_filter:
+                                continue
+
+                        job_id = str(job.job_id)
+                        batch_job_id = str(job.batch_job_id)
+                        _, status_name = str(job.status).split(".", 1)
+                        color = color_dict[job.status]
+                        row = [job_id]
+                        if show_sizes:
+                            row.append(humanfriendly.format_size(jobs_sizes[idx]))
+
+                        row += [
+                            batch_job_id,
+                            dtfmt(job.created_at),
+                            dtfmt(job.updated_at),
+                            status_name,
+                        ]
+
+                        rows.append(tuple(click.style(c, fg=color) for c in row))
 
                 click.echo(format_table(tuple(headers), rows, align=tuple(align)))
 
@@ -524,7 +526,7 @@ class Repl(cmd.Cmd):
         """Update the job at PATH."""
         with Spinner("Updating jobs"):
             jobs = self.state.get_jobs(path, recursive=recursive)
-            self.state.refresh_jobs(jobs)
+            jobs = list(self.state.refresh_jobs(jobs))
         counts = {k: 0 for k in Job.Status}
 
         click.echo(f"{len(jobs)} job(s) updated")
@@ -670,6 +672,17 @@ class Repl(cmd.Cmd):
             poll_interval=poll_interval,
             update_interval=update_interval,
         )
+
+    def do_shell(self, cmd: str) -> None:
+        """
+        Run the command given in a shell.
+        The environment variable $KONG_PWD is set to the current working directory
+        """
+        logger.debug("cmd: %s", cmd)
+        env = os.environ.copy()
+        env.update({"KONG_PWD": self.state.cwd.path})
+        logger.debug("Expanded: %s", cmd)
+        subprocess.run(cmd, shell=True, env=env)
 
     def do_exit(self, arg: str) -> bool:
         """Exit the repl"""
