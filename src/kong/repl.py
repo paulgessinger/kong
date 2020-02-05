@@ -4,6 +4,7 @@ import shlex
 import cmd
 import readline
 import os
+import subprocess
 import sys
 import time
 from concurrent.futures import wait, ThreadPoolExecutor
@@ -670,6 +671,17 @@ class Repl(cmd.Cmd):
             poll_interval=poll_interval,
             update_interval=update_interval,
         )
+
+    def do_shell(self, cmd: str) -> None:
+        """
+        Run the command given in a shell.
+        The environment variable $KONG_PWD is set to the current working directory
+        """
+        logger.debug("cmd: %s", cmd)
+        env = os.environ.copy()
+        env.update({"KONG_PWD": self.state.cwd.path})
+        logger.debug("Expanded: %s", cmd)
+        subprocess.run(cmd, shell=True, env=env)
 
     def do_exit(self, arg: str) -> bool:
         """Exit the repl"""
