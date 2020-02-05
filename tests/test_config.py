@@ -70,14 +70,17 @@ def test_notificationmanager(monkeypatch):
     config.data = {}
     nm = NotificationManager(config)
     assert notifier.call_count == 0
+    assert not nm.enabled
 
     config.data = {"notify": []}
     nm = NotificationManager(config)
     assert notifier.call_count == 0
+    assert not nm.enabled
 
     config.data = {"notify": [{"name": "foo", "arg1": 5, "arg2": "yep"}]}
 
     nm = NotificationManager(config)
+    assert nm.enabled
 
     notifier.assert_called_once_with(name="foo", arg1=5, arg2="yep")
 

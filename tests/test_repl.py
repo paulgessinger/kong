@@ -953,3 +953,13 @@ def test_less(state, repl, capsys, monkeypatch):
         repl.onecmd(f"less --nope")
     out, err = capsys.readouterr()
     assert "no such option" in out
+
+
+def test_shell(repl, monkeypatch):
+    string = "HALLO HALLO 123"
+    cmd = f"echo '{string}'"
+
+    run = Mock()
+    monkeypatch.setattr("subprocess.run", run)
+    repl.onecmd(f"!{cmd}")
+    run.assert_called_once_with(cmd, shell=True, env=ANY)
