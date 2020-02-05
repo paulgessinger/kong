@@ -758,7 +758,7 @@ class State:
         wait_start = datetime.datetime.now()
         last_update = datetime.datetime.now()
 
-        if update_interval is not None and notify:
+        if update_interval is not None and notify and self.config.notifications.enabled:
             print(f"Will notify every {humanfriendly.format_timespan(update_interval)}")
 
         try:
@@ -800,6 +800,8 @@ class State:
                 counts[job.status] += 1
 
             out = [f"{k.name[:1]}{v}" for k, v in counts.items()]
+
+            print(f"Wait terminated: {out}")
 
             if notify:
                 if counts[Job.Status.FAILED] > 0:

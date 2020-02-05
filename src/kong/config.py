@@ -164,6 +164,10 @@ class NotificationManager:
             responses.append(notifier.notify(message, title, *args, **kwargs))
         return responses
 
+    @property
+    def enabled(self) -> bool:
+        return len(self.notifiers) > 0
+
 
 class Config:
     """
