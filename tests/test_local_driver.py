@@ -246,7 +246,7 @@ def test_job_env_is_valid(driver, state):
     def run_get_env(**kwargs):
         j1 = driver.create_job(folder=root, command="env", **kwargs)
         j1.submit()
-        j1.wait()
+        j1.wait(poll_interval=0.1)
         env = {}
         with j1.stdout() as fh:
             raw = fh.read().strip().split("\n")
@@ -299,9 +299,9 @@ def test_run_job(driver, state, db):
     assert j1.status == Job.Status.SUBMITTED
 
     print("WAIT")
-    driver.wait(j1, timeout=2)
+    driver.wait(j1, timeout=2, poll_interval=0.1)
     print("WAIT DONE")
-    driver.wait(j1, timeout=2)
+    driver.wait(j1, timeout=2, poll_interval=0.1)
     assert j1.status == Job.Status.COMPLETED
 
     with driver.stdout(j1) as so:
@@ -332,7 +332,7 @@ def test_run_stdout_stderr(driver, state):
 
     j1 = driver.create_job(command=f"echo '{error}' 1>&2 ; echo '{value}'", folder=root)
     j1.submit()
-    j1.wait()
+    j1.wait(poll_interval=0.1)
     assert j1.status == Job.Status.COMPLETED
 
     # os.system("ls -al "+os.path.join(state.config.jobdir, os.listdir(state.config.jobdir)[0]))
@@ -391,10 +391,10 @@ def test_run_job_timeout(driver, state):
     j1.submit()
 
     with pytest.raises(TimeoutError):
-        driver.wait(j1, timeout=0.1)
+        driver.wait(j1, timeout=0.1, poll_interval=0.05)
     assert j1.status == Job.Status.RUNNING
     time.sleep(1)
-    driver.wait(j1, timeout=0.1)
+    driver.wait(j1, timeout=0.1, poll_interval=0.05)
     assert j1.status == Job.Status.COMPLETED
 
 
@@ -406,8 +406,8 @@ def test_run_failed(driver, state):
     j1.submit()
     j2.submit()
 
-    j1.wait()
-    j2.wait()
+    j1.wait(poll_interval=0.1)
+    j2.wait(poll_interval=0.1)
 
     assert j1.status == Job.Status.FAILED
     assert j1.data["exit_code"] == 1
@@ -441,7 +441,7 @@ def test_run_terminated(driver, state):
     ):  # or parent.children() for recursive=False
         child.terminate()
     proc.terminate()
-    j1.wait()
+    j1.wait(poll_interval=0.1)
     assert j1.status == Job.Status.FAILED
 
 
@@ -485,7 +485,7 @@ def test_bulk_submit(driver, state):
     for job in jobs:
         assert job.status == Job.Status.SUBMITTED
 
-    driver.wait(jobs)
+    driver.wait(jobs, poll_interval=0.1)
 
     for job in jobs:
         assert job.status == Job.Status.COMPLETED
@@ -545,7 +545,7 @@ def test_bulk_wait(driver, state):
         job.submit()
         jobs.append(job)
 
-    driver.wait(jobs)
+    driver.wait(jobs, poll_interval=0.1)
 
     for i, job in enumerate(jobs[:15]):
         assert job.status == Job.Status.COMPLETED
@@ -627,7 +627,7 @@ def test_job_resubmit(driver, state, monkeypatch):
         command="echo 'begin'; sleep 0.2 ; echo 'end' ; exit 1", folder=root
     )
     j1.submit()
-    j1.wait()
+    j1.wait(poll_interval=0.1)
     assert j1.status == Job.Status.FAILED
     with j1.stdout() as fh:
         assert fh.read().strip() == "begin\nend"
@@ -651,7 +651,7 @@ def test_job_resubmit(driver, state, monkeypatch):
     driver.submit(j1)
 
     assert j1.status == Job.Status.SUBMITTED
-    j1.wait()
+    j1.wait(poll_interval=0.1)
     assert j1.status == Job.Status.FAILED
 
 
@@ -719,7 +719,7 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
     jobs[0].save()
 
     driver.bulk_submit(jobs[1:])
-    driver.wait(jobs)
+    driver.wait(jobs, poll_interval=0.1)
 
     for job in jobs[1:]:
         assert job.status == Job.Status.FAILED
@@ -764,7 +764,7 @@ def test_job_bulk_resubmit(driver, state, monkeypatch):
 
     for job in jobs:
         assert job.status == Job.Status.SUBMITTED
-    driver.wait(jobs)
+    driver.wait(jobs, poll_interval=0.1)
     for job in jobs:
         assert job.status == Job.Status.FAILED
 

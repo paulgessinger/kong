@@ -2,6 +2,7 @@ import datetime
 import multiprocessing
 import tempfile
 import os
+import time
 from contextlib import contextmanager
 from subprocess import Popen
 from typing import (
@@ -408,6 +409,12 @@ class LocalDriver(DriverBase):
                 delta,
                 len(remaining_jobs),
             )
+
+            if timeout is not None:
+                if (datetime.datetime.now() - start).total_seconds() >= timeout:
+                    raise TimeoutError()
+
+            print("waiting", poll_interval)
             time.sleep(poll_interval)
 
     @checked_job
