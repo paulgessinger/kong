@@ -702,7 +702,7 @@ class State:
 
     def wait(
         self,
-        jobspec: JobSpec,
+        jobspecs: List[JobSpec],
         recursive: bool = False,
         notify: bool = True,
         timeout: Optional[int] = None,
@@ -723,7 +723,7 @@ class State:
         :return: An iterable if `progress` is `True`, else `None`.
         """
         it = self._wait_gen(
-            jobspec=jobspec,
+            jobspecs=jobspecs,
             recursive=recursive,
             notify=notify,
             timeout=timeout,
@@ -738,15 +738,16 @@ class State:
 
     def _wait_gen(
         self,
-        jobspec: JobSpec,
+        jobspecs: List[JobSpec],
         recursive: bool = False,
         notify: bool = True,
         timeout: Optional[int] = None,
         poll_interval: Optional[int] = None,
         update_interval: Optional[timedelta] = None,
     ) -> Iterable[List[Job]]:
-        jobs: List[Job]
-        jobs = list(self._extract_jobs(jobspec, recursive=recursive))
+        jobs: List[Job] = []
+        for jobspec in jobspecs:
+            jobs.extend(self._extract_jobs(jobspec, recursive=recursive))
 
         logger.debug("Jobs for waiting: %s", jobs)
         assert len(jobs) > 0
