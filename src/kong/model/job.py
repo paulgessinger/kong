@@ -288,7 +288,7 @@ class Job(BaseModel):
 
 
 color_dict = {
-    Job.Status.UNKNOWN: "red",
+    Job.Status.UNKNOWN: "magenta",
     Job.Status.CREATED: "white",
     Job.Status.SUBMITTED: "yellow",
     Job.Status.RUNNING: "blue",
