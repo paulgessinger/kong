@@ -368,7 +368,7 @@ class Repl(cmd.Cmd):
             else:
                 names.append(item.name)
 
-        click.secho(f"Moved {', '.join(names)} -> {dest}")
+        click.secho(f"Moved -> {dest}")
 
     @parse_arguments
     @click.argument("path")
