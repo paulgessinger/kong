@@ -426,6 +426,16 @@ def test_run_killed(driver, state):
     j1.wait()
     assert j1.status == Job.Status.UNKNOWN
 
+def test_wait(driver, state):
+    j1 = state.create_job(command="sleep 2")
+
+    with pytest.raises(ValueError):
+        driver.wait(j1)
+
+    j1.submit()
+
+    with pytest.raises(TimeoutError):
+        driver.wait(j1, poll_interval=0.05, timeout=0.2)
 
 @skip_lxplus
 def test_run_terminated(driver, state):

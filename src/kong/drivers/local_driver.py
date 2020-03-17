@@ -337,29 +337,6 @@ class LocalDriver(DriverBase):
         with open(job.data["stderr"], "r") as fh:
             yield fh
 
-    @checked_job
-    def _wait_single(self, job: Job, timeout: Optional[int] = None) -> Job:
-        logger.debug("Wait for job %s requested", job)
-        self.sync_status(job)
-        if job.status not in (Job.Status.SUBMITTED, Job.Status.RUNNING):
-            logger.info(
-                "Job %s is in status %s, neither SUBMITTED nor RUNNING, wait will not complete, returning now",
-                job,
-                job.status,
-            )
-            return job
-
-        try:
-            proc = psutil.Process(pid=job.data["pid"])
-            try:
-                proc.wait(timeout=timeout)
-            except psutil.TimeoutExpired as e:
-                raise TimeoutError(str(e))
-        except psutil.NoSuchProcess:
-            logger.debug("Wait encountered non-existing pid, we're done")
-
-        return cast(Job, self.sync_status(job))
-
     def wait_gen(
         self,
         job: Union[Job, List[Job]],
@@ -410,11 +387,6 @@ class LocalDriver(DriverBase):
                 len(remaining_jobs),
             )
 
-            if timeout is not None:
-                if (datetime.datetime.now() - start).total_seconds() >= timeout:
-                    raise TimeoutError()
-
-            print("waiting", poll_interval)
             time.sleep(poll_interval)
 
     @checked_job
