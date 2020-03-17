@@ -15,7 +15,6 @@ from typing import (
     Dict,
     Collection,
     Iterator,
-    cast,
     Sequence,
 )
 import uuid
@@ -375,7 +374,7 @@ class LocalDriver(DriverBase):
                 j
                 for j in jobs
                 if j.status
-                   not in (Job.Status.COMPLETED, Job.Status.FAILED, Job.Status.UNKNOWN)
+                not in (Job.Status.COMPLETED, Job.Status.FAILED, Job.Status.UNKNOWN)
             ]
             if len(remaining_jobs) == 0:
                 logger.debug("Waiting completed")

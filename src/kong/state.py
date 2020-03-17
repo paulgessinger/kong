@@ -703,7 +703,7 @@ class State:
 
     def wait(
         self,
-        jobspecs: List[JobSpec],
+        jobspecs: Sequence[JobSpec],
         recursive: bool = False,
         notify: bool = True,
         timeout: Optional[int] = None,
@@ -739,7 +739,7 @@ class State:
 
     def _wait_gen(
         self,
-        jobspecs: List[JobSpec],
+        jobspecs: Sequence[JobSpec],
         recursive: bool = False,
         notify: bool = True,
         timeout: Optional[int] = None,
