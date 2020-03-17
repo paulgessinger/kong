@@ -437,7 +437,8 @@ class State:
                     first_job.ensure_driver_instance(self.config)
                     driver = first_job.driver_instance
 
-                    driver.bulk_remove(jobs)
+                    with Spinner(f"Removing {len(jobs)} jobs"):
+                        driver.bulk_remove(jobs)
 
                 for folder in folders:
                     folder.delete_instance(recursive=True, delete_nullable=True)
