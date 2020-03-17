@@ -9,6 +9,7 @@ import sys
 import time
 from concurrent.futures import wait, ThreadPoolExecutor
 
+import blessed
 import humanfriendly
 import sh
 from typing import Any, Callable, List, Optional, Union, Iterable, cast, Dict, Tuple
@@ -160,6 +161,7 @@ class Repl(cmd.Cmd):
         type=click.Choice([s.name for s in Job.Status]),
         help="Only list jobs with this status. Will still show other jobs in folder summaries",
     )
+    @click.option("--continuous", "-c", type=int)
     def do_ls(
         self,
         dir: str,
@@ -167,12 +169,14 @@ class Repl(cmd.Cmd):
         recursive: bool,
         show_sizes: bool,
         status_filter_str: Optional[str],
+        continuous: Optional[int],
     ) -> None:
         "List the directory content of DIR: jobs and folders"
+
+        ex: Optional[ThreadPoolExecutor] = None
+        if show_sizes:
+            ex = ThreadPoolExecutor()
         try:
-            ex: Optional[ThreadPoolExecutor] = None
-            if show_sizes:
-                ex = ThreadPoolExecutor()
 
             folders, jobs = self.state.ls(dir, refresh=refresh)
 
@@ -181,132 +185,159 @@ class Repl(cmd.Cmd):
                 assert arg_folder is not None  # should be a folder
                 jobs = list(arg_folder.jobs_recursive())
 
-            with Spinner("Refreshing jobs", persist=False, enabled=refresh):
+            if refresh:
+                if not continuous:
+                    with Spinner("Refreshing jobs", persist=False, enabled=refresh):
+                        jobs = cast(list, self.state.refresh_jobs(jobs))
+                    click.echo(self.make_table(folders, jobs, ex, show_sizes, status_filter_str))
+                else:
+                    assert show_sizes == False, "Not supported"
+                    term = blessed.Terminal()
+                    first = True
+                    while True:
+                        jobs = cast(list, self.state.refresh_jobs(jobs))
+                        table = self.make_table(folders, jobs, ex, show_sizes, status_filter_str)
+                        lines = 4 + len(table.split("\n"))
 
-                if refresh:
-                    jobs = cast(list, self.state.refresh_jobs(jobs))
+                        if first:
+                            print(datetime.datetime.now())
+                            print(table)
+                        else:
+                            with term.location(0, term.height - lines):
+                                print(datetime.datetime.now())
+                                print(table)
 
-            def get_size(job: Job) -> int:
-                return job.size(cast(ThreadPoolExecutor, ex))
-
-            def get_folder_size(folder: Folder) -> int:
-                # print("get folder size: ", folder.path)
-                return sum(
-                    cast(ThreadPoolExecutor, ex).map(get_size, folder.jobs_recursive())
-                )
-
-            folder_sizes: List[int] = []
-            jobs_sizes: List[int] = []
-            if show_sizes:
-                ex_ = cast(ThreadPoolExecutor, ex)
-                with Spinner("Calculating output sizes", persist=False):
-                    folder_size_futures = []
-                    for folder in folders:
-                        folder_size_futures.append(ex_.submit(get_folder_size, folder))
-
-                    job_size_futures = []
-                    for job in jobs:
-                        job_size_futures.append(ex_.submit(get_size, job))
-
-                    wait(folder_size_futures)
-                    folder_sizes = [f.result() for f in folder_size_futures]
-                    wait(job_size_futures)
-                    jobs_sizes = [f.result() for f in job_size_futures]
-
-            if len(folders) > 0:
-                with Spinner("Collection folder information", persist=False):
-                    headers = ["name"]
-                    align = ["l+"]
-
-                    if show_sizes:
-                        headers.append("output size")
-                        align = ["l", "l+"]
-
-                    for s in Job.Status:
-                        headers.append(click.style(s.name, fg=color_dict[s]))
-                        align.append("r")
-
-                rows = []
-                for idx, folder in enumerate(folders):
-                    counts = folder.job_stats()
-
-                    output = ""
-                    for k, c in counts.items():
-                        output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
-
-                    row = [folder.name]
-                    if show_sizes:
-                        row.append(humanfriendly.format_size(folder_sizes[idx]))
-                    # row += [output]
-                    for k, c in counts.items():
-                        row.append(click.style(str(c), fg=color_dict[k]))
-
-                    rows.append(tuple(row))
-
-                click.echo(format_table(tuple(headers), rows, align=tuple(align)))
-
-            if len(folders) > 0 and len(jobs) > 0:
-                print()
-
-            if len(jobs) > 0:
-                with Spinner("Collection job information", persist=False):
-                    headers = ["job id"]
-                    align = ["l"]
-
-                    if show_sizes:
-                        headers.append("output size")
-                        align.append("l")
-
-                    headers += ["batch job id", "created", "updated", "status"]
-                    align += ["r+", "l", "l", "l"]
-
-                    def dtfmt(dt: datetime.datetime) -> str:
-                        return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-                    rows = []
-                    status_filter = (
-                        Job.Status[status_filter_str]
-                        if status_filter_str is not None
-                        else None
-                    )
-                    for idx, job in enumerate(jobs):
-
-                        if status_filter is not None:
-                            if job.status != status_filter:
-                                continue
-
-                        job_id = str(job.job_id)
-                        batch_job_id = str(job.batch_job_id)
-                        _, status_name = str(job.status).split(".", 1)
-                        color = color_dict[job.status]
-                        row = [job_id]
-                        if show_sizes:
-                            row.append(humanfriendly.format_size(jobs_sizes[idx]))
-
-                        row += [
-                            batch_job_id,
-                            dtfmt(job.created_at),
-                            dtfmt(job.updated_at),
-                            status_name,
-                        ]
-
-                        rows.append(tuple(click.style(c, fg=color) for c in row))
-
-                click.echo(format_table(tuple(headers), rows, align=tuple(align)))
-
-                if show_sizes:
-                    click.echo(
-                        "Size of jobs listed above: "
-                        + click.style(
-                            humanfriendly.format_size(sum(jobs_sizes)), bold=True
-                        )
-                    )
+                        first = False
+                        time.sleep(continuous)
+            else:
+                click.echo(self.make_table(folders, jobs, ex, show_sizes, status_filter_str))
 
         except pw.DoesNotExist:
             click.secho(f"Folder {dir} does not exist", fg="red")
         finally:
             if ex is not None:
                 ex.shutdown()
+
+    @staticmethod
+    def make_table(folders: List[Folder], jobs: List[Job], ex: Optional[ThreadPoolExecutor] = None, show_sizes: bool = False, status_filter_str: Optional[str] = None):
+        def get_size(job: Job) -> int:
+            return job.size(cast(ThreadPoolExecutor, ex))
+
+        def get_folder_size(folder: Folder) -> int:
+            # print("get folder size: ", folder.path)
+            return sum(
+                cast(ThreadPoolExecutor, ex).map(get_size, folder.jobs_recursive())
+            )
+
+        table = ""
+
+        folder_sizes: List[int] = []
+        jobs_sizes: List[int] = []
+        if show_sizes:
+            ex_ = cast(ThreadPoolExecutor, ex)
+            with Spinner("Calculating output sizes", persist=False):
+                folder_size_futures = []
+                for folder in folders:
+                    folder_size_futures.append(ex_.submit(get_folder_size, folder))
+
+                job_size_futures = []
+                for job in jobs:
+                    job_size_futures.append(ex_.submit(get_size, job))
+
+                wait(folder_size_futures)
+                folder_sizes = [f.result() for f in folder_size_futures]
+                wait(job_size_futures)
+                jobs_sizes = [f.result() for f in job_size_futures]
+
+        if len(folders) > 0:
+            # with Spinner("Collection folder information", persist=False):
+            headers = ["name"]
+            align = ["l+"]
+
+            if show_sizes:
+                headers.append("output size")
+                align = ["l", "l+"]
+
+            for s in Job.Status:
+                headers.append(click.style(s.name, fg=color_dict[s]))
+                align.append("r")
+
+            rows = []
+            for idx, folder in enumerate(folders):
+                counts = folder.job_stats()
+
+                output = ""
+                for k, c in counts.items():
+                    output += style(f" {c:> 6d}{k.name[:1]}", fg=color_dict[k])
+
+                row = [folder.name]
+                if show_sizes:
+                    row.append(humanfriendly.format_size(folder_sizes[idx]))
+                # row += [output]
+                for k, c in counts.items():
+                    row.append(click.style(str(c), fg=color_dict[k]))
+
+                rows.append(tuple(row))
+
+            table += format_table(tuple(headers), rows, align=tuple(align)) + "\n"
+
+        if len(folders) > 0 and len(jobs) > 0:
+            table += "\n"
+        if len(jobs) > 0:
+            # with Spinner("Collection job information", persist=False):
+            headers = ["job id"]
+            align = ["l"]
+
+            if show_sizes:
+                headers.append("output size")
+                align.append("l")
+
+            headers += ["batch job id", "created", "updated", "status"]
+            align += ["r+", "l", "l", "l"]
+
+            def dtfmt(dt: datetime.datetime) -> str:
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+            rows = []
+            status_filter = (
+                Job.Status[status_filter_str]
+                if status_filter_str is not None
+                else None
+            )
+            for idx, job in enumerate(jobs):
+
+                if status_filter is not None:
+                    if job.status != status_filter:
+                        continue
+
+                job_id = str(job.job_id)
+                batch_job_id = str(job.batch_job_id)
+                _, status_name = str(job.status).split(".", 1)
+                color = color_dict[job.status]
+                row = [job_id]
+                if show_sizes:
+                    row.append(humanfriendly.format_size(jobs_sizes[idx]))
+
+                row += [
+                    batch_job_id,
+                    dtfmt(job.created_at),
+                    dtfmt(job.updated_at),
+                    status_name,
+                ]
+
+                rows.append(tuple(click.style(c, fg=color) for c in row))
+
+            table += format_table(tuple(headers), rows, align=tuple(align))
+            table += "\n"
+
+            if show_sizes:
+                table +=(
+                    "Size of jobs listed above: "
+                    + click.style(
+                        humanfriendly.format_size(sum(jobs_sizes)), bold=True
+                    ) + "\n")
+
+        return table
 
     @parse_arguments
     @click.argument("path")
