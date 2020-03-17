@@ -3,7 +3,7 @@ import os
 import re
 from abc import ABC, abstractmethod
 from datetime import date, timedelta
-from typing import Iterator, Iterable, Optional, Union, List, Sequence, cast, Collection
+from typing import Iterator, Iterable, Optional, Union, List, Sequence, cast, Collection, Dict, Any
 
 import sh
 from jinja2 import Environment, DictLoader
@@ -23,15 +23,17 @@ class SlurmAccountingItem:
     job_id: int
     status: Job.Status
     exit_code: int
+    other: Dict[str, Any]
 
-    def __init__(self, job_id: int, status: Job.Status, exit_code: int):
+    def __init__(self, job_id: int, status: Job.Status, exit_code: int, other: Dict[str, Any]):
         self.job_id = job_id
         self.status = status
         self.exit_code = exit_code
+        self.other = other
 
     @classmethod
     def from_parts(
-        cls, job_id: str, status_str: str, exit: str
+        cls, job_id: str, status_str: str, exit: str, other: Dict[str, Any]
     ) -> "SlurmAccountingItem":
         exit_code, _ = exit.split(":", 1)
 
@@ -39,14 +41,14 @@ class SlurmAccountingItem:
             status = Job.Status.SUBMITTED
         elif status_str == "COMPLETED":
             status = Job.Status.COMPLETED
-        elif status_str == "FAILED" or status_str.startswith("CANCELLED"):
+        elif status_str in ("FAILED", "TIMEOUT") or status_str.startswith("CANCELLED"):
             status = Job.Status.FAILED
         elif status_str == "RUNNING":
             status = Job.Status.RUNNING
         else:
             status = Job.Status.UNKNOWN
 
-        return cls(int(job_id), status, int(exit_code))
+        return cls(int(job_id), status, int(exit_code), other=other)
 
     def __repr__(self) -> str:
         return f"SAI<{self.job_id}, {self.status}, {self.exit_code}>"
@@ -95,8 +97,18 @@ class ShellSlurmInterface(SlurmInterface):
         logger.debug("Getting job info for %d jobs", len(jobs))
         starttime = date.today() - start_delta
 
+        fields = [
+            "JobID",
+            "State",
+            "ExitCode",
+            "Submit",
+            "Start",
+            "End",
+            "NodeList",
+        ]
+
         args = dict(
-            brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
+            format=",".join(fields), noheader=True, parsable2=True, starttime=starttime, _iter=True
         )
 
         if len(jobs) > 0 and len(jobs) < 20:
@@ -113,10 +125,16 @@ class ShellSlurmInterface(SlurmInterface):
 
         assert self._sacct is not None
         for line in self._sacct(**args):
-            job_id, status, exit = line.split("|", 3)
+            data = dict(zip(fields, line.split("|")))
+            job_id = data["JobID"]
+            status = data["State"]
+            exit = data["ExitCode"]
+            # job_id, status, exit = line.split("|", 3)
             if not job_id.isdigit():
                 continue
-            yield SlurmAccountingItem.from_parts(job_id, status, exit)
+            yield SlurmAccountingItem.from_parts(job_id, status, exit, other=dict(
+                node=data["NodeList"],
+            ))
 
     def sbatch(self, job: Job) -> int:
         assert self._sbatch is not None
@@ -302,6 +320,7 @@ class SlurmDriver(BatchDriverBase):
                     continue
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
+                job.data.update(item.other)
                 job.updated_at = now
                 assert job.status != Job.Status.CREATED, "Job updated to created?"
                 yield job
