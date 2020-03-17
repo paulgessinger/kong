@@ -133,7 +133,10 @@ class ShellSlurmInterface(SlurmInterface):
             if not job_id.isdigit():
                 continue
             yield SlurmAccountingItem.from_parts(job_id, status, exit, other=dict(
-                node=data["NodeList"],
+                node=data["NodeList"] if data["NodeList"] != "" else None,
+                submit=data["Submit"] if data["Submit"] != "" else None,
+                start=data["Start"] if data["Start"] != "" else None,
+                end=data["End"] if data["End"] != "" else None,
             ))
 
     def sbatch(self, job: Job) -> int:
