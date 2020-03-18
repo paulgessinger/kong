@@ -8,7 +8,15 @@ with open(os.path.join(thisdir, "README.md")) as fh:
 
 dev_requires = ["black"]
 doc_requires = ["sphinx-autodoc-typehints"]
-tests_require = ["pytest", "coverage", "pytest-cov", "mypy", "flake8", "tox"]
+tests_require = [
+    "pytest",
+    "coverage",
+    "pytest-cov",
+    "pytest-rerunfailures",
+    "mypy",
+    "flake8",
+    "tox"
+]
 setup(
     name="kong-batch",
     use_scm_version=True,
