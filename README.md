@@ -1,5 +1,7 @@
-# Kong [![Build Status](https://travis-ci.com/paulgessinger/kong.svg?branch=master)](https://travis-ci.com/paulgessinger/kong) [![codecov](https://codecov.io/gh/paulgessinger/kong/branch/master/graph/badge.svg)](https://codecov.io/gh/paulgessinger/kong) [![pypi](https://img.shields.io/pypi/v/kong-batch)](https://pypi.org/project/kong-batch/) [![docs](https://readthedocs.org/projects/kong-batch/badge/?version=latest)](https://kong-batch.readthedocs.io)
+# Kong ![CI](https://github.com/paulgessinger/kong/workflows/CI/badge.svg) [![codecov](https://codecov.io/gh/paulgessinger/kong/branch/master/graph/badge.svg)](https://codecov.io/gh/paulgessinger/kong) [![pypi](https://img.shields.io/pypi/v/kong-batch)](https://pypi.org/project/kong-batch/) [![docs](https://readthedocs.org/projects/kong-batch/badge/?version=latest)](https://kong-batch.readthedocs.io)
 [Documentation](https://kong-batch.readthedocs.io)
+
+
 
 ## What does this do?
 Suppose you use a batch cluster somewhere to run parallel workloads. Normally
