@@ -14,6 +14,7 @@ from typing import (
     IO,
     ContextManager,
     Sequence,
+    cast,
 )
 
 from kong.drivers import InvalidJobStatus
@@ -247,7 +248,7 @@ class BatchDriverBase(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Sequence["Job"]) -> List["Job"]:
+    def _bulk_cleanup(self, jobs: Sequence["Job"]) -> Iterable["Job"]:
         jobs = self.bulk_sync_status(jobs)
         # safety check
         for job in jobs:
@@ -266,16 +267,26 @@ class BatchDriverBase(DriverBase):
                         rmtree(path)
                 except Exception:
                     logger.error("Unable to remove directory %s", d)
-        return list(jobs)
+            yield job
+
+    def bulk_cleanup(
+        self, jobs: Sequence["Job"], progress: bool = False
+    ) -> Iterable["Job"]:
+        it = self._bulk_cleanup(jobs)
+        if progress:
+            return it
+        else:
+            return list(it)
 
     def remove(self, job: "Job") -> None:
         logger.debug("Removing job %s", job)
         job = self.cleanup(job)
         job.delete_instance()
 
-    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"], do_cleanup: bool = True) -> None:
         logger.debug("Removing %d jobs", len(jobs))
-        jobs = self.bulk_cleanup(jobs)
+        if do_cleanup:
+            jobs = cast(Sequence[Job], self.bulk_cleanup(jobs))
         ids = [j.job_id for j in jobs]
         with database.atomic():
             for chunk in chunks(ids, self.select_batch_size):

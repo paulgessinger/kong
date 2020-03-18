@@ -136,7 +136,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_cleanup(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
+    def bulk_cleanup(self, jobs: Sequence["Job"], progress: bool) -> Iterable["Job"]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -144,7 +144,7 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"], do_cleanup: bool) -> None:
         raise NotImplementedError()
 
     def make_log_path(self, job: "Job") -> str:
