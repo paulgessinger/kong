@@ -39,32 +39,32 @@ def driver(monkeypatch, state):
 
 def test_sacct_parse(driver, monkeypatch, state):
     sacct_output = """
-5205197|FAILED|2:0
-5205197.batch|FAILED|2:0
-5205197.extern|COMPLETED|0:0
-5205197.0|FAILED|2:0
-5205206|FAILED|2:0
-5205206.batch|FAILED|2:0
-5205206.extern|COMPLETED|0:0
-5205206.0|FAILED|2:0
-5205209|FAILED|2:0
-5205209.batch|FAILED|2:0
-5205209.extern|COMPLETED|0:0
-5205209.0|FAILED|2:0
-5205223|FAILED|13:0
-5205223.batch|FAILED|13:0
-5205223.extern|COMPLETED|0:0
-5205223.0|FAILED|13:0
-5205350|FAILED|13:0
-5205350.batch|FAILED|13:0
-5205350.extern|COMPLETED|0:0
-5205350.0|FAILED|13:0
-5205355|PENDING|0:0
-5205757|COMPLETED|0:0
-5205757.batch|COMPLETED|0:0
-5205757.extern|COMPLETED|0:0
-5205757.0|COMPLETED|0:0
-22822|NOCLUE|0:0
+5205197|FAILED|2:0|2020-03-17T10:10:35|2020-03-17T10:16:23|2020-03-17T14:16:48|z0021
+5205197.batch|FAILED|2:0|2020-03-17T10:10:35|2020-03-17T10:16:23|2020-03-17T14:16:48|z0021
+5205197.extern|COMPLETED|0:0|2020-03-17T10:10:35|2020-03-17T10:16:23|2020-03-17T14:16:48|z0021
+5205197.0|FAILED|2:0|2020-03-17T10:10:35|2020-03-17T10:16:23|2020-03-17T14:16:48|z0021
+5205206|FAILED|2:0|2020-03-18T10:10:35|2020-03-18T10:16:23|2020-03-18T14:16:48|z0022
+5205206.batch|FAILED|2:0|2020-03-18T10:10:35|2020-03-18T10:16:23|2020-03-18T14:16:48|z0022
+5205206.extern|COMPLETED|0:0|2020-03-18T10:10:35|2020-03-18T10:16:23|2020-03-18T14:16:48|z0022
+5205206.0|FAILED|2:0|2020-03-18T10:10:35|2020-03-18T10:16:23|2020-03-18T14:16:48|z0022
+5205209|FAILED|2:0|2020-03-19T10:10:35|2020-03-19T10:16:23|2020-03-19T14:16:48|z0023
+5205209.batch|FAILED|2:0|2020-03-19T10:10:35|2020-03-19T10:16:23|2020-03-19T14:16:48|z0023
+5205209.extern|COMPLETED|0:0|2020-03-19T10:10:35|2020-03-19T10:16:23|2020-03-19T14:16:48|z0023
+5205209.0|FAILED|2:0|2020-03-19T10:10:35|2020-03-19T10:16:23|2020-03-19T14:16:48|z0023
+5205223|FAILED|13:0|2020-03-20T10:10:35|2020-03-20T10:16:23|2020-03-20T14:16:48|z0024
+5205223.batch|FAILED|13:0|2020-03-20T10:10:35|2020-03-20T10:16:23|2020-03-20T14:16:48|z0024
+5205223.extern|COMPLETED|0:0|2020-03-20T10:10:35|2020-03-20T10:16:23|2020-03-20T14:16:48|z0024
+5205223.0|FAILED|13:0|2020-03-20T10:10:35|2020-03-20T10:16:23|2020-03-20T14:16:48|z0024
+5205350|FAILED|13:0|2020-03-21T10:10:35|2020-03-21T10:16:23|2020-03-21T14:16:48|z0025
+5205350.batch|FAILED|13:0|2020-03-21T10:10:35|2020-03-21T10:16:23|2020-03-21T14:16:48|z0025
+5205350.extern|COMPLETED|0:0|2020-03-21T10:10:35|2020-03-21T10:16:23|2020-03-21T14:16:48|z0025
+5205350.0|FAILED|13:0|2020-03-21T10:10:35|2020-03-21T10:16:23|2020-03-21T14:16:48|z0025
+5205355|PENDING|0:0|2020-03-22T10:10:35|||
+5205757|COMPLETED|0:0|2020-03-23T10:10:35|2020-03-23T10:16:23|2020-03-23T14:16:48|z0026
+5205757.batch|COMPLETED|0:0|2020-03-23T10:10:35|2020-03-23T10:16:23|2020-03-23T14:16:48|z0026
+5205757.extern|COMPLETED|0:0|2020-03-23T10:10:35|2020-03-23T10:16:23|2020-03-23T14:16:48|z0026
+5205757.0|COMPLETED|0:0|2020-03-23T10:10:35|2020-03-23T10:16:23|2020-03-23T14:16:48|z0026
+22822|NOCLUE|0:0||2020-03-17T10:10:35||
     """.strip()
 
     with monkeypatch.context() as m:
@@ -78,23 +78,31 @@ def test_sacct_parse(driver, monkeypatch, state):
         starttime = date.today() - td
 
         mock.assert_called_once_with(
-            brief=True, noheader=True, parsable2=True, starttime=starttime, _iter=True
+            format="JobID,State,ExitCode,Submit,Start,End,NodeList", noheader=True, parsable2=True, starttime=starttime, _iter=True
         )
 
+        db = datetime(2020, 3, 17, 10, 10, 35)
+        def fmt(dt):
+            return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+        def make_other(d, host):
+            return dict(submit=fmt(d), start=fmt(d.replace(minute=16, second=23)), end=fmt(d.replace(hour=14, minute=16, second=48)), node=host)
+
         ref = [
-            SlurmAccountingItem(5_205_197, Job.Status.FAILED, 2),
-            SlurmAccountingItem(5_205_206, Job.Status.FAILED, 2),
-            SlurmAccountingItem(5_205_209, Job.Status.FAILED, 2),
-            SlurmAccountingItem(5_205_223, Job.Status.FAILED, 13),
-            SlurmAccountingItem(5_205_350, Job.Status.FAILED, 13),
-            SlurmAccountingItem(5_205_355, Job.Status.SUBMITTED, 0),
-            SlurmAccountingItem(5_205_757, Job.Status.COMPLETED, 0),
-            SlurmAccountingItem(22822, Job.Status.UNKNOWN, 0),
+            SlurmAccountingItem(5_205_197, Job.Status.FAILED, 2, other=make_other(db, "z0021")),
+            SlurmAccountingItem(5_205_206, Job.Status.FAILED, 2, other=make_other(db.replace(day=18), "z0022")),
+            SlurmAccountingItem(5_205_209, Job.Status.FAILED, 2, other=make_other(db.replace(day=19), "z0023")),
+            SlurmAccountingItem(5_205_223, Job.Status.FAILED, 13, other=make_other(db.replace(day=20), "z0024")),
+            SlurmAccountingItem(5_205_350, Job.Status.FAILED, 13, other=make_other(db.replace(day=21), "z0025")),
+            SlurmAccountingItem(5_205_355, Job.Status.SUBMITTED, 0, other={"submit": fmt(db.replace(day=22)), "start": None, "end": None, "node": None}),
+            SlurmAccountingItem(5_205_757, Job.Status.COMPLETED, 0, other=make_other(db.replace(day=23), "z0026")),
+            SlurmAccountingItem(22822, Job.Status.UNKNOWN, 0, other={"submit": None, "start": fmt(db.replace(day=17)), "end": None, "node": None}),
         ]
 
         assert len(ref) == len(res)
         for a, b in zip(ref, res):
             assert a == b
+            assert a.other == b.other
 
         batch_job_id = 5_207_375
         sbatch = Mock(return_value=f"Submitted batch job {batch_job_id}")
@@ -117,7 +125,7 @@ def test_sacct_parse(driver, monkeypatch, state):
 
 
 def test_repr():
-    sai = SlurmAccountingItem(1, Job.Status.UNKNOWN, 0)
+    sai = SlurmAccountingItem(1, Job.Status.UNKNOWN, 0, {})
     assert repr(sai) != ""
 
 
@@ -232,7 +240,7 @@ def test_resubmit_job(driver, state, monkeypatch):
     monkeypatch.setattr(
         driver.slurm,
         "sacct",
-        Mock(return_value=[SAI(j1.batch_job_id, Job.Status.FAILED, 0)]),
+        Mock(return_value=[SAI(j1.batch_job_id, Job.Status.FAILED, 0, {})]),
     )
 
     bjid2 = 42
@@ -258,7 +266,7 @@ def test_resubmit_job(driver, state, monkeypatch):
     monkeypatch.setattr(
         driver.slurm,
         "sacct",
-        Mock(return_value=[SAI(j1.batch_job_id, Job.Status.FAILED, 0)]),
+        Mock(return_value=[SAI(j1.batch_job_id, Job.Status.FAILED, 0, {})]),
     )
 
     # will go to failed
@@ -429,8 +437,8 @@ def test_sync_status(driver, monkeypatch):
     assert j1.batch_job_id == str(batch_job_id)
 
     sacct_return = [
-        [SlurmAccountingItem(batch_job_id, Job.Status.RUNNING, 0)],
-        [SlurmAccountingItem(batch_job_id, Job.Status.FAILED, 0)],
+        [SlurmAccountingItem(batch_job_id, Job.Status.RUNNING, 0, {})],
+        [SlurmAccountingItem(batch_job_id, Job.Status.FAILED, 0, {})],
     ]
     sacct = Mock(side_effect=sacct_return)
     monkeypatch.setattr(driver.slurm, "sacct", sacct)
@@ -493,7 +501,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
     monkeypatch.setattr(driver.slurm, "sbatch", sbatch)
     driver.bulk_submit(jobs)
 
-    sacct_return = ["|".join([str(i + 1), "RUNNING", "0:0"]) for i in range(len(jobs))]
+    sacct_return = ["|".join([str(i + 1), "RUNNING", "0:0", "", "", "", ""]) for i in range(len(jobs))]
     sacct = Mock(return_value=sacct_return)
     # pretend they're all running now
     monkeypatch.setattr(driver.slurm, "_sacct", sacct)
@@ -502,7 +510,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     sacct.assert_called_once_with(
         jobs=",".join([j.batch_job_id for j in jobs]),
-        brief=True,
+        format="JobID,State,ExitCode,Submit,Start,End,NodeList",
         noheader=True,
         parsable2=True,
         starttime=ANY,
@@ -513,7 +521,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         assert job.status == Job.Status.RUNNING
 
     sacct_return = [
-        "|".join([str(i + 1), "COMPLETED" if i < 6 else "FAILED", "0:0"])
+        "|".join([str(i + 1), "COMPLETED" if i < 6 else "FAILED", "0:0"] + [""]*4)
         for i in range(len(jobs))
     ]
 
@@ -523,7 +531,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
     jobs = driver.bulk_sync_status(jobs)
     sacct.assert_called_once_with(
         jobs=",".join([j.batch_job_id for j in jobs]),
-        brief=True,
+        format="JobID,State,ExitCode,Submit,Start,End,NodeList",
         noheader=True,
         parsable2=True,
         starttime=ANY,
@@ -549,8 +557,8 @@ def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
     driver.bulk_submit(jobs)
 
     SAI = SlurmAccountingItem
-    sacct_return = [SAI(i + 1, Job.Status.RUNNING, 0) for i in range(len(jobs))]
-    sacct_return += [SAI(12_345_665, Job.Status.UNKNOWN, 0)]
+    sacct_return = [SAI(i + 1, Job.Status.RUNNING, 0, {}) for i in range(len(jobs))]
+    sacct_return += [SAI(12_345_665, Job.Status.UNKNOWN, 0, {})]
     sacct = Mock(return_value=sacct_return)
     # pretend they're all running now
     monkeypatch.setattr(driver.slurm, "sacct", sacct)
@@ -631,15 +639,15 @@ def test_wait(driver, state, monkeypatch):
         ) -> Iterator[SlurmAccountingItem]:
             values = [
                 [
-                    SlurmAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0)
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0, {})
                     for j in self.jobs
                 ],
                 [  # first half done
-                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0, {})
                     for j in self.jobs[len(self.jobs) // 2 :]
                 ],
                 [  # all done
-                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    SlurmAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0, {})
                     for j in self.jobs
                 ],
             ]

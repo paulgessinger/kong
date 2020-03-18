@@ -219,7 +219,9 @@ class Job(BaseModel):
         driver.resubmit(self)
 
     @with_driver
-    def wait(self, driver: DriverBase, timeout: Optional[int] = None) -> None:
+    def wait(
+        self, driver: DriverBase, timeout: Optional[int] = None, **kwargs: Any
+    ) -> None:
         """
         wait(timeout: Optional[int] = None)
 
@@ -227,7 +229,7 @@ class Job(BaseModel):
 
         :param timeout: If set to a number, will raise a `TimeoutError` after that time
         """
-        driver.wait(self, timeout=timeout)
+        driver.wait(self, timeout=timeout, **kwargs)
 
     @with_driver
     def kill(self, driver: DriverBase) -> None:
@@ -288,7 +290,7 @@ class Job(BaseModel):
 
 
 color_dict = {
-    Job.Status.UNKNOWN: "red",
+    Job.Status.UNKNOWN: "magenta",
     Job.Status.CREATED: "white",
     Job.Status.SUBMITTED: "yellow",
     Job.Status.RUNNING: "blue",

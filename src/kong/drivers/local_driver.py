@@ -2,6 +2,7 @@ import datetime
 import multiprocessing
 import tempfile
 import os
+import time
 from contextlib import contextmanager
 from subprocess import Popen
 from typing import (
@@ -14,7 +15,6 @@ from typing import (
     Dict,
     Collection,
     Iterator,
-    cast,
     Sequence,
 )
 import uuid
@@ -336,35 +336,16 @@ class LocalDriver(DriverBase):
         with open(job.data["stderr"], "r") as fh:
             yield fh
 
-    @checked_job
-    def _wait_single(self, job: Job, timeout: Optional[int] = None) -> Job:
-        logger.debug("Wait for job %s requested", job)
-        self.sync_status(job)
-        if job.status not in (Job.Status.SUBMITTED, Job.Status.RUNNING):
-            logger.info(
-                "Job %s is in status %s, neither SUBMITTED nor RUNNING, wait will not complete, returning now",
-                job,
-                job.status,
-            )
-            return job
-
-        try:
-            proc = psutil.Process(pid=job.data["pid"])
-            try:
-                proc.wait(timeout=timeout)
-            except psutil.TimeoutExpired as e:
-                raise TimeoutError(str(e))
-        except psutil.NoSuchProcess:
-            logger.debug("Wait encountered non-existing pid, we're done")
-
-        return cast(Job, self.sync_status(job))
-
     def wait_gen(
         self,
         job: Union[Job, List[Job]],
         poll_interval: Optional[int] = None,
         timeout: Optional[int] = None,
     ) -> Iterable[List[Job]]:
+        start = datetime.datetime.now()
+        poll_interval = poll_interval or 30
+
+        jobs: List[Job]
         if isinstance(job, Job):
             jobs = [job]
         elif isinstance(job, list):
@@ -372,11 +353,40 @@ class LocalDriver(DriverBase):
         else:
             raise TypeError("Argument is neither job nor list of jobs")
 
-        logger.debug("Waiting for %s jobs", len(jobs))
+        # pre-check for status
         for job in jobs:
-            self._wait_single(job, timeout=timeout)
+            if job.status == Job.Status.CREATED:
+                raise ValueError(f"Job is in status {job.status}, cannot wait")
 
-        yield list(self.bulk_sync_status(jobs))
+        logger.debug("Begin waiting for %d jobs", len(jobs))
+
+        while True:
+            now = datetime.datetime.now()
+            delta: datetime.timedelta = now - start
+            if timeout is not None:
+                if delta.total_seconds() > timeout:
+                    raise TimeoutError()
+
+            logger.debug("Refreshing %d", len(jobs))
+            jobs = list(self.bulk_sync_status(jobs))  # overwrite with updated
+            # filter out all that are considered waitable
+            remaining_jobs = [
+                j
+                for j in jobs
+                if j.status
+                not in (Job.Status.COMPLETED, Job.Status.FAILED, Job.Status.UNKNOWN)
+            ]
+            if len(remaining_jobs) == 0:
+                logger.debug("Waiting completed")
+                break
+            yield jobs
+            logger.debug(
+                "Waiting. Elapsed time: %s, %d jobs remaining",
+                delta,
+                len(remaining_jobs),
+            )
+
+            time.sleep(poll_interval)
 
     @checked_job
     def resubmit(self, job: Job) -> Job:

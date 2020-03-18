@@ -952,7 +952,7 @@ def test_job_resubmit_failed_only(state):
     for j in [j1, j2, j3]:
         j.submit()
 
-    state.default_driver.wait([j1, j2, j3])
+    state.default_driver.wait([j1, j2, j3], poll_interval=0.1)
 
     assert j1.get_status() == Job.Status.COMPLETED
     assert j2.get_status() == Job.Status.COMPLETED
@@ -987,12 +987,12 @@ def test_wait(state, monkeypatch):
     nm.notify = Mock()
     monkeypatch.setattr(state.config, "notifications", nm)
 
-    state.wait("*", notify=False)
+    state.wait("*", notify=False, poll_interval=0.1)
     assert nm.notify.call_count == 0
     assert driver.wait.call_count == 1
 
     driver.wait.reset_mock()
-    exhaust(state.wait("*", notify=True, progress=True))
+    exhaust(state.wait("*", notify=True, progress=True, poll_interval=0.1))
     assert nm.notify.call_count == 1
     assert driver.wait.call_count == 1
 
@@ -1017,31 +1017,33 @@ def test_wait(state, monkeypatch):
 
 
 def test_wait_recursive(state, monkeypatch):
-
-    #driver = Mock(wraps=LocalDriver)
     monkeypatch.setattr("kong.drivers.driver_base.DriverBase._check_driver", Mock(return_value=True))
     monkeypatch.setattr("kong.drivers.local_driver.LocalDriver.sync_status", Mock())
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
-    def wait(j, *args, **kwargs):
-        return j
-    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver._wait_single", Mock(side_effect=wait))
+    def wait(jobs, *args, **kwargs):
+        if isinstance(jobs, Job):
+            yield [jobs]
+        else:
+            yield jobs
 
-    j1 = state.create_job(command="sleep 1")
-    state.mkdir("alpha")
-    state.cd("alpha")
-    j2 = state.create_job(command="sleep 1")
+    with monkeypatch.context() as m:
+        m.setattr("kong.drivers.local_driver.LocalDriver.wait_gen", Mock(side_effect=wait))
 
+        j1 = state.create_job(command="sleep 1")
+        state.mkdir("alpha")
+        state.cd("alpha")
+        j2 = state.create_job(command="sleep 1")
 
-    for j in (j1, j2):
-        j.status = Job.Status.RUNNING
-        j.save()
+        for j in (j1, j2):
+            j.status = Job.Status.RUNNING
+            j.save()
 
-    state.wait(".")
+        state.wait(".", poll_interval=0.1)
 
-    exhaust(j1.driver_instance.wait_gen([j1, j2]))
+        exhaust(j1.driver_instance.wait_gen([j1, j2], poll_interval=0.1))
 
     with pytest.raises(TypeError):
-        exhaust(j1.driver_instance.wait_gen(64))
+        exhaust(j1.driver_instance.wait_gen(64, poll_interval=0.1))
 
 def test_wait_timeout(state, monkeypatch):
     root = Folder.get_root()
@@ -1063,9 +1065,9 @@ def test_wait_timeout(state, monkeypatch):
     with monkeypatch.context() as m:
         nm = MagicMock()
         m.setattr(state.config, "notifications", nm)
-        state.wait("*", notify=False)
+        state.wait("*", notify=False, poll_interval=0.1)
         assert nm.notify.call_count == 0
-        state.wait("*", notify=True)
+        state.wait("*", notify=True, poll_interval=0.1)
         assert nm.notify.call_count == 1
 
 def test_wait_failure(state, monkeypatch):

@@ -368,7 +368,7 @@ class Repl(cmd.Cmd):
             else:
                 names.append(item.name)
 
-        click.secho(f"Moved {', '.join(names)} -> {dest}")
+        click.secho(f"Moved -> {dest}")
 
     @parse_arguments
     @click.argument("path")
@@ -614,7 +614,7 @@ class Repl(cmd.Cmd):
         click.echo_via_pager(reader())
 
     @parse_arguments
-    @click.argument("path")
+    @click.argument("path", nargs=-1)
     @click.option(
         "--notify/--no-notify",
         default=True,
@@ -637,7 +637,7 @@ class Repl(cmd.Cmd):
     )
     def do_wait(
         self,
-        path: str,
+        path: List[str],
         notify: bool,
         recursive: bool,
         poll_interval: Optional[int],
