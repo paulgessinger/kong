@@ -27,14 +27,15 @@ jobs:
         file: ./coverage.xml # optional
 
   lint:
-      runs-on: ubuntu-latest
-      - uses: actions/checkout@v1
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.8
-      - name: Install dependencies
-        run: |
-            pip install tox tox-gh-actions
-      - name: Run linters
-        run: tox -e mypy,flake8,black
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        pip install tox tox-gh-actions
+    - name: Run linters
+      run: tox -e mypy,flake8,black
