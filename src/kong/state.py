@@ -294,7 +294,9 @@ class State:
     ) -> List[Union[Job, Folder]]:
         """
         :param source: The object to move, can be a path, job object or folder object
-        :param dest: The object to move to. If `source` is a job, this can be a folder. If `source` is a folder, and `dest` is a folder, `source` will be moved *into* `dest`. If `dest` does not exist, `source` will be renamed to `dest`.
+        :param dest: The object to move to. If `source` is a job, this can be a folder.
+                     If `source` is a folder, and `dest` is a folder, `source` will be
+                     moved *into* `dest`. If `dest` does not exist, `source` will be renamed to `dest`.
         :return: List of moved objects
         """
         # source might be: a job or a folder
@@ -437,8 +439,15 @@ class State:
                     first_job.ensure_driver_instance(self.config)
                     driver = first_job.driver_instance
 
+                    for _ in Progress(
+                        driver.bulk_cleanup(jobs, progress=True),
+                        total=len(jobs),
+                        desc="Cleaning up",
+                    ):
+                        pass
+
                     with Spinner(f"Removing {len(jobs)} jobs"):
-                        driver.bulk_remove(jobs)
+                        driver.bulk_remove(jobs, do_cleanup=False)
 
                 for folder in folders:
                     folder.delete_instance(recursive=True, delete_nullable=True)
@@ -467,7 +476,15 @@ class State:
                     first_job.ensure_driver_instance(self.config)
                     driver = first_job.driver_instance
 
-                    driver.bulk_remove(jobs)
+                    for _ in Progress(
+                        driver.bulk_cleanup(jobs, progress=True),
+                        total=len(jobs),
+                        desc="Cleaning up",
+                    ):
+                        pass
+
+                    with Spinner(f"Removing {len(jobs)} jobs"):
+                        driver.bulk_remove(jobs, do_cleanup=False)
 
                 folder.delete_instance(recursive=True, delete_nullable=True)
                 return True
@@ -560,11 +577,13 @@ class State:
         self, name: JobSpec, confirm: Confirmation = YES, recursive: bool = False
     ) -> None:
         """
-        Submit one or more jobs using the driver it was created with. This will cause it to execute.
+        Submit one or more jobs using the driver it was created with.
+        This will cause it to execute.
 
         :param name: Path or job id
         :param confirm: Confirmation callback. Defaults to YES
-        :param recursive: If `True`, will recursively select jobs for submission. Required if `path` is a n actual path.
+        :param recursive: If `True`, will recursively select jobs for submission.
+                          Required if `path` is a n actual path.
         """
 
         jobs: List[Job]
@@ -599,7 +618,8 @@ class State:
 
         :param name: Path or job id
         :param confirm: Confirmation callback. Defaults to YES
-        :param recursive: If `True`, will recursively select jobs for termination. Required if `path` is a n actual path.
+        :param recursive: If `True`, will recursively select jobs for termination.
+                          Required if `path` is a n actual path.
         """
 
         jobs: List[Job]
@@ -616,6 +636,7 @@ class State:
             return
         job: Job
         for job in Progress(jobs, desc="Killing jobs"):
+
             job.ensure_driver_instance(self.config)  # type: ignore
             job.kill()  # type: ignore
 
@@ -628,12 +649,15 @@ class State:
     ) -> None:
 
         """
-        Resubmit one or more jobs. This causes them to run with the same settings as before.
+        Resubmit one or more jobs. This causes them to run with the same
+        settings as before.
 
         :param name: Path or job id
         :param confirm: Confirmation callback. Defaults to YES
-        :param recursive: If `True`, will recursively select jobs for resubmission. Required if `path` is a n actual path.
-        :param failed_only: If `True` only select jobs in the FAILED state for resubmission.
+        :param recursive: If `True`, will recursively select jobs for resubmission.
+                          Required if `path` is a n actual path.
+        :param failed_only: If `True` only select jobs in the FAILED
+                            state for resubmission.
         """
 
         jobs: List[Job]
@@ -665,7 +689,8 @@ class State:
         Helper method to select jobs from a path, range or instance.
 
         :param name: Identifies one or more jobs
-        :param recursive: Select jobs recursively, i.e. follow folders and collect all jobs on the way
+        :param recursive: Select jobs recursively, i.e. follow folders and
+                          collect all jobs on the way
         :return: A list with all collected jobs.
         """
         return self._extract_jobs(name, recursive)
@@ -788,10 +813,11 @@ class State:
                         now = datetime.datetime.now()
                         delta = now - last_update
                         if delta > update_interval:
+                            prog = humanfriendly.format_timespan(now - wait_start)
                             last_update = now
                             self.config.notifications.notify(
                                 title="kong: Job wait progress",
-                                message=f"Progress after {humanfriendly.format_timespan(now-wait_start)}:\n{strip_colors(', '.join(out))}",
+                                message=f"Progress after {prog}:\n{strip_colors(', '.join(out))}",
                             )
 
                     yield cur_jobs

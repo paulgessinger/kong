@@ -426,6 +426,7 @@ def test_run_killed(driver, state):
     j1.wait()
     assert j1.status == Job.Status.UNKNOWN
 
+
 def test_wait(driver, state):
     j1 = state.create_job(command="sleep 2")
 
@@ -436,6 +437,7 @@ def test_wait(driver, state):
 
     with pytest.raises(TimeoutError):
         driver.wait(j1, poll_interval=0.05, timeout=0.2)
+
 
 @pytest.mark.flaky(reruns=5)
 def test_run_terminated(driver, state):

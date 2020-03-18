@@ -132,13 +132,13 @@ def test_condor_history_empty(driver, monkeypatch, state):
     assert res == []
     assert mock.call_count == 1
 
+
 def test_condor_history_no_userlog(driver, monkeypatch, state):
     mock = Mock(return_value="")
     monkeypatch.setattr(driver.htcondor, "_condor_history", mock)
     monkeypatch.setattr("os.path.exists", Mock(return_value=False))
     assert list(driver.htcondor.condor_history("blub")) == []
     assert mock.call_count == 0
-
 
 
 def test_condor_history(driver, monkeypatch, state):
@@ -264,7 +264,7 @@ def test_driver_create(state, monkeypatch):
     sif.config = state.config.htcondor_driver
 
     monkeypatch.setattr("os.path.exists", Mock(return_value=True))
-    monkeypatch.setattr("os.path.getsize", Mock(return_value=40*1e6))
+    monkeypatch.setattr("os.path.getsize", Mock(return_value=40 * 1e6))
     warning = Mock()
     monkeypatch.setattr("kong.drivers.htcondor_driver.logger.warning", warning)
 
@@ -272,9 +272,10 @@ def test_driver_create(state, monkeypatch):
 
     driver = HTCondorDriver(state.config, sif)
 
-    monkeypatch.setattr("os.path.getsize", Mock(return_value=60*1e6))
+    monkeypatch.setattr("os.path.getsize", Mock(return_value=60 * 1e6))
     driver = HTCondorDriver(state.config, sif)
     warning.assert_called_once()
+
 
 def test_condor_submit_rm(driver, monkeypatch, state):
     condor_submit_output = """

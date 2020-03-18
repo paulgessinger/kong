@@ -142,17 +142,26 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def bulk_cleanup(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
+    def _bulk_cleanup(self, jobs: Sequence["Job"]) -> Iterable["Job"]:
         for job in jobs:
             self.cleanup(job)
-        return jobs
+            yield job
+
+    def bulk_cleanup(
+        self, jobs: Sequence["Job"], progress: bool = False
+    ) -> Iterable["Job"]:
+        it = self._bulk_cleanup(jobs)
+        if progress:
+            return it
+        else:
+            return list(it)
 
     def remove(self, job: Job) -> None:
         logger.debug("Removing job %s", job)
         self.cleanup(job)
         job.delete_instance()
 
-    def bulk_remove(self, jobs: Sequence["Job"]) -> None:
+    def bulk_remove(self, jobs: Sequence["Job"], do_cleanup: bool = True) -> None:
         for job in jobs:
             self.remove(job)
 
