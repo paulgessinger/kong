@@ -39,3 +39,23 @@ jobs:
         pip install tox
     - name: Run linters
       run: tox -e mypy,flake8,black
+
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install requirements
+        run: pip install wheel
+      - name: Build distributions
+        run: python setup.py sdist bdist_wheel
+      - name: Publish package to TestPyPI
+        uses: pypa/gh-action-pypi-publish@v1.1.0
+        with:
+          user: __token__
+          password: ${{ secrets.TEST_PYPI_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
+
