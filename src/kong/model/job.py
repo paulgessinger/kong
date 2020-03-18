@@ -219,7 +219,9 @@ class Job(BaseModel):
         driver.resubmit(self)
 
     @with_driver
-    def wait(self, driver: DriverBase, timeout: Optional[int] = None, **kwargs: Any) -> None:
+    def wait(
+        self, driver: DriverBase, timeout: Optional[int] = None, **kwargs: Any
+    ) -> None:
         """
         wait(timeout: Optional[int] = None)
 

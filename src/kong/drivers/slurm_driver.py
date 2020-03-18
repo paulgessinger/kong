@@ -3,7 +3,18 @@ import os
 import re
 from abc import ABC, abstractmethod
 from datetime import date, timedelta
-from typing import Iterator, Iterable, Optional, Union, List, Sequence, cast, Collection, Dict, Any
+from typing import (
+    Iterator,
+    Iterable,
+    Optional,
+    Union,
+    List,
+    Sequence,
+    cast,
+    Collection,
+    Dict,
+    Any,
+)
 
 import sh
 from jinja2 import Environment, DictLoader
@@ -25,7 +36,9 @@ class SlurmAccountingItem:
     exit_code: int
     other: Dict[str, Any]
 
-    def __init__(self, job_id: int, status: Job.Status, exit_code: int, other: Dict[str, Any]):
+    def __init__(
+        self, job_id: int, status: Job.Status, exit_code: int, other: Dict[str, Any]
+    ):
         self.job_id = job_id
         self.status = status
         self.exit_code = exit_code
@@ -108,7 +121,11 @@ class ShellSlurmInterface(SlurmInterface):
         ]
 
         args = dict(
-            format=",".join(fields), noheader=True, parsable2=True, starttime=starttime, _iter=True
+            format=",".join(fields),
+            noheader=True,
+            parsable2=True,
+            starttime=starttime,
+            _iter=True,
         )
 
         if len(jobs) > 0 and len(jobs) < 20:
@@ -132,12 +149,17 @@ class ShellSlurmInterface(SlurmInterface):
             # job_id, status, exit = line.split("|", 3)
             if not job_id.isdigit():
                 continue
-            yield SlurmAccountingItem.from_parts(job_id, status, exit, other=dict(
-                node=data["NodeList"] if data["NodeList"] != "" else None,
-                submit=data["Submit"] if data["Submit"] != "" else None,
-                start=data["Start"] if data["Start"] != "" else None,
-                end=data["End"] if data["End"] != "" else None,
-            ))
+            yield SlurmAccountingItem.from_parts(
+                job_id,
+                status,
+                exit,
+                other=dict(
+                    node=data["NodeList"] if data["NodeList"] != "" else None,
+                    submit=data["Submit"] if data["Submit"] != "" else None,
+                    start=data["Start"] if data["Start"] != "" else None,
+                    end=data["End"] if data["End"] != "" else None,
+                ),
+            )
 
     def sbatch(self, job: Job) -> int:
         assert self._sbatch is not None
