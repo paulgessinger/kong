@@ -93,7 +93,6 @@ def test_shorten():
     with pytest.raises(ValueError):
         shorten("abcdefgh", 4)  # doesn't make sense
 
-
     s = click.style("abcabcabcabc", bold=True)
     out = shorten(s, 6)
     assert len(click.unstyle(out)) == 6
@@ -106,7 +105,6 @@ def test_shorten():
     assert len(click.unstyle(out)) == 6
     assert click.unstyle(out) == "a...bc"
     assert out == click.unstyle(out)
-
 
 
 def test_shorten_path():

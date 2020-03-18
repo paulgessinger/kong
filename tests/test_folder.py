@@ -134,7 +134,6 @@ def test_find_by_path(db):
     f3 = f2.add_folder("f3")
     f4 = f2.add_folder("f4")
 
-
     # Check it works with implicit CWD
     assert Folder.find_by_path("/") == root
     assert Folder.find_by_path("../blubb") == None
@@ -186,6 +185,7 @@ def test_fancy_operator(db):
     assert root / "f1" / "f2" / "f3" == f3
     assert root / "f1" / "f2" / "f4" == f4
 
+
 def test_folders_recursive(db, state):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
@@ -212,6 +212,7 @@ def test_jobs_recursive(db, state):
     assert len(jobs) == 2
     assert all(a == b for a, b in zip(jobs, [j1, j2]))
 
+
 def test_job_stats(db, state):
 
     root = Folder.get_root()
@@ -228,7 +229,6 @@ def test_job_stats(db, state):
     j4 = state.create_job(command="sleep 1")
     j5 = state.create_job(command="sleep 1")
     j6 = state.create_job(command="sleep 1")
-
 
     j2.status = Job.Status.RUNNING
     j2.save()

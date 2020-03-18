@@ -17,24 +17,23 @@ def noabc(monkeypatch):
 def driver(noabc, state):
     return BatchDriverBase(state.config)
 
+
 def test_bulk_cleanup(state, driver, monkeypatch):
     jobs = [state.create_job(command="sleep 1") for _ in range(3)]
 
     for j in jobs:
         j.driver = BatchDriverBase
 
-    sync = Mock(side_effect= lambda j: j)
+    sync = Mock(side_effect=lambda j: j)
     monkeypatch.setattr(
-        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status",
-        sync
+        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
     )
-
 
     with monkeypatch.context() as m:
         rmtree = Mock()
         m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
-        assert rmtree.call_count == 3*2
+        assert rmtree.call_count == 3 * 2
 
     with monkeypatch.context() as m:
         rmtree = Mock()
@@ -54,15 +53,13 @@ def test_bulk_remove(state, driver, monkeypatch):
     for j in jobs:
         j.driver = BatchDriverBase
 
-    sync = Mock(side_effect= lambda j: j)
+    sync = Mock(side_effect=lambda j: j)
     monkeypatch.setattr(
-        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status",
-        sync
+        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
     )
 
     with monkeypatch.context() as m:
-        monkeypatch.setattr(driver, "bulk_cleanup",
-                            Mock(side_effect=lambda j:j))
+        monkeypatch.setattr(driver, "bulk_cleanup", Mock(side_effect=lambda j: j))
         assert len(list(Job.select())) == 3
         driver.bulk_remove(jobs, do_cleanup=True)
         assert driver.bulk_cleanup.call_count == 1
@@ -73,8 +70,7 @@ def test_bulk_remove(state, driver, monkeypatch):
         j.driver = BatchDriverBase
 
     with monkeypatch.context() as m:
-        monkeypatch.setattr(driver, "bulk_cleanup",
-                            Mock(side_effect=lambda j:j))
+        monkeypatch.setattr(driver, "bulk_cleanup", Mock(side_effect=lambda j: j))
         assert len(list(Job.select())) == 3
         driver.bulk_remove(jobs, do_cleanup=False)
         assert driver.bulk_cleanup.call_count == 0

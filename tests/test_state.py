@@ -1017,9 +1017,12 @@ def test_wait(state, monkeypatch):
 
 
 def test_wait_recursive(state, monkeypatch):
-    monkeypatch.setattr("kong.drivers.driver_base.DriverBase._check_driver", Mock(return_value=True))
+    monkeypatch.setattr(
+        "kong.drivers.driver_base.DriverBase._check_driver", Mock(return_value=True)
+    )
     monkeypatch.setattr("kong.drivers.local_driver.LocalDriver.sync_status", Mock())
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
+
     def wait(jobs, *args, **kwargs):
         if isinstance(jobs, Job):
             yield [jobs]
@@ -1027,7 +1030,9 @@ def test_wait_recursive(state, monkeypatch):
             yield jobs
 
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.local_driver.LocalDriver.wait_gen", Mock(side_effect=wait))
+        m.setattr(
+            "kong.drivers.local_driver.LocalDriver.wait_gen", Mock(side_effect=wait)
+        )
 
         j1 = state.create_job(command="sleep 1")
         state.mkdir("alpha")
@@ -1044,6 +1049,7 @@ def test_wait_recursive(state, monkeypatch):
 
     with pytest.raises(TypeError):
         exhaust(j1.driver_instance.wait_gen(64, poll_interval=0.1))
+
 
 def test_wait_timeout(state, monkeypatch):
     root = Folder.get_root()
@@ -1069,6 +1075,7 @@ def test_wait_timeout(state, monkeypatch):
         assert nm.notify.call_count == 0
         state.wait("*", notify=True, poll_interval=0.1)
         assert nm.notify.call_count == 1
+
 
 def test_wait_failure(state, monkeypatch):
     root = Folder.get_root()

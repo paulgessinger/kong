@@ -85,6 +85,7 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         state.ls.assert_called_once()
         assert state.refresh_jobs.call_count == 1
 
+
 def test_ls_status(state, repl, capsys, monkeypatch):
     monkeypatch.setattr("kong.repl.Spinner", MagicMock())
 
@@ -106,7 +107,6 @@ def test_ls_status(state, repl, capsys, monkeypatch):
     repl.onecmd("ls -S FAILED")
     out, err = capsys.readouterr()
     assert len(out.strip().split("\n")) == 3
-
 
 
 def test_ls_sizes(db, tree, state, repl, capsys, sample_jobs, monkeypatch):
@@ -174,7 +174,7 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
         mock = Mock(return_value=[])
         m.setattr(state, "refresh_jobs", mock)
         repl.onecmd("ls -R /")
-        assert mock.call_count == 2 # called once for folders, once for jobs
+        assert mock.call_count == 2  # called once for folders, once for jobs
 
 
 def test_complete_path(state, tree, repl):
@@ -193,6 +193,7 @@ def test_complete_path(state, tree, repl):
     alts = complete_path(root.subfolder("f2"), "a")
     assert alts == ["alpha/"]
 
+
 def test_completed_default(repl):
     root = Folder.get_root()
     root.add_folder("alpha")
@@ -200,7 +201,10 @@ def test_completed_default(repl):
     root.add_folder("beta_gamma")
 
     assert repl.completedefault("al", "ls al", 3, 5) == ["alpha/"]
-    assert repl.completedefault("be", "ls alpha be", 9, 11) == ["beta_delta/", "beta_gamma/"]
+    assert repl.completedefault("be", "ls alpha be", 9, 11) == [
+        "beta_delta/",
+        "beta_gamma/",
+    ]
     assert repl.completedefault("alp", "ls alp beta_delta", 3, 6) == ["alpha/"]
     assert repl.completedefault("alp", "ls alp nope", 3, 6) == ["alpha/"]
     assert repl.completedefault("be", "ls be", 3, 5) == ["beta_delta/", "beta_gamma/"]
@@ -275,7 +279,6 @@ def test_mkdir_create_parents(state, repl, capsys):
     assert Folder.find_by_path("/a1/b2", state.cwd) is not None
     assert Folder.find_by_path("/a1/b2/c3", state.cwd) is not None
     assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is not None
-
 
 
 def test_cd(state, repl, db, capsys):
@@ -595,7 +598,6 @@ def test_wait(repl, state, monkeypatch):
     )
 
 
-
 def test_exit(repl):
     assert repl.do_exit("") == True
     assert repl.do_EOF("") == True
@@ -641,7 +643,7 @@ def test_onecmd(repl, monkeypatch, capsys):
     m = Mock(side_effect=RuntimeError())
     monkeypatch.setattr("cmd.Cmd.onecmd", m)
     with monkeypatch.context() as m:
-        m.setattr(repl, "_raise", False) # disable debug mode for this check
+        m.setattr(repl, "_raise", False)  # disable debug mode for this check
         repl.onecmd("whatever")  # swallows other exceptions
 
 
@@ -858,10 +860,9 @@ def test_update(repl, state, capsys, monkeypatch):
 
 
 def test_info(state, repl, capsys, monkeypatch):
-    repl.onecmd("info") # missing arg
+    repl.onecmd("info")  # missing arg
     out, err = capsys.readouterr()
     assert "usage" in out
-
 
     job = state.create_job(command="sleep 1")
 

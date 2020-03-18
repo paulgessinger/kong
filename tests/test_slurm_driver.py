@@ -78,25 +78,82 @@ def test_sacct_parse(driver, monkeypatch, state):
         starttime = date.today() - td
 
         mock.assert_called_once_with(
-            format="JobID,State,ExitCode,Submit,Start,End,NodeList", noheader=True, parsable2=True, starttime=starttime, _iter=True
+            format="JobID,State,ExitCode,Submit,Start,End,NodeList",
+            noheader=True,
+            parsable2=True,
+            starttime=starttime,
+            _iter=True,
         )
 
         db = datetime(2020, 3, 17, 10, 10, 35)
+
         def fmt(dt):
             return dt.strftime("%Y-%m-%dT%H:%M:%S")
 
         def make_other(d, host):
-            return dict(submit=fmt(d), start=fmt(d.replace(minute=16, second=23)), end=fmt(d.replace(hour=14, minute=16, second=48)), node=host)
+            return dict(
+                submit=fmt(d),
+                start=fmt(d.replace(minute=16, second=23)),
+                end=fmt(d.replace(hour=14, minute=16, second=48)),
+                node=host,
+            )
 
         ref = [
-            SlurmAccountingItem(5_205_197, Job.Status.FAILED, 2, other=make_other(db, "z0021")),
-            SlurmAccountingItem(5_205_206, Job.Status.FAILED, 2, other=make_other(db.replace(day=18), "z0022")),
-            SlurmAccountingItem(5_205_209, Job.Status.FAILED, 2, other=make_other(db.replace(day=19), "z0023")),
-            SlurmAccountingItem(5_205_223, Job.Status.FAILED, 13, other=make_other(db.replace(day=20), "z0024")),
-            SlurmAccountingItem(5_205_350, Job.Status.FAILED, 13, other=make_other(db.replace(day=21), "z0025")),
-            SlurmAccountingItem(5_205_355, Job.Status.SUBMITTED, 0, other={"submit": fmt(db.replace(day=22)), "start": None, "end": None, "node": None}),
-            SlurmAccountingItem(5_205_757, Job.Status.COMPLETED, 0, other=make_other(db.replace(day=23), "z0026")),
-            SlurmAccountingItem(22822, Job.Status.UNKNOWN, 0, other={"submit": None, "start": fmt(db.replace(day=17)), "end": None, "node": None}),
+            SlurmAccountingItem(
+                5_205_197, Job.Status.FAILED, 2, other=make_other(db, "z0021")
+            ),
+            SlurmAccountingItem(
+                5_205_206,
+                Job.Status.FAILED,
+                2,
+                other=make_other(db.replace(day=18), "z0022"),
+            ),
+            SlurmAccountingItem(
+                5_205_209,
+                Job.Status.FAILED,
+                2,
+                other=make_other(db.replace(day=19), "z0023"),
+            ),
+            SlurmAccountingItem(
+                5_205_223,
+                Job.Status.FAILED,
+                13,
+                other=make_other(db.replace(day=20), "z0024"),
+            ),
+            SlurmAccountingItem(
+                5_205_350,
+                Job.Status.FAILED,
+                13,
+                other=make_other(db.replace(day=21), "z0025"),
+            ),
+            SlurmAccountingItem(
+                5_205_355,
+                Job.Status.SUBMITTED,
+                0,
+                other={
+                    "submit": fmt(db.replace(day=22)),
+                    "start": None,
+                    "end": None,
+                    "node": None,
+                },
+            ),
+            SlurmAccountingItem(
+                5_205_757,
+                Job.Status.COMPLETED,
+                0,
+                other=make_other(db.replace(day=23), "z0026"),
+            ),
+            SlurmAccountingItem(
+                22822,
+                Job.Status.UNKNOWN,
+                0,
+                other={
+                    "submit": None,
+                    "start": fmt(db.replace(day=17)),
+                    "end": None,
+                    "node": None,
+                },
+            ),
         ]
 
         assert len(ref) == len(res)
@@ -501,7 +558,10 @@ def test_bulk_sync_status(driver, state, monkeypatch):
     monkeypatch.setattr(driver.slurm, "sbatch", sbatch)
     driver.bulk_submit(jobs)
 
-    sacct_return = ["|".join([str(i + 1), "RUNNING", "0:0", "", "", "", ""]) for i in range(len(jobs))]
+    sacct_return = [
+        "|".join([str(i + 1), "RUNNING", "0:0", "", "", "", ""])
+        for i in range(len(jobs))
+    ]
     sacct = Mock(return_value=sacct_return)
     # pretend they're all running now
     monkeypatch.setattr(driver.slurm, "_sacct", sacct)
@@ -521,7 +581,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
         assert job.status == Job.Status.RUNNING
 
     sacct_return = [
-        "|".join([str(i + 1), "COMPLETED" if i < 6 else "FAILED", "0:0"] + [""]*4)
+        "|".join([str(i + 1), "COMPLETED" if i < 6 else "FAILED", "0:0"] + [""] * 4)
         for i in range(len(jobs))
     ]
 

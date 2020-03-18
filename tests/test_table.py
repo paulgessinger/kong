@@ -181,12 +181,17 @@ nebukadnezar  otto   kilo
         ]
     )
 
+
 def test_stretch_shorten():
     headers = ["alpha", "beta", click.style("gamma", bg="green")]
     rows = [
         ["delta", "omega", "psi"],
         ["echo", click.style("charlie", fg="red"), "bingo"],
-        [click.style("nebukadnezar prometheus apollo jupiter", bold=True), "otto", "kilo"],
+        [
+            click.style("nebukadnezar prometheus apollo jupiter", bold=True),
+            "otto",
+            "kilo",
+        ],
     ]
     align = ["r+", "c", "l"]
     s = format_table(headers, rows, align, width=50)
@@ -202,8 +207,8 @@ def test_stretch_shorten():
                                 echo charlie bingo
 nebukadnezar pro...us apollo jupiter  otto   kilo 
 """[
-           1:-1
-           ]
+            1:-1
+        ]
     )
 
 
@@ -230,4 +235,3 @@ def test_do_align():
     assert _do_align(s, "c", 10, " ") == f"  {s}  "
     s = click.style("abcxabc", fg="red")
     assert _do_align(s, "c", 10, " ") == f" {s}  "
-
