@@ -437,7 +437,7 @@ def test_wait(driver, state):
     with pytest.raises(TimeoutError):
         driver.wait(j1, poll_interval=0.05, timeout=0.2)
 
-@skip_lxplus
+@pytest.mark.flaky(reruns=5)
 def test_run_terminated(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
