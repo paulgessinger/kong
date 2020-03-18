@@ -8,10 +8,24 @@ with open(os.path.join(thisdir, "README.md")) as fh:
 
 dev_requires = ["black"]
 doc_requires = ["sphinx-autodoc-typehints"]
-tests_require = ["pytest", "coverage", "pytest-cov", "mypy", "flake8", "tox"]
+tests_require = [
+    "pytest",
+    "coverage",
+    "pytest-cov",
+    "pytest-rerunfailures",
+    "mypy",
+    "flake8",
+    "tox"
+]
+
+def local_scheme(version):
+    """Skip the local version (eg. +xyz of 0.6.1.dev4+gdf99fe2)
+    to be able to upload to Test PyPI"""
+    return ""
+
 setup(
     name="kong-batch",
-    use_scm_version=True,
+    use_scm_version={"local_scheme": local_scheme},
     setup_requires=["setuptools_scm"],
     description="Batch job submission and management tool",
     long_description=long_desc,
