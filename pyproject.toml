@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kong-batch"
-version = "0.2.6"
+version = "0.2.4"
 description = "Batch job submission and management tool"
 authors = ["Paul Gessinger <hello@paulgessinger.com>"]
 license = "MIT"
@@ -43,6 +43,14 @@ flake8 = "^3.8.3"
 black = "^19.10b0"
 tox = "^3.17.1"
 sphinx-autodoc-typehints = "^1.11.0"
+
+[tool.semantic_release]
+version_pattern = [
+    'pyproject.toml:version = "{version}"',
+]
+commit_subject = "Bump and tag {version}"
+commit_message = ""
+
 
 [build-system]
 requires = ["poetry>=0.12"]
