@@ -632,7 +632,7 @@ class Repl(cmd.Cmd):
     @click.option(
         "--poll-interval",
         "-i",
-        type=int,
+        type=str,
         default=None,
         help="Interval with which to poll for job status updates",
     )
@@ -672,12 +672,24 @@ class Repl(cmd.Cmd):
             )
         else:
             update_interval = None
+        logger.debug("Update interval is %s", update_interval)
+
+        poll_interval_seconds: Optional[int] = None
+        # if poll_interval
+        if poll_interval is not None:
+            if poll_interval.isdigit():
+                poll_interval_seconds = int(poll_interval)
+            else:
+                print(poll_interval)
+                poll_interval_seconds = humanfriendly.parse_timespan(poll_interval)
+
+        logger.debug("Poll interval is %s", poll_interval_seconds)
 
         self.state.wait(
             path,
             notify=notify,
             recursive=recursive,
-            poll_interval=poll_interval,
+            poll_interval=poll_interval_seconds,
             update_interval=update_interval,
         )
 
