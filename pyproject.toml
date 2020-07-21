@@ -5,6 +5,7 @@ description = "Batch job submission and management tool"
 authors = ["Paul Gessinger <hello@paulgessinger.com>"]
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/paulgessinger/kong/"
 packages = [
     { include = "kong", from = "src" },
 ]

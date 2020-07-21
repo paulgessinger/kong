@@ -9,7 +9,7 @@ you'd write dedicated submission code for each type of system and use the
 relevant shell commands to monitor job progress. How do you keep track
 of what happened to jobs? How do you even keep track of which job did what?
 
-With kong, you can organize you jobs into *folders* (not actual folders on disk),
+With kong, you can organize your jobs into *folders* (not actual folders on disk),
 however you feel like it. Kong can keep track of job statuses and reports
 them to you in a clean and organized view. You can manage your jobs 
 in kong, kill them, resubmit them, remove them. Kong also normalizes things
