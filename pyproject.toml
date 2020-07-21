@@ -50,6 +50,7 @@ version_pattern = [
 ]
 commit_subject = "Bump and tag {version}"
 commit_message = ""
+build_command = "pip install poetry && poetry build"
 
 
 [build-system]
