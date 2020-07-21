@@ -255,4 +255,4 @@ SELECT status, count() FROM job where folder_id in children GROUP BY status;
 
 
 # Needed for RTD
-from .job import Job  # noqa: F402
+from .job import Job  # noqa: E402

@@ -148,9 +148,9 @@ def shorten_path(path: str, last_length: Optional[int] = None) -> str:
     return "/".join(shortened)
 
 
-def chunks(l: List[T], n: int) -> Iterable[List[T]]:
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
+def chunks(items: List[T], nchunks: int) -> Iterable[List[T]]:
+    for i in range(0, len(items), nchunks):
+        yield items[i : i + nchunks]
 
 
 def exhaust(generator: Iterable[Any]) -> None:

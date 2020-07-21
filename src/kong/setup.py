@@ -22,7 +22,7 @@ def setup(cfg: Optional[config.Config]) -> None:
         data = dict(cfg.data)
 
     data["default_driver"] = click.prompt(
-        f"Which batch system driver shall we use by default?",
+        "Which batch system driver shall we use by default?",
         default=data.get("default_driver"),
     )
 
