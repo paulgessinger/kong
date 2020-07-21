@@ -37,6 +37,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install poetry
+        poetry config virtualenvs.create false
         poetry install --no-root
     - name: mypy
       run: mypy src/kong
