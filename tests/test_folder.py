@@ -203,7 +203,7 @@ def test_folders_recursive(db, state, monkeypatch):
 
 
 
-def test_jobs_recursive(db, state):
+def test_jobs_recursive(db, state, monkeypatch):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
     f2 = f1.add_folder("f2")
@@ -217,8 +217,14 @@ def test_jobs_recursive(db, state):
     assert len(jobs) == 2
     assert all(a == b for a, b in zip(jobs, [j1, j2]))
 
+    with monkeypatch.context() as m:
+        m.setattr("sqlite3.sqlite_version_info", (3, 7, 17))
+        jobs = root.jobs_recursive()
+        assert len(jobs) == 2
+        assert all(a == b for a, b in zip(jobs, [j1, j2]))
 
-def test_job_stats(db, state):
+
+def test_job_stats(db, state, monkeypatch):
 
     root = Folder.get_root()
 
@@ -257,3 +263,7 @@ def test_job_stats(db, state):
 
     assert exp == f1.job_stats()
     assert exp == root.job_stats()
+
+    with monkeypatch.context() as m:
+        assert exp == f1.job_stats()
+        assert exp == root.job_stats()
