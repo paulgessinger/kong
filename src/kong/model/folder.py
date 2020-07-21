@@ -167,6 +167,7 @@ class Folder(BaseModel):
             )
             folders: List["Folder"] = []
             for child in self.children:
+                folders.append(child)
                 folders += child.folders_recursive()
             return folders
 
