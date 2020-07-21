@@ -44,6 +44,11 @@ black = "^19.10b0"
 tox = "^3.17.1"
 sphinx-autodoc-typehints = "^1.11.0"
 
+[tool.semantic_release]
+version_pattern = [
+    'pyproject.toml:version = "{version}"',
+]
+
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
