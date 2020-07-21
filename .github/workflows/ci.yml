@@ -36,9 +36,14 @@ jobs:
         python-version: 3.8
     - name: Install dependencies
       run: |
-        pip install tox poetry
-    - name: Run linters
-      run: tox -e mypy,flake8,black
+        pip install poetry
+        poetry install --no-root
+    - name: mypy
+      run: mypy src/kong
+    - name: flake8
+      run: flake8 src/kong
+    - name: black
+      run: black src/kong
 
   publish:
     runs-on: ubuntu-latest
