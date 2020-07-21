@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "kong"
+name = "kong-batch"
 version = "0.2.6"
 description = "Batch job submission and management tool"
 authors = ["Paul Gessinger <hello@paulgessinger.com>"]
