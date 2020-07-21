@@ -1,7 +1,7 @@
 import datetime
 import os
 import time
-from concurrent.futures.thread import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Executor, as_completed, Future
 from contextlib import contextmanager
 from typing import (
     Iterable,
@@ -21,6 +21,7 @@ from kong.drivers import InvalidJobStatus
 from kong.logger import logger
 from kong.util import rmtree, chunks
 from .driver_base import DriverBase, checked_job
+from ..executor import SerialExecutor
 from ..model.job import Job
 from ..db import database
 
@@ -248,7 +249,7 @@ class BatchDriverBase(DriverBase):
                 rmtree(path)
         return job
 
-    def _bulk_cleanup(self, jobs: Sequence["Job"]) -> Iterable["Job"]:
+    def _bulk_cleanup(self, jobs: Sequence["Job"], ex: Executor) -> Iterable["Job"]:
         jobs = self.bulk_sync_status(jobs)
         # safety check
         for job in jobs:
@@ -258,7 +259,7 @@ class BatchDriverBase(DriverBase):
 
         logger.debug("Cleaning up %d jobs", len(jobs))
 
-        for job in jobs:
+        def run(job: Job) -> Job:
             for d in ["log_dir", "output_dir"]:
                 try:
                     path = job.data[d]
@@ -267,12 +268,20 @@ class BatchDriverBase(DriverBase):
                         rmtree(path)
                 except Exception:
                     logger.error("Unable to remove directory %s", d)
-            yield job
+            return job
+
+        futures = [ex.submit(run, j) for j in jobs]
+
+        for f in as_completed(futures):
+            yield f.result()
 
     def bulk_cleanup(
-        self, jobs: Sequence["Job"], progress: bool = False
+        self,
+        jobs: Sequence["Job"],
+        progress: bool = False,
+        ex: Executor = SerialExecutor(),
     ) -> Iterable["Job"]:
-        it = self._bulk_cleanup(jobs)
+        it = self._bulk_cleanup(jobs, ex)
         if progress:
             return it
         else:
