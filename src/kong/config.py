@@ -32,6 +32,10 @@ slurm_schema = Schema(
     }
 )
 
+prun_schema = Schema(
+    {"PANDA_PYTHONPATH": len, "emi_path": len, "PATHENA_GRID_SETUP_SH": len}
+)
+
 htcondor_schema = Schema(
     {
         Optional("user", default=getpass.getuser()): And(str, len),
@@ -54,6 +58,7 @@ config_schema = Schema(
         Optional("repl_extra_columns", default=[]): [str],
         Optional("history_length", default=1000): int,
         Optional("slurm_driver"): slurm_schema,
+        Optional("prun_driver"): prun_schema,
         Optional("htcondor_driver"): htcondor_schema,
         Optional("notify", default=[]): [{"name": str, Optional(object): object}],
         Optional(object): object,
