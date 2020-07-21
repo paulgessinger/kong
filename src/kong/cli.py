@@ -11,10 +11,8 @@ from . import setup
 from .state import State
 from .logger import logger
 from .repl import Repl
+from . import __version__
 
-import pkg_resources  # part of setuptools
-
-version = pkg_resources.get_distribution("kong-batch").version
 
 
 @click.group(invoke_without_command=True)
@@ -48,7 +46,8 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     logging.getLogger().setLevel(global_level)
 
     if show_version:
-        click.echo(f"{config.APP_NAME} version: {version}")
+        print("HALLO")
+        click.echo(f"{config.APP_NAME} version: {__version__}")
         return
 
     # check if setup was executed
