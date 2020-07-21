@@ -14,7 +14,6 @@ from .repl import Repl
 from . import __version__
 
 
-
 @click.group(invoke_without_command=True)
 @click.option("--version", "show_version", is_flag=True, help="Show version and exit")
 @click.option("-v", "--verbose", "verbosity", count=True, help="Increase the verbosity")
