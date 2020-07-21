@@ -432,14 +432,14 @@ class Repl(cmd.Cmd):
 
         If rm deletes jobs, cleanup routines will be run. Use `rm -r` to delete folders.
         """
-        confirm = click.confirm
+        confirm: Callable[[str], bool] = click.confirm
         if yes:
-            def confirm():
-                return True # pragma: no cover
+
+            def confirm(arg: str) -> bool:
+                return True  # pragma: no cover
+
         try:
-            if self.state.rm(
-                path, recursive=recursive, confirm=confirm
-            ):
+            if self.state.rm(path, recursive=recursive, confirm=confirm):
                 click.echo(f"{path} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")

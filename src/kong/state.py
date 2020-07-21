@@ -395,7 +395,7 @@ class State:
         name: Union[str, Job, Folder],
         recursive: bool = False,
         confirm: Confirmation = lambda _: True,
-        threads: int = os.cpu_count()
+        threads: Optional[int] = os.cpu_count(),
     ) -> bool:
         """
         Remove jobs or folders.
@@ -446,7 +446,7 @@ class State:
                         for _ in Progress(
                             driver.bulk_cleanup(jobs, progress=True, ex=ex),
                             total=len(jobs),
-                            desc="Cleaning up"
+                            desc="Cleaning up",
                         ):
                             pass
 

@@ -1,7 +1,7 @@
 import datetime
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, Executor, as_completed, Future
+from concurrent.futures import ThreadPoolExecutor, Executor, as_completed
 from contextlib import contextmanager
 from typing import (
     Iterable,

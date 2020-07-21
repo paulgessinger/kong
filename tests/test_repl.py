@@ -525,6 +525,7 @@ def test_rm(state, repl, db, capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert len(out) > 0
 
+
 def test_rm_yes(state, repl, monkeypatch):
     state_rm = Mock()
     monkeypatch.setattr(repl.state, "rm", state_rm)
@@ -546,6 +547,7 @@ def test_rm_yes(state, repl, monkeypatch):
     assert args == ("/",)
     assert kwargs["recursive"] == False
     assert kwargs["confirm"] != click.confirm
+
 
 def test_rm_job(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()

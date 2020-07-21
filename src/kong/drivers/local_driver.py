@@ -18,7 +18,7 @@ from typing import (
     Sequence,
 )
 import uuid
-from concurrent.futures import Executor, as_completed, Future
+from concurrent.futures import Executor, as_completed
 
 import psutil
 

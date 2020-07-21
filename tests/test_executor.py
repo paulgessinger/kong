@@ -1,5 +1,6 @@
 from kong.executor import SerialExecutor
 
+
 def test_SerialExecutor():
     ex = SerialExecutor()
 
@@ -21,7 +22,7 @@ def test_SerialExecutor():
     f = ex.submit(error)
     assert isinstance(f.exception(), ValueError)
 
-    ret = lambda x: x*x
+    ret = lambda x: x * x
 
     f = ex.submit(ret, 4)
     assert f.result() == 16
