@@ -518,7 +518,7 @@ def test_bulk_kill(driver, state):
     root = Folder.get_root()
 
     jobs = driver.bulk_create_jobs(
-        [dict(folder=root, command=f"sleep 10; echo 'JOB{i}'") for i in range(15)]
+        [dict(folder=root, command=f"sleep 100; echo 'JOB{i}'") for i in range(15)]
     )
 
     for job in jobs:
@@ -529,7 +529,7 @@ def test_bulk_kill(driver, state):
     for job in jobs:
         assert job.status == Job.Status.SUBMITTED
 
-    driver.bulk_kill(jobs)
+    jobs = driver.bulk_kill(jobs)
 
     for job in jobs:
         assert job.status == Job.Status.FAILED

@@ -407,6 +407,9 @@ class Repl(cmd.Cmd):
                 fg: Optional[str] = None
                 if field == "status":
                     fg = color_dict[job.status]
+                if field == "folder":
+                    click.echo(f"folder: {job.folder.path}")
+                    continue
                 if field == "command" and not full:
                     cmd = job.command
                     if len(cmd) > 500:
@@ -422,16 +425,21 @@ class Repl(cmd.Cmd):
     @parse_arguments
     @click.argument("path")
     @click.option("--recursive", "-r", is_flag=True, help="Recursively delete")
-    def do_rm(self, path: str, recursive: bool) -> None:
+    @click.option("--yes", "-y", is_flag=True)
+    def do_rm(self, path: str, recursive: bool, yes: bool) -> None:
         """
         Delete item at PATH.
 
         If rm deletes jobs, cleanup routines will be run. Use `rm -r` to delete folders.
         """
+        confirm: Callable[[str], bool] = click.confirm
+        if yes:
+
+            def confirm(arg: str) -> bool:
+                return True  # pragma: no cover
+
         try:
-            if self.state.rm(
-                path, recursive=recursive, confirm=lambda s: click.confirm(s)
-            ):
+            if self.state.rm(path, recursive=recursive, confirm=confirm):
                 click.echo(f"{path} is gone")
         except state.CannotRemoveRoot:
             click.secho("Cannot delete root folder", fg="red")

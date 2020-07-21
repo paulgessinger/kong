@@ -1,5 +1,7 @@
 import functools
 import os
+from concurrent.futures import Executor
+
 from typing import (
     List,
     Any,
@@ -16,6 +18,7 @@ from abc import abstractmethod, ABC
 
 from kong.drivers import DriverMismatch
 from kong.util import exhaust
+from ..executor import SerialExecutor
 from ..logger import logger
 from ..config import Config
 
@@ -136,7 +139,9 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def bulk_cleanup(self, jobs: Sequence["Job"], progress: bool) -> Iterable["Job"]:
+    def bulk_cleanup(
+        self, jobs: Sequence["Job"], progress: bool, ex: Executor = SerialExecutor()
+    ) -> Iterable["Job"]:
         raise NotImplementedError()
 
     @abstractmethod

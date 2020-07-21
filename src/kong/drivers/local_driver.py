@@ -18,9 +18,11 @@ from typing import (
     Sequence,
 )
 import uuid
+from concurrent.futures import Executor, as_completed
 
 import psutil
 
+from ..executor import SerialExecutor
 from ..util import rmtree
 from ..db import database
 from ..model.folder import Folder
@@ -142,15 +144,18 @@ class LocalDriver(DriverBase):
                 rmtree(path)
         return job
 
-    def _bulk_cleanup(self, jobs: Sequence["Job"]) -> Iterable["Job"]:
-        for job in jobs:
-            self.cleanup(job)
-            yield job
+    def _bulk_cleanup(self, jobs: Sequence["Job"], ex: Executor) -> Iterable["Job"]:
+        futures = [ex.submit(self.cleanup, j) for j in jobs]
+        for f in as_completed(futures):
+            yield f.result()
 
     def bulk_cleanup(
-        self, jobs: Sequence["Job"], progress: bool = False
+        self,
+        jobs: Sequence["Job"],
+        progress: bool = False,
+        ex: Executor = SerialExecutor(),
     ) -> Iterable["Job"]:
-        it = self._bulk_cleanup(jobs)
+        it = self._bulk_cleanup(jobs, ex)
         if progress:
             return it
         else:

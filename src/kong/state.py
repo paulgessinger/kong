@@ -1,4 +1,6 @@
 import datetime
+from concurrent.futures import ThreadPoolExecutor
+
 import humanfriendly
 from datetime import timedelta
 from fnmatch import fnmatch
@@ -393,6 +395,7 @@ class State:
         name: Union[str, Job, Folder],
         recursive: bool = False,
         confirm: Confirmation = lambda _: True,
+        threads: Optional[int] = os.cpu_count(),
     ) -> bool:
         """
         Remove jobs or folders.
@@ -439,12 +442,13 @@ class State:
                     first_job.ensure_driver_instance(self.config)
                     driver = first_job.driver_instance
 
-                    for _ in Progress(
-                        driver.bulk_cleanup(jobs, progress=True),
-                        total=len(jobs),
-                        desc="Cleaning up",
-                    ):
-                        pass
+                    with ThreadPoolExecutor(threads) as ex:
+                        for _ in Progress(
+                            driver.bulk_cleanup(jobs, progress=True, ex=ex),
+                            total=len(jobs),
+                            desc="Cleaning up",
+                        ):
+                            pass
 
                     with Spinner(f"Removing {len(jobs)} jobs"):
                         driver.bulk_remove(jobs, do_cleanup=False)
@@ -476,12 +480,13 @@ class State:
                     first_job.ensure_driver_instance(self.config)
                     driver = first_job.driver_instance
 
-                    for _ in Progress(
-                        driver.bulk_cleanup(jobs, progress=True),
-                        total=len(jobs),
-                        desc="Cleaning up",
-                    ):
-                        pass
+                    with ThreadPoolExecutor(threads) as ex:
+                        for _ in Progress(
+                            driver.bulk_cleanup(jobs, progress=True, ex=ex),
+                            total=len(jobs),
+                            desc="Cleaning up",
+                        ):
+                            pass
 
                     with Spinner(f"Removing {len(jobs)} jobs"):
                         driver.bulk_remove(jobs, do_cleanup=False)
