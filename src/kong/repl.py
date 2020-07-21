@@ -434,7 +434,8 @@ class Repl(cmd.Cmd):
         """
         confirm = click.confirm
         if yes:
-            confirm = lambda _: True
+            def confirm():
+                return True # pragma: no cover
         try:
             if self.state.rm(
                 path, recursive=recursive, confirm=confirm

@@ -5,6 +5,7 @@ import time
 from concurrent.futures import Executor, Future
 from datetime import timedelta
 
+import click
 import pytest
 from unittest import mock
 from unittest.mock import Mock, ANY, MagicMock
@@ -524,6 +525,27 @@ def test_rm(state, repl, db, capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert len(out) > 0
 
+def test_rm_yes(state, repl, monkeypatch):
+    state_rm = Mock()
+    monkeypatch.setattr(repl.state, "rm", state_rm)
+
+    root = Folder.get_root()
+
+    repl.onecmd("rm /")
+    assert state_rm.call_count == 1
+    args, kwargs = state_rm.call_args
+    assert args == ("/",)
+    assert kwargs["recursive"] == False
+    assert kwargs["confirm"] == click.confirm
+
+    state_rm.reset_mock()
+
+    repl.onecmd("rm / --yes")
+    assert state_rm.call_count == 1
+    args, kwargs = state_rm.call_args
+    assert args == ("/",)
+    assert kwargs["recursive"] == False
+    assert kwargs["confirm"] != click.confirm
 
 def test_rm_job(state, repl, db, capsys, monkeypatch):
     root = Folder.get_root()
