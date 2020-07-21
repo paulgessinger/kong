@@ -48,6 +48,9 @@ sphinx-autodoc-typehints = "^1.11.0"
 version_pattern = [
     'pyproject.toml:version = "{version}"',
 ]
+commit_subject = "Bump and tag {version}"
+commit_message = ""
+
 
 [build-system]
 requires = ["poetry>=0.12"]
