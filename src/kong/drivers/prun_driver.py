@@ -28,6 +28,8 @@ from ..db import database
 from ..model.job import Job
 from ..model.folder import Folder
 
+import pytz
+
 # from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
 
@@ -166,7 +168,10 @@ class PrunDriver(DriverBase):
                     continue
                 job.status = map_status(item["status"])
                 job.data.update(item)
-                job.updated_at = now
+                creationdate = datetime.datetime.strptime(item["creationdate"], "%Y-%m-%d %H:%M:%S")
+                updated = datetime.datetime.strptime(item["statechangetime"], "%Y-%m-%d %H:%M:%S")
+                job.created_at = creationdate
+                job.updated_at = updated
                 assert job.status != Job.Status.CREATED, "Job updated to created?"
                 yield job
             if job_not_found > 0:
@@ -178,7 +183,7 @@ class PrunDriver(DriverBase):
         with database.atomic():
             Job.bulk_update(
                 proc(),
-                fields=[Job.data, Job.status, Job.updated_at],
+                fields=[Job.data, Job.status, Job.created_at, Job.updated_at],
                 batch_size=self.batch_size,
             )
 
