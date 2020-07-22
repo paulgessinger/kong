@@ -110,15 +110,7 @@ class ShellSlurmInterface(SlurmInterface):
         logger.debug("Getting job info for %d jobs", len(jobs))
         starttime = date.today() - start_delta
 
-        fields = [
-            "JobID",
-            "State",
-            "ExitCode",
-            "Submit",
-            "Start",
-            "End",
-            "NodeList",
-        ]
+        fields = ["JobID", "State", "ExitCode", "Submit", "Start", "End", "NodeList"]
 
         args = dict(
             format=",".join(fields),
