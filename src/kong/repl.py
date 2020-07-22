@@ -162,7 +162,14 @@ class Repl(cmd.Cmd):
         type=click.Choice([s.name for s in Job.Status]),
         help="Only list jobs with this status. Will still show other jobs in folder summaries",
     )
-    @click.option("--extra", "-e", "extra_columns", type=str, default="", help="Additional columns to grab from jobs' data dict. Comma separated list.")
+    @click.option(
+        "--extra",
+        "-e",
+        "extra_columns",
+        type=str,
+        default="",
+        help="Additional columns to grab from jobs' data dict. Comma separated list.",
+    )
     def do_ls(
         self,
         dir: str,
@@ -170,7 +177,7 @@ class Repl(cmd.Cmd):
         recursive: bool,
         show_sizes: bool,
         status_filter_str: Optional[str],
-        extra_columns: str
+        extra_columns: str,
     ) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
