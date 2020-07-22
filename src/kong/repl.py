@@ -675,7 +675,7 @@ class Repl(cmd.Cmd):
         logger.debug("Update interval is %s", update_interval)
 
         poll_interval_seconds: Optional[int] = None
-        # if poll_interval
+
         if poll_interval is not None:
             if poll_interval.isdigit():
                 poll_interval_seconds = int(poll_interval)

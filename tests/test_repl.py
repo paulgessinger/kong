@@ -609,7 +609,18 @@ def test_wait(repl, state, monkeypatch):
     wait.assert_called_once_with(
         ("*",), notify=False, recursive=True, poll_interval=50, update_interval=None
     )
+    wait.reset_mock()
 
+    repl.onecmd("wait * --no-notify --recursive --poll-interval 1h")
+    wait.assert_called_once_with(
+        ("*",), notify=False, recursive=True, poll_interval=60*60, update_interval=None
+    )
+    wait.reset_mock()
+
+    repl.onecmd("wait * --no-notify --recursive")
+    wait.assert_called_once_with(
+        ("*",), notify=False, recursive=True, poll_interval=None, update_interval=None
+    )
     wait.reset_mock()
 
     repl.onecmd("wait * --notify --recursive --poll-interval 50 --notify-interval 30m")
