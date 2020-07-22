@@ -187,11 +187,11 @@ class Repl(cmd.Cmd):
 
             folders, jobs = self.state.ls(dir, refresh=refresh)
 
-            extra_columns = extra_columns.split(",") if extra_columns != "" else []
+            _extra_columns = extra_columns.split(",") if extra_columns != "" else []
 
-            extra_columns = self.state.config.repl_extra_columns + extra_columns
+            _extra_columns = self.state.config.repl_extra_columns + _extra_columns
 
-            logger.debug("Extra columns: %s", extra_columns)
+            logger.debug("Extra columns: %s", _extra_columns)
 
             if recursive:
                 arg_folder = Folder.find_by_path(dir, self.state.cwd)
@@ -274,7 +274,7 @@ class Repl(cmd.Cmd):
                         headers.append("output size")
                         align.append("l")
 
-                    for col in extra_columns:
+                    for col in _extra_columns:
                         headers.append(col)
                         align.append("l")
 
@@ -317,7 +317,7 @@ class Repl(cmd.Cmd):
                         else:
                             updated_at_str = updated_at.strftime(dtfmt)
 
-                        for col in extra_columns:
+                        for col in _extra_columns:
                             row.append(job.data.get(col, "-"))
 
                         row += [
