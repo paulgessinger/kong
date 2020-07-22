@@ -683,7 +683,7 @@ class Repl(cmd.Cmd):
 
     @parse_arguments
     @click.argument("verbosity", type=int)
-    def do_set_verbosity(self, verbosity: int):
+    def do_set_verbosity(self, verbosity: int) -> None:
         """
         Set verbosity level to VERBOSITY
         """
