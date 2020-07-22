@@ -3,7 +3,7 @@ import re
 import tempfile
 import time
 from concurrent.futures import Executor, Future
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import click
 import pytest
@@ -13,6 +13,7 @@ import peewee as pw
 from click import UsageError
 from conftest import skip_lxplus
 
+from kong.model import BaseModel
 from kong.model.folder import Folder
 from kong.model.job import Job
 
@@ -85,6 +86,38 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
 
         state.ls.assert_called_once()
         assert state.refresh_jobs.call_count == 1
+
+
+def test_ls_dateformat(state, repl, capsys):
+    j1 = state.create_job(command="sleep 1")
+    j2 = state.create_job(command="sleep 1")
+
+    j1.updated_at = datetime(2020, 7, 22, 15, 0, 0)
+    j1.created_at = datetime(2020, 7, 22, 12, 0, 0)
+    BaseModel.save(j1)
+    # j1.save()
+
+    j2.updated_at = datetime(2020, 7, 22, 15, 0, 0)
+    j2.created_at = datetime(2020, 7, 21, 12, 0, 0)
+    # j2.save()
+    BaseModel.save(j2)
+
+    repl.onecmd("ls")
+    out, err = capsys.readouterr()
+
+    l1, l2 = out.splitlines()[-2:]
+
+    assert (
+        re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}", l1)
+        is not None
+    )
+    assert (
+        re.search(
+            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}",
+            l2,
+        )
+        is not None
+    )
 
 
 def test_ls_status(state, repl, capsys, monkeypatch):
