@@ -646,7 +646,11 @@ def test_wait(repl, state, monkeypatch):
 
     repl.onecmd("wait * --no-notify --recursive --poll-interval 1h")
     wait.assert_called_once_with(
-        ("*",), notify=False, recursive=True, poll_interval=60*60, update_interval=None
+        ("*",),
+        notify=False,
+        recursive=True,
+        poll_interval=60 * 60,
+        update_interval=None,
     )
     wait.reset_mock()
 
