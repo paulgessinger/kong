@@ -88,6 +88,41 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
         assert state.refresh_jobs.call_count == 1
 
 
+def test_ls_extra_columns(state, repl, capsys):
+    j = state.create_job(command="sleep 1")
+    j.data["col1"] = "AAA"
+    j.data["col2"] = "BBB"
+    j.save()
+
+    repl.onecmd("ls")
+    out, err = capsys.readouterr()
+    assert "col1" not in out
+    assert "AAA" not in out
+    assert "col2" not in out
+    assert "BBB" not in out
+
+    repl.onecmd("ls -e col1")
+    out, err = capsys.readouterr()
+    assert "col1" in out
+    assert "AAA" in out
+    assert "col2" not in out
+    assert "BBB" not in out
+
+    repl.onecmd("ls -e col2")
+    out, err = capsys.readouterr()
+    assert "col1" not in out
+    assert "AAA" not in out
+    assert "col2" in out
+    assert "BBB" in out
+
+    repl.onecmd("ls -e col1,col2")
+    out, err = capsys.readouterr()
+    assert "col1" in out
+    assert "AAA" in out
+    assert "col2" in out
+    assert "BBB" in out
+
+
 def test_ls_dateformat(state, repl, capsys):
     j1 = state.create_job(command="sleep 1")
     j2 = state.create_job(command="sleep 1")

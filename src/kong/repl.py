@@ -162,6 +162,14 @@ class Repl(cmd.Cmd):
         type=click.Choice([s.name for s in Job.Status]),
         help="Only list jobs with this status. Will still show other jobs in folder summaries",
     )
+    @click.option(
+        "--extra",
+        "-e",
+        "extra_columns",
+        type=str,
+        default="",
+        help="Additional columns to grab from jobs' data dict. Comma separated list.",
+    )
     def do_ls(
         self,
         dir: str,
@@ -169,6 +177,7 @@ class Repl(cmd.Cmd):
         recursive: bool,
         show_sizes: bool,
         status_filter_str: Optional[str],
+        extra_columns: str,
     ) -> None:
         "List the directory content of DIR: jobs and folders"
         try:
@@ -177,6 +186,12 @@ class Repl(cmd.Cmd):
                 ex = ThreadPoolExecutor()
 
             folders, jobs = self.state.ls(dir, refresh=refresh)
+
+            _extra_columns = extra_columns.split(",") if extra_columns != "" else []
+
+            _extra_columns = self.state.config.repl_extra_columns + _extra_columns
+
+            logger.debug("Extra columns: %s", _extra_columns)
 
             if recursive:
                 arg_folder = Folder.find_by_path(dir, self.state.cwd)
@@ -259,6 +274,10 @@ class Repl(cmd.Cmd):
                         headers.append("output size")
                         align.append("l")
 
+                    for col in _extra_columns:
+                        headers.append(col)
+                        align.append("l")
+
                     headers += ["batch job id", "created", "updated", "status"]
                     align += ["r+", "l", "l", "l"]
 
@@ -297,6 +316,9 @@ class Repl(cmd.Cmd):
                             updated_at_str = updated_at.strftime(tfmt)
                         else:
                             updated_at_str = updated_at.strftime(dtfmt)
+
+                        for col in _extra_columns:
+                            row.append(job.data.get(col, "-"))
 
                         row += [
                             batch_job_id,
