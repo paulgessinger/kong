@@ -13,6 +13,8 @@ import humanfriendly
 import sh
 from typing import Any, Callable, List, Optional, Union, Iterable, cast, Dict, Tuple
 import shutil
+import dateutil.tz
+import pytz
 
 import click
 import peewee as pw
@@ -260,8 +262,9 @@ class Repl(cmd.Cmd):
                     headers += ["batch job id", "created", "updated", "status"]
                     align += ["r+", "l", "l", "l"]
 
-                    def dtfmt(dt: datetime.datetime) -> str:
-                        return dt.strftime("%Y-%m-%d %H:%M:%S")
+                    dfcnv = lambda dt: dt.replace(tzinfo=pytz.utc).astimezone(dateutil.tz.tzlocal())
+                    tfmt = "%H:%M:%S"
+                    dtfmt = f"%Y-%m-%d {tfmt}"
 
                     rows = []
                     status_filter = (
@@ -283,10 +286,18 @@ class Repl(cmd.Cmd):
                         if show_sizes:
                             row.append(humanfriendly.format_size(jobs_sizes[idx]))
 
+                        created_at = dfcnv(job.created_at)
+                        updated_at = dfcnv(job.updated_at)
+
+                        if created_at.date() == updated_at.date():
+                            updated_at_str = updated_at.strftime(tfmt)
+                        else:
+                            updated_at_str = updated_at.strftime(dtfmt)
+
                         row += [
                             batch_job_id,
-                            dtfmt(job.created_at),
-                            dtfmt(job.updated_at),
+                            created_at.strftime(dtfmt),
+                            updated_at_str,
                             status_name,
                         ]
 

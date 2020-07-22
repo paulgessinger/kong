@@ -334,7 +334,7 @@ class SlurmDriver(BatchDriverBase):
         for job in jobs:
             self._check_driver(job)
 
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
 
         def proc() -> Iterable[Job]:
             job_not_found = 0

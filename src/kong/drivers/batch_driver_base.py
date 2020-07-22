@@ -34,7 +34,7 @@ class BatchDriverBase(DriverBase):
         return self.bulk_sync_status([job])[0]
 
     def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
         jobs = self.bulk_sync_status(jobs)
 
         def delete() -> Iterable["Job"]:
@@ -104,7 +104,7 @@ class BatchDriverBase(DriverBase):
             time.sleep(poll_interval)
 
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
 
         def sub() -> Iterable[Job]:
             for job in jobs:
@@ -214,7 +214,7 @@ class BatchDriverBase(DriverBase):
         with database.atomic():
 
             with database.atomic():
-                now = datetime.datetime.now()
+                now = datetime.datetime.utcnow()
 
                 def jobit() -> Iterable[Job]:
                     for job in jobs:
