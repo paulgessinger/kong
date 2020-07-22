@@ -133,7 +133,7 @@ class Job(BaseModel):
         memory = pw.IntegerField(null=False, default=1000)  # memory in Megabytes
         status = EnumField(choices=Status, null=False, default=Status.CREATED)
 
-        created_at = pw.DateTimeField(default=datetime.datetime.now)
+        created_at = pw.DateTimeField(default=datetime.datetime.utcnow)
         updated_at = pw.DateTimeField()
 
     _driver_instance: Optional[DriverBase] = None

@@ -692,7 +692,7 @@ python-versions = "*"
 version = "1.1.8"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "World timezone definitions, modern and historical"
 name = "pytz"
 optional = false
@@ -1051,7 +1051,7 @@ testing = ["jaraco.itertools", "func-timeout"]
 ipython = ["ipython"]
 
 [metadata]
-content-hash = "04f92b46b7ac3227e3f41630bff8cee03164ea76df668e2e54a851f66c2da4f3"
+content-hash = "8b6b5155c191b7595667cd22c2a9a5e1e894b8f53b3e38ab44b8fb81dbd91054"
 python-versions = "^3.6"
 
 [metadata.files]
