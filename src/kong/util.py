@@ -1,3 +1,4 @@
+import logging
 import math
 import re
 import os
@@ -13,6 +14,7 @@ from collections import deque
 
 from tqdm import tqdm  # type: ignore
 from halo import Halo  # type: ignore
+import coloredlogs
 
 from .logger import logger
 
@@ -172,3 +174,26 @@ def get_size(path: str, ex: Optional[Executor] = None) -> int:
         size = sum(f.result() for f in futures)
 
     return size
+
+
+def set_verbosity(verbosity: int) -> None:
+    if verbosity == 0:
+        level = logging.WARNING
+        global_level = logging.WARNING
+    elif verbosity <= 1:
+        level = logging.INFO
+        global_level = logging.INFO
+    elif verbosity <= 2:
+        level = logging.DEBUG
+        global_level = logging.INFO
+    else:
+        level = logging.DEBUG
+        global_level = logging.DEBUG
+
+    coloredlogs.install(
+        fmt="%(asctime)s %(levelname)s %(name)s %(filename)s:%(funcName)s %(message)s",
+        level=level,
+    )
+
+    logger.setLevel(level)
+    logging.getLogger().setLevel(global_level)

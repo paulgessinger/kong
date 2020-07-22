@@ -3,7 +3,6 @@ import logging
 from typing import Any
 
 import click
-import coloredlogs
 from peewee import sqlite3
 
 from . import config
@@ -12,6 +11,7 @@ from .state import State
 from .logger import logger
 from .repl import Repl
 from . import __version__
+from .util import set_verbosity
 
 
 @click.group(invoke_without_command=True)
@@ -23,26 +23,7 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     Starts the main kong command loop. Will automatically perform setup the
     first time it is invoked.
     """
-    if verbosity == 0:
-        level = logging.WARNING
-        global_level = logging.WARNING
-    elif verbosity <= 1:
-        level = logging.INFO
-        global_level = logging.INFO
-    elif verbosity <= 2:
-        level = logging.DEBUG
-        global_level = logging.INFO
-    else:
-        level = logging.DEBUG
-        global_level = logging.DEBUG
-
-    coloredlogs.install(
-        fmt="%(asctime)s %(levelname)s %(name)s %(filename)s:%(funcName)s %(message)s",
-        level=level,
-    )
-
-    logger.setLevel(level)
-    logging.getLogger().setLevel(global_level)
+    set_verbosity(verbosity)
 
     if show_version:
         print("HALLO")

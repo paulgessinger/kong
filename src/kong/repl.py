@@ -20,7 +20,7 @@ from click import style
 from kong.model.job import color_dict
 from .table import format_table
 
-from .util import shorten_path, Spinner
+from .util import shorten_path, Spinner, set_verbosity
 from .state import DoesNotExist
 from .config import APP_NAME, APP_DIR
 from .logger import logger
@@ -680,6 +680,15 @@ class Repl(cmd.Cmd):
             poll_interval=poll_interval,
             update_interval=update_interval,
         )
+
+    @parse_arguments
+    @click.argument("verbosity", type=int)
+    def do_set_verbosity(self, verbosity: int):
+        """
+        Set verbosity level to VERBOSITY
+        """
+        assert verbosity >= 0, "Verbosity must be >= 0"
+        set_verbosity(verbosity)
 
     def do_shell(self, cmd: str) -> None:
         """
