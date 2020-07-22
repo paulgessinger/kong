@@ -1,3 +1,4 @@
+import copy
 import sys
 import os
 from unittest.mock import Mock, call
@@ -26,6 +27,7 @@ def driver(monkeypatch, state, pandatools):
         m.setattr("sys.path", paths)
         env = {}
         m.setattr("os.environ", env)
+        m.setattr("kong.drivers.prun_driver._first_run", True)
         driver = PrunDriver(state.config)
         assert paths == ["PANDA_PYTHONPATH_VALUE"]
         assert "emi_path_value" in env["PATH"]
@@ -38,8 +40,10 @@ def driver(monkeypatch, state, pandatools):
 @pytest.fixture
 def pandatools(monkeypatch):
     pandatools = Mock()
-    pandatools.queryPandaMonUtils = Mock()
     monkeypatch.setitem(sys.modules, "pandatools", pandatools)
+
+    query = Mock()
+    monkeypatch.setitem(sys.modules, "pandatools.queryPandaMonUtils", query)
 
     PsubUtils = Mock()
     PsubUtils.commands_get_status_output = Mock()
@@ -52,7 +56,14 @@ def pandatools(monkeypatch):
     return pandatools
 
 
-def test_bulk_sync_status(driver, pandatools):
+@pytest.fixture()
+def test_result():
+    from panda_query_return1 import result
+
+    return copy.deepcopy(result)
+
+
+def test_bulk_sync_status(driver, pandatools, test_result):
     root = Folder.get_root()
 
     task_ids = [21948780, 21948716, 21956507, 21953913, 21962217]
@@ -61,9 +72,7 @@ def test_bulk_sync_status(driver, pandatools):
         driver.create_job(folder=root, command="sleep 10", task_id=i) for i in task_ids
     ]
 
-    from panda_query_return1 import result
-
-    query = Mock(return_value=result)
+    query = Mock(return_value=test_result)
     pandatools.queryPandaMonUtils.query_tasks = query
 
     jobs = driver.bulk_sync_status(jobs)
@@ -79,7 +88,8 @@ def test_bulk_sync_status(driver, pandatools):
         Job.Status.SUBMITTED,
     ]
 
-def test_sync_status(driver, pandatools):
+
+def test_sync_status(driver, pandatools, test_result):
     root = Folder.get_root()
 
     task_ids = [21948780, 21948716, 21956507, 21953913, 21962217]
@@ -88,9 +98,7 @@ def test_sync_status(driver, pandatools):
         driver.create_job(folder=root, command="sleep 10", task_id=i) for i in task_ids
     ]
 
-    from panda_query_return1 import result
-
-    ts, url, items = result
+    ts, url, items = copy.deepcopy(test_result)
 
     data = {item["jeditaskid"]: item for item in items}
 
