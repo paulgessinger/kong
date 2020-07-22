@@ -262,7 +262,11 @@ class Repl(cmd.Cmd):
                     headers += ["batch job id", "created", "updated", "status"]
                     align += ["r+", "l", "l", "l"]
 
-                    dfcnv = lambda dt: dt.replace(tzinfo=pytz.utc).astimezone(dateutil.tz.tzlocal())
+                    def dfcnv(dt: datetime.datetime) -> datetime.datetime:
+                        return dt.replace(tzinfo=pytz.utc).astimezone(
+                            dateutil.tz.tzlocal()
+                        )
+
                     tfmt = "%H:%M:%S"
                     dtfmt = f"%Y-%m-%d {tfmt}"
 
