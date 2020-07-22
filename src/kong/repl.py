@@ -100,7 +100,7 @@ class Repl(cmd.Cmd):
         self, text: str, line: str, begidx: int, endidx: int
     ) -> List[str]:
         logger.debug(
-            "text: %s, line: %s, begidx: %d, endidx: %d", text, line, begidx, endidx,
+            "text: %s, line: %s, begidx: %d, endidx: %d", text, line, begidx, endidx
         )
 
         # find component
@@ -687,7 +687,8 @@ class Repl(cmd.Cmd):
         """
         Set verbosity level to VERBOSITY
         """
-        assert verbosity >= 0, "Verbosity must be >= 0"
+        if verbosity < 0:
+            raise ValueError("Verbosity must be >= 0")
         set_verbosity(verbosity)
 
     def do_shell(self, cmd: str) -> None:

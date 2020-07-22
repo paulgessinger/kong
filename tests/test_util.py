@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import stat
@@ -26,6 +27,7 @@ from kong.util import (
     Spinner,
     Progress,
     get_size,
+    set_verbosity,
 )
 
 
@@ -306,3 +308,32 @@ def test_get_size(cleaned_tmpdir):
     assert get_size(tmpdir) == size
     with ThreadPoolExecutor() as ex:
         assert get_size(tmpdir, ex) == size
+
+
+def test_set_verbosity(monkeypatch):
+    coloredlogs = Mock()
+    monkeypatch.setattr("kong.util.coloredlogs", coloredlogs)
+
+    logger = Mock()
+    monkeypatch.setattr("kong.util.logger", logger)
+
+    setLevel = Mock()
+    monkeypatch.setattr(logging.getLogger(), "setLevel", setLevel)
+
+    maps = {
+        0: (logging.WARNING, logging.WARNING),
+        1: (logging.INFO, logging.INFO),
+        2: (logging.DEBUG, logging.INFO),
+        3: (logging.DEBUG, logging.DEBUG),
+        42: (logging.DEBUG, logging.DEBUG),
+    }
+
+    for verb, (level, glevel) in maps.items():
+        coloredlogs.reset_mock()
+        logger.reset_mock()
+        setLevel.reset_mock()
+
+        set_verbosity(verb)
+        coloredlogs.install.assert_called_once_with(fmt=ANY, level=level)
+        logger.setLevel.assert_called_once_with(level)
+        setLevel.assert_called_once_with(glevel)
