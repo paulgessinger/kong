@@ -36,15 +36,11 @@ jobs:
         python-version: 3.8
     - name: Install dependencies
       run: |
-        pip install poetry
+        pip install poetry pre-commit
         poetry config virtualenvs.create false
         poetry install --no-root
-    - name: mypy
-      run: mypy src/kong
-    - name: flake8
-      run: flake8 src/kong
-    - name: black
-      run: black src/kong tests
+    - name: Run linters
+      run: pre-commit run --all-files
 
 
   publish:

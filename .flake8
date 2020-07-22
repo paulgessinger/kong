@@ -1,3 +1,4 @@
 [flake8]
 max-line-length = 88
 ignore = E203, W503, E501
+exclude = ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,tests,.venv,.coverage,.idea,.mypy_cache,.pytest_cache,doc,conf.py,tests/*.py"

@@ -84,7 +84,7 @@ class Notifier:
         self._kwargs = kwargs
 
     def notify(
-        self, message: str, title: typing.Optional[str] = None, **kwargs: typing.Any,
+        self, message: str, title: typing.Optional[str] = None, **kwargs: typing.Any
     ) -> notifiers.core.Response:
         """
         Send a notification through this notificer instance
