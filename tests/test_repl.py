@@ -1032,3 +1032,18 @@ def test_shell(repl, monkeypatch):
     monkeypatch.setattr("subprocess.run", run)
     repl.onecmd(f"!{cmd}")
     run.assert_called_once_with(cmd, shell=True, env=ANY)
+
+
+def test_set_verbosity(repl, monkeypatch):
+    setter = Mock()
+    monkeypatch.setattr("kong.repl.set_verbosity", setter)
+
+    for i in range(10):
+        setter.reset_mock()
+        repl.onecmd(f"set_verbosity {i}")
+        setter.assert_called_once_with(i)
+
+    setter.reset_mock()
+    with pytest.raises(ValueError):
+        repl.onecmd("set_verbosity -- -3")
+    assert setter.call_count == 0
