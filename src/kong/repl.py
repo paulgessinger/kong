@@ -648,7 +648,7 @@ class Repl(cmd.Cmd):
         path: List[str],
         notify: bool,
         recursive: bool,
-        poll_interval: Optional[int],
+        poll_interval: Optional[str],
         notify_interval: Optional[str],
     ) -> None:
         """
@@ -681,7 +681,7 @@ class Repl(cmd.Cmd):
                 poll_interval_seconds = int(poll_interval)
             else:
                 print(poll_interval)
-                poll_interval_seconds = humanfriendly.parse_timespan(poll_interval)
+                poll_interval_seconds = int(humanfriendly.parse_timespan(poll_interval))
 
         logger.debug("Poll interval is %s", poll_interval_seconds)
 

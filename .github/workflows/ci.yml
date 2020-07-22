@@ -44,7 +44,7 @@ jobs:
     - name: flake8
       run: flake8 src/kong
     - name: black
-      run: black src/kong
+      run: black src/kong tests
 
 
   publish:
