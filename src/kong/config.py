@@ -51,6 +51,7 @@ config_schema = Schema(
         Optional(
             "joboutputdir", default=lambda: os.path.join(APP_DIR, "joboutput")
         ): os.path.exists,
+        Optional("repl_extra_columns", default=[]): [str],
         Optional("history_length", default=1000): int,
         Optional("slurm_driver"): slurm_schema,
         Optional("htcondor_driver"): htcondor_schema,
