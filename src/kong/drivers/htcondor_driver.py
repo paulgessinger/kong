@@ -1,10 +1,9 @@
-import datetime
 import itertools
 import json
 import os
 import re
 from abc import ABC, abstractmethod
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import humanfriendly
 from typing import (
@@ -41,14 +40,31 @@ class HTCondorAccountingItem:
     exit_code: int
     status: Job.Status
 
-    def __init__(self, job_id: int, status: Job.Status, exit_code: int):
+    start_date: datetime
+    completion_date: datetime
+
+    def __init__(
+        self,
+        job_id: int,
+        status: Job.Status,
+        exit_code: int,
+        start_date: datetime,
+        completion_date: datetime,
+    ):
         self.job_id = job_id
         self.status = status
         self.exit_code = exit_code
+        self.start_date = start_date
+        self.completion_date = completion_date
 
     @classmethod
     def from_parts(
-        cls, job_id: int, condor_status: int, exit_code: int
+        cls,
+        job_id: int,
+        condor_status: int,
+        exit_code: int,
+        start_date: int,
+        completion_date: int,
     ) -> "HTCondorAccountingItem":
         # see http://pages.cs.wisc.edu/~adesmet/status.html
 
@@ -80,7 +96,13 @@ class HTCondorAccountingItem:
             # at scheduler level, this is completed, might have exited with failure though
             if exit_code != 0 and exit_code != -1:
                 status = Job.Status.FAILED
-        return cls(job_id, status, exit_code)
+        return cls(
+            job_id,
+            status,
+            exit_code,
+            datetime.utcfromtimestamp(start_date),
+            datetime.utcfromtimestamp(completion_date),
+        )
 
     def __repr__(self) -> str:
         return f"HTCondorAI<{self.job_id}, {repr(self.status)}, {self.exit_code}>"
@@ -138,13 +160,31 @@ class ShellHTCondorInterface(HTCondorInterface):
             assert item["ProcId"] == 0, "Clusters with more than one jobs not supported"
             condor_status = item["JobStatus"]
             exit_code = item["ExitCode"] if "ExitCode" in item else -1
-            yield HTCondorAccountingItem.from_parts(job_id, condor_status, exit_code)
+            yield HTCondorAccountingItem.from_parts(
+                job_id,
+                condor_status,
+                exit_code,
+                item.get("JobCurrentStartDate", 0),
+                item.get("CompletionDate", 0),
+            )
 
     def condor_q(self) -> Iterator[HTCondorAccountingItem]:
 
         logger.debug("Getting job infos")
 
-        args = ["-attributes", ",".join(["ClusterId", "ProcId", "JobStatus"]), "-json"]
+        args = [
+            "-attributes",
+            ",".join(
+                [
+                    "ClusterId",
+                    "ProcId",
+                    "JobStatus",
+                    "JobCurrentStartDate",
+                    "CompletionDate",
+                ]
+            ),
+            "-json",
+        ]
 
         assert self._condor_q is not None
         return self._parse_output(str(self._condor_q(*args)))
@@ -163,7 +203,16 @@ class ShellHTCondorInterface(HTCondorInterface):
             "-userlog",
             log_file,
             "-attributes",
-            ",".join(["ClusterId", "ProcId", "JobStatus", "ExitCode"]),
+            ",".join(
+                [
+                    "ClusterId",
+                    "ProcId",
+                    "JobStatus",
+                    "ExitCode",
+                    "JobCurrentStartDate",
+                    "CompletionDate",
+                ]
+            ),
             "-json",
             "-limit",
             "10000",
@@ -342,8 +391,6 @@ class HTCondorDriver(BatchDriverBase):
         for job in jobs:
             self._check_driver(job)
 
-        now = datetime.datetime.utcnow()
-
         def proc() -> Iterable[Job]:
             job_not_found = 0
             for item in itertools.chain(
@@ -355,7 +402,8 @@ class HTCondorDriver(BatchDriverBase):
                     continue
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
-                job.updated_at = now
+
+                job.updated_at = max([item.start_date, item.completion_date])
                 yield job
             if job_not_found > 0:
                 logger.warning(

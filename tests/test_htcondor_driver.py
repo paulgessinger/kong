@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Collection, Iterator
 from unittest.mock import Mock, ANY, call
 
@@ -43,49 +43,63 @@ def test_condor_q(driver, monkeypatch, state):
 {
   "ClusterId": 5184659,
   "JobStatus": 0,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184660,
   "JobStatus": 1,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184661,
   "JobStatus": 2,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184662,
   "JobStatus": 3,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184663,
   "JobStatus": 4,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732
 }
 ,
 {
   "ClusterId": 5184664,
   "JobStatus": 5,
-  "ProcId": 0
+  "ProcId": 0,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184665,
   "JobStatus": 6,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184666,
   "JobStatus": 42,
-  "ProcId": 0
+  "ProcId": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ]
     """.strip()
@@ -98,23 +112,43 @@ def test_condor_q(driver, monkeypatch, state):
         res = list(driver.htcondor.condor_q())
 
         mock.assert_called_once_with(
-            "-attributes", "ClusterId,ProcId,JobStatus", "-json"
+            "-attributes",
+            "ClusterId,ProcId,JobStatus,JobCurrentStartDate,CompletionDate",
+            "-json",
         )
 
+        start_date = datetime.utcfromtimestamp(1596724732)
+        completion_date = datetime.utcfromtimestamp(1596724743)
+        t0 = datetime.utcfromtimestamp(0)
+
         ref = [
-            HTCondorAccountingItem(5184659, Job.Status.SUBMITTED, -1),
-            HTCondorAccountingItem(5184660, Job.Status.SUBMITTED, -1),
-            HTCondorAccountingItem(5184661, Job.Status.RUNNING, -1),
-            HTCondorAccountingItem(5184662, Job.Status.FAILED, -1),
-            HTCondorAccountingItem(5184663, Job.Status.COMPLETED, -1),
-            HTCondorAccountingItem(5184664, Job.Status.FAILED, -1),
-            HTCondorAccountingItem(5184665, Job.Status.FAILED, -1),
-            HTCondorAccountingItem(5184666, Job.Status.UNKNOWN, -1),
+            HTCondorAccountingItem(
+                5184659, Job.Status.SUBMITTED, -1, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184660, Job.Status.SUBMITTED, -1, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184661, Job.Status.RUNNING, -1, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184662, Job.Status.FAILED, -1, start_date, completion_date
+            ),
+            HTCondorAccountingItem(5184663, Job.Status.COMPLETED, -1, start_date, t0),
+            HTCondorAccountingItem(5184664, Job.Status.FAILED, -1, t0, completion_date),
+            HTCondorAccountingItem(
+                5184665, Job.Status.FAILED, -1, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184666, Job.Status.UNKNOWN, -1, start_date, completion_date
+            ),
         ]
 
         assert len(ref) == len(res)
         for a, b in zip(ref, res):
             assert a == b
+            assert a.start_date == b.start_date
+            assert a.completion_date == b.completion_date
 
 
 def test_condor_q_empty(driver, monkeypatch, state):
@@ -148,70 +182,89 @@ def test_condor_history(driver, monkeypatch, state):
   "ClusterId": 5184659,
   "JobStatus": 0,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184660,
   "JobStatus": 1,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184661,
   "JobStatus": 2,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184662,
   "JobStatus": 3,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184663,
   "JobStatus": 4,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184664,
   "JobStatus": 5,
   "ProcId": 0,
-  "ExitCode": 3
+  "ExitCode": 3,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184665,
   "JobStatus": 6,
   "ProcId": 0,
-  "ExitCode": 4
+  "ExitCode": 4,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184666,
   "JobStatus": 42,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184667,
   "JobStatus": 4,
   "ProcId": 0,
-  "ExitCode": 0
+  "ExitCode": 0,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ,
 {
   "ClusterId": 5184668,
   "JobStatus": 4,
   "ProcId": 0,
-  "ExitCode": 1
+  "ExitCode": 1,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
 }
 ]
     """.strip()
@@ -227,28 +280,52 @@ def test_condor_history(driver, monkeypatch, state):
             "-userlog",
             ANY,
             "-attributes",
-            "ClusterId,ProcId,JobStatus,ExitCode",
+            "ClusterId,ProcId,JobStatus,ExitCode,JobCurrentStartDate,CompletionDate",
             "-json",
             "-limit",
             ANY,
         )
 
+        start_date = datetime.utcfromtimestamp(1596724732)
+        completion_date = datetime.utcfromtimestamp(1596724743)
+        t0 = datetime.utcfromtimestamp(0)
+
         ref = [
-            HTCondorAccountingItem(5184659, Job.Status.SUBMITTED, 0),
-            HTCondorAccountingItem(5184660, Job.Status.SUBMITTED, 0),
-            HTCondorAccountingItem(5184661, Job.Status.RUNNING, 0),
-            HTCondorAccountingItem(5184662, Job.Status.FAILED, 0),
-            HTCondorAccountingItem(5184663, Job.Status.COMPLETED, 0),
-            HTCondorAccountingItem(5184664, Job.Status.FAILED, 3),
-            HTCondorAccountingItem(5184665, Job.Status.FAILED, 4),
-            HTCondorAccountingItem(5184666, Job.Status.UNKNOWN, 0),
-            HTCondorAccountingItem(5184667, Job.Status.COMPLETED, 0),
-            HTCondorAccountingItem(5184668, Job.Status.FAILED, 1),
+            HTCondorAccountingItem(
+                5184659, Job.Status.SUBMITTED, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184660, Job.Status.SUBMITTED, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184661, Job.Status.RUNNING, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184662, Job.Status.FAILED, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184663, Job.Status.COMPLETED, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184664, Job.Status.FAILED, 3, start_date, completion_date
+            ),
+            HTCondorAccountingItem(5184665, Job.Status.FAILED, 4, t0, completion_date),
+            HTCondorAccountingItem(
+                5184666, Job.Status.UNKNOWN, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184667, Job.Status.COMPLETED, 0, start_date, completion_date
+            ),
+            HTCondorAccountingItem(
+                5184668, Job.Status.FAILED, 1, start_date, completion_date
+            ),
         ]
 
         assert len(ref) == len(res)
         for a, b in zip(ref, res):
             assert a == b
+            assert a.start_date == b.start_date
+            assert a.completion_date == b.completion_date
 
 
 def test_driver_create(state, monkeypatch):
@@ -304,7 +381,9 @@ Submitting job(s).
 
 
 def test_repr():
-    htai = HTCondorAccountingItem(1, Job.Status.UNKNOWN, 0)
+    htai = HTCondorAccountingItem(
+        1, Job.Status.UNKNOWN, 0, datetime.now(), datetime.now()
+    )
     assert repr(htai) != ""
 
 
@@ -412,10 +491,11 @@ def test_resubmit_job(driver, state, monkeypatch):
         driver.resubmit(j1)
 
     HTAI = HTCondorAccountingItem
+    now = datetime.now()
     monkeypatch.setattr(
         driver.htcondor,
         "condor_q",
-        Mock(return_value=[HTAI(j1.batch_job_id, Job.Status.FAILED, 0)]),
+        Mock(return_value=[HTAI(j1.batch_job_id, Job.Status.FAILED, 0, now, now)]),
     )
 
     bjid2 = 42
@@ -441,7 +521,7 @@ def test_resubmit_job(driver, state, monkeypatch):
     monkeypatch.setattr(
         driver.htcondor,
         "condor_history",
-        Mock(return_value=[HTAI(j1.batch_job_id, Job.Status.FAILED, 0)]),
+        Mock(return_value=[HTAI(j1.batch_job_id, Job.Status.FAILED, 0, now, now)]),
     )
 
     # will go to failed
@@ -615,9 +695,13 @@ def test_sync_status(driver, monkeypatch):
     assert j1.status == Job.Status.SUBMITTED
     assert j1.batch_job_id == str(batch_job_id)
 
+    t1 = datetime(2020, 8, 3, 20, 15)
+    t2 = datetime(2020, 8, 3, 22, 15)
+    t3 = datetime.utcfromtimestamp(0)
+
     condor_q_return = [
-        [HTCondorAccountingItem(batch_job_id, Job.Status.RUNNING, 0)],
-        [HTCondorAccountingItem(batch_job_id, Job.Status.FAILED, 0)],
+        [HTCondorAccountingItem(batch_job_id, Job.Status.RUNNING, 0, t1, t3)],
+        [HTCondorAccountingItem(batch_job_id, Job.Status.FAILED, 0, t1, t2)],
     ]
     condor_q = Mock(side_effect=condor_q_return)
     monkeypatch.setattr(driver.htcondor, "condor_q", condor_q)
@@ -625,8 +709,10 @@ def test_sync_status(driver, monkeypatch):
 
     j1 = driver.sync_status(j1)
     assert j1.status == Job.Status.RUNNING
+    assert j1.updated_at == t1
     j1 = driver.sync_status(j1)
     assert j1.status == Job.Status.FAILED
+    assert j1.updated_at == t2
 
 
 def test_bulk_create(driver, state):
@@ -682,8 +768,14 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     HTAI = HTCondorAccountingItem
 
+    t1 = datetime(2020, 8, 3, 20, 15)
+    t2 = datetime(2020, 8, 3, 22, 15)
+    t3 = datetime.utcfromtimestamp(0)
+
     condor_q = Mock(
-        return_value=[HTAI(i + 1, Job.Status.RUNNING, -1) for i in range(len(jobs))]
+        return_value=[
+            HTAI(i + 1, Job.Status.RUNNING, -1, t1, t3) for i in range(len(jobs))
+        ]
     )
 
     # pretend they're all running now
@@ -699,6 +791,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     for job in jobs:
         assert job.status == Job.Status.RUNNING
+        assert job.updated_at == t1
 
     with monkeypatch.context() as m:
         condor_history = Mock(
@@ -707,6 +800,8 @@ def test_bulk_sync_status(driver, state, monkeypatch):
                     i + 1,
                     Job.Status.COMPLETED if i < 6 else Job.Status.FAILED,
                     0 if i < 6 else 1,
+                    t1,
+                    t2,
                 )
                 for i in range(len(jobs))
             ]
@@ -720,8 +815,10 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     for job in jobs[:6]:
         assert job.status == Job.Status.COMPLETED
+        assert job.updated_at == t2
     for job in jobs[6:]:
         assert job.status == Job.Status.FAILED
+        assert job.updated_at == t2
 
 
 def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
@@ -736,9 +833,12 @@ def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
     monkeypatch.setattr(driver.htcondor, "condor_submit", condor_submit)
     driver.bulk_submit(jobs)
 
+    t1 = datetime(2020, 8, 3, 20, 15)
     HTAI = HTCondorAccountingItem
-    condor_q_return = [HTAI(i + 1, Job.Status.RUNNING, 0) for i in range(len(jobs))]
-    condor_history_return = [HTAI(12_345_665, Job.Status.UNKNOWN, 0)]
+    condor_q_return = [
+        HTAI(i + 1, Job.Status.RUNNING, 0, t1, t1) for i in range(len(jobs))
+    ]
+    condor_history_return = [HTAI(12_345_665, Job.Status.UNKNOWN, 0, t1, t1)]
     # pretend they're all running now
     monkeypatch.setattr(driver.htcondor, "condor_q", Mock(return_value=condor_q_return))
     monkeypatch.setattr(
@@ -748,6 +848,7 @@ def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
 
     for job in jobs:
         assert job.status == Job.Status.RUNNING
+        assert job.updated_at == t1
 
 
 def test_kill_job(driver, state, monkeypatch):
@@ -810,6 +911,8 @@ def test_bulk_kill(driver, state, monkeypatch):
 def test_wait(driver, state, monkeypatch):
     root = Folder.get_root()
 
+    t1 = datetime(2020, 8, 3, 20, 15)
+
     class HTCondorInterfaceDummy(HTCondorInterface):
         def __init__(self):
             self.max_job_id = 1
@@ -820,15 +923,21 @@ def test_wait(driver, state, monkeypatch):
         def condor_q(self) -> Iterator[HTCondorAccountingItem]:
             values = [
                 [
-                    HTCondorAccountingItem(j.batch_job_id, Job.Status.RUNNING, 0)
+                    HTCondorAccountingItem(
+                        j.batch_job_id, Job.Status.RUNNING, 0, t1, t1
+                    )
                     for j in self.jobs
                 ],
                 [  # first half done
-                    HTCondorAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    HTCondorAccountingItem(
+                        j.batch_job_id, Job.Status.COMPLETED, 0, t1, t1
+                    )
                     for j in self.jobs[len(self.jobs) // 2 :]
                 ],
                 [  # all done
-                    HTCondorAccountingItem(j.batch_job_id, Job.Status.COMPLETED, 0)
+                    HTCondorAccountingItem(
+                        j.batch_job_id, Job.Status.COMPLETED, 0, t1, t1
+                    )
                     for j in self.jobs
                 ],
             ]
