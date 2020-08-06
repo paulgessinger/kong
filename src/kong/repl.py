@@ -457,7 +457,10 @@ class Repl(cmd.Cmd):
                 click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
             click.echo("data:")
             for k, v in job.data.items():
-                click.secho(f"- {k}: {v}")
+                vs = str(v)
+                if len(vs) > 500 and not full:
+                    vs = vs[:500] + "..."
+                click.secho(f"- {k}: {vs}")
 
     @parse_arguments
     @click.argument("path")
