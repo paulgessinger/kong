@@ -3,6 +3,7 @@ import functools
 import os
 import sys
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import (
     Collection,
     Sequence,
@@ -28,7 +29,7 @@ from ..db import database
 from ..model.job import Job
 from ..model.folder import Folder
 
-import pytz
+import sh
 
 # from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
@@ -126,6 +127,8 @@ class PrunDriver(DriverBase):
 
         import pandatools
         import pandatools.queryPandaMonUtils
+        import pandatools.Client
+
         self._pandatools = pandatools
 
     def create_job(
@@ -143,6 +146,12 @@ class PrunDriver(DriverBase):
             driver=self.__class__,
             cores=cores,
         )
+
+        log_dir = self.make_log_path(job)
+        os.makedirs(log_dir, exist_ok=True)
+
+        job.data = {"log_dir": log_dir}
+        job.save()
 
         return job
 
@@ -167,9 +176,26 @@ class PrunDriver(DriverBase):
                     job_not_found += 1
                     continue
                 job.status = map_status(item["status"])
+
+                if "dsinfo" in item and item["dsinfo"]["nfilesfailed"] > 0:
+                    logger.debug("Update based on dsinfo: %s", item["dsinfo"])
+                    job.status = Job.Status.FAILED
+
+                if (
+                    "scoutinghascritfailures" in item
+                    and item["scoutinghascritfailures"]
+                ):
+                    logger.debug("Info says job has 'scoutinghascritfailures'")
+                    job.status = Job.Status.FAILED
+
                 job.data.update(item)
-                creationdate = datetime.datetime.strptime(item["creationdate"], "%Y-%m-%d %H:%M:%S")
-                updated = datetime.datetime.strptime(item["statechangetime"], "%Y-%m-%d %H:%M:%S")
+                job.data["url"] = f"https://bigpanda.cern.ch/task/{job.batch_job_id}"
+                creationdate = datetime.datetime.strptime(
+                    item["creationdate"], "%Y-%m-%d %H:%M:%S"
+                )
+                updated = datetime.datetime.strptime(
+                    item["statechangetime"], "%Y-%m-%d %H:%M:%S"
+                )
                 job.created_at = creationdate
                 job.updated_at = updated
                 assert job.status != Job.Status.CREATED, "Job updated to created?"
@@ -230,7 +256,60 @@ class PrunDriver(DriverBase):
         raise NotImplementedError()
 
     def stdout(self, job: "Job") -> ContextManager[None]:
-        raise NotImplementedError()
+        self._check_driver(job)
+
+        if not job.status in (Job.Status.COMPLETED, Job.Status.FAILED):
+            raise ValueError("Job needs to have terminated")
+
+        datasets = job.data["datasets"]
+        # print(dataset)
+
+        # for dataset in datasets:
+        #     print(dataset["datasetname"])
+
+        # res = self._pandatools.Client.getJediTaskDetails({"jediTaskID": job.batch_job_id}, True, True, True)
+        # print(res)
+
+        rucio_home = self.prun_config["RUCIO_HOME"]
+
+        rucio = sh.Command("/usr/bin/python").bake(
+            os.path.join(rucio_home, "bin/rucio"),
+            "-S",
+            "x509",
+            _env={
+                "RUCIO_HOME": rucio_home,
+                "PYTHONPATH": self.prun_config["RUCIO_PYTHONPATH"],
+                "RUCIO_ACCOUNT": self.prun_config["RUCIO_ACCOUNT"],
+                "X509_USER_PROXY": self.prun_config["X509_USER_PROXY"],
+            },
+        )
+
+        # print(rucio())
+
+        def get_datasets(pattern: str) -> List[str]:
+            return rucio.ls("--short", pattern).strip().splitlines()
+
+        taskname = job.data["taskname"]
+
+        datasets = []
+        datasets += get_datasets(f"{taskname}.log.*")
+        datasets += get_datasets(f"panda.um.{taskname}.log.*")
+
+        logger.debug("Datasets: %s", datasets)
+
+        log_dir = Path(job.data["log_dir"])
+        assert log_dir.exists()
+
+        download_dir = log_dir / "rucio_download"
+        download_dir.mkdir(exist_ok=True)
+
+        for d in datasets:
+            try:
+                rucio.download(d, no_subdir=True, _cwd=download_dir)
+            except BaseException as e:
+                print(e.stderr.decode("utf8"))
+
+        raise ValueError()
 
     def stderr(self, job: "Job") -> ContextManager[None]:
         raise NotImplementedError()
