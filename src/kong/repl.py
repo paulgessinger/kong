@@ -651,15 +651,22 @@ class Repl(cmd.Cmd):
         assert len(jobs) == 1
         job = jobs[0]
 
-        def reader() -> Iterable[str]:
-            with open(job.data["stdout"]) as fp:
-                line = fp.readline()
-                yield line
-                while line:
-                    line = fp.readline()
-                    yield line
+        job.ensure_driver_instance(self.state.config)
 
-        click.echo_via_pager(reader())
+        # def reader() -> Iterable[str]:
+        #     # with open(job.data["stdout"]) as fp:
+        #     with job.stdout() as fp:
+        #         line = fp.readline()
+        #         yield line
+        #         while line:
+        #             line = fp.readline()
+        #             yield line
+        #
+        # iter = reader()
+        # click.echo_via_pager(iter)
+
+        with job.stdout() as fp:
+            click.echo_via_pager(fp)
 
     @parse_arguments
     @click.argument("path", nargs=-1)
