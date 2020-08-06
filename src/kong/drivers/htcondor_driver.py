@@ -164,8 +164,8 @@ class ShellHTCondorInterface(HTCondorInterface):
                 job_id,
                 condor_status,
                 exit_code,
-                item["JobCurrentStartDate"],
-                item["CompletionDate"],
+                item.get("JobCurrentStartDate", 0),
+                item.get("CompletionDate", 0),
             )
 
     def condor_q(self) -> Iterator[HTCondorAccountingItem]:

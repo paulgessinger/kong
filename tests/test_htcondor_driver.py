@@ -76,15 +76,13 @@ def test_condor_q(driver, monkeypatch, state):
   "ClusterId": 5184663,
   "JobStatus": 4,
   "ProcId": 0,
-  "JobCurrentStartDate": 1596724732,
-  "CompletionDate": 1596724743
+  "JobCurrentStartDate": 1596724732
 }
 ,
 {
   "ClusterId": 5184664,
   "JobStatus": 5,
   "ProcId": 0,
-  "JobCurrentStartDate": 1596724732,
   "CompletionDate": 1596724743
 }
 ,
@@ -121,6 +119,7 @@ def test_condor_q(driver, monkeypatch, state):
 
         start_date = datetime.utcfromtimestamp(1596724732)
         completion_date = datetime.utcfromtimestamp(1596724743)
+        t0 = datetime.utcfromtimestamp(0)
 
         ref = [
             HTCondorAccountingItem(
@@ -135,12 +134,8 @@ def test_condor_q(driver, monkeypatch, state):
             HTCondorAccountingItem(
                 5184662, Job.Status.FAILED, -1, start_date, completion_date
             ),
-            HTCondorAccountingItem(
-                5184663, Job.Status.COMPLETED, -1, start_date, completion_date
-            ),
-            HTCondorAccountingItem(
-                5184664, Job.Status.FAILED, -1, start_date, completion_date
-            ),
+            HTCondorAccountingItem(5184663, Job.Status.COMPLETED, -1, start_date, t0),
+            HTCondorAccountingItem(5184664, Job.Status.FAILED, -1, t0, completion_date),
             HTCondorAccountingItem(
                 5184665, Job.Status.FAILED, -1, start_date, completion_date
             ),
@@ -242,7 +237,6 @@ def test_condor_history(driver, monkeypatch, state):
   "JobStatus": 6,
   "ProcId": 0,
   "ExitCode": 4,
-  "JobCurrentStartDate": 1596724732,
   "CompletionDate": 1596724743
 }
 ,
@@ -294,6 +288,7 @@ def test_condor_history(driver, monkeypatch, state):
 
         start_date = datetime.utcfromtimestamp(1596724732)
         completion_date = datetime.utcfromtimestamp(1596724743)
+        t0 = datetime.utcfromtimestamp(0)
 
         ref = [
             HTCondorAccountingItem(
@@ -314,9 +309,7 @@ def test_condor_history(driver, monkeypatch, state):
             HTCondorAccountingItem(
                 5184664, Job.Status.FAILED, 3, start_date, completion_date
             ),
-            HTCondorAccountingItem(
-                5184665, Job.Status.FAILED, 4, start_date, completion_date
-            ),
+            HTCondorAccountingItem(5184665, Job.Status.FAILED, 4, t0, completion_date),
             HTCondorAccountingItem(
                 5184666, Job.Status.UNKNOWN, 0, start_date, completion_date
             ),
