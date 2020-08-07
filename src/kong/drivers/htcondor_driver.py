@@ -404,6 +404,8 @@ class HTCondorDriver(BatchDriverBase):
         for job in jobs:
             self._check_driver(job)
 
+        epoch = datetime.utcfromtimestamp(0)
+
         def proc() -> Iterable[Job]:
             job_not_found = 0
             for item in itertools.chain(
@@ -416,7 +418,10 @@ class HTCondorDriver(BatchDriverBase):
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
 
-                job.updated_at = max([item.start_date, item.completion_date])
+                updated_at = max([item.start_date, item.completion_date])
+                if updated_at == epoch:
+                    updated_at = job.created_at
+                job.updated_at = updated_at
                 yield job
             if job_not_found > 0:
                 logger.warning(

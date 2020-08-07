@@ -774,12 +774,31 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     condor_q = Mock(
         return_value=[
+            HTAI(i + 1, Job.Status.RUNNING, -1, t3, t3) for i in range(len(jobs))
+        ]
+    )
+
+    # running but with garbage timestamps
+    with monkeypatch.context() as m:
+        m.setattr(driver.htcondor, "condor_q", condor_q)
+        m.setattr(driver.htcondor, "condor_history", Mock(return_value=[]))
+
+        jobs = driver.bulk_sync_status(jobs)
+
+        driver.htcondor.condor_history.assert_called_once_with(ANY)
+        condor_q.assert_called_once_with()
+
+    for job in jobs:
+        assert job.status == Job.Status.RUNNING
+        assert job.updated_at == job.created_at
+
+    condor_q = Mock(
+        return_value=[
             HTAI(i + 1, Job.Status.RUNNING, -1, t1, t3) for i in range(len(jobs))
         ]
     )
 
     # pretend they're all running now
-
     with monkeypatch.context() as m:
         m.setattr(driver.htcondor, "condor_q", condor_q)
         m.setattr(driver.htcondor, "condor_history", Mock(return_value=[]))
