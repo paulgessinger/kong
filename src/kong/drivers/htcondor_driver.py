@@ -253,13 +253,21 @@ stdout={{stdout}}
 """.strip()
 
 batchfile_tpl_str = """
-universe = vanilla
 log = {{htcondor_out}}
 executable = {{jobscript}}
+{%- if universe is not none %}
+universe = {{universe}}
+{%- endif %}
+{%- if cores > 1 %}
 request_cpus = {{cores}}
+{%- endif %}
+{%- if memory > 0 %}
 request_memory = {{memory}}
+{%- endif %}
 batch_name = {{name}}
+{%- if walltime is not none %}
 +MaxRuntime = {{walltime}}
+{%- endif %}
 
 {{submitfile_extra}}
 
@@ -300,10 +308,10 @@ class HTCondorDriver(BatchDriverBase):
         folder: "Folder",
         command: str,
         cores: int = 1,
-        memory: int = 2000,
+        memory: int = 0,
         universe: Optional[str] = None,
         name: Optional[str] = None,
-        walltime: Union[timedelta, str] = timedelta(minutes=30),
+        walltime: Optional[Union[timedelta, str]] = timedelta(minutes=30),
     ) -> "Job":  # type: ignore
 
         if universe is None:
@@ -333,8 +341,13 @@ class HTCondorDriver(BatchDriverBase):
         batchfile = os.path.join(log_dir, "batchfile.sh")
         jobscript = os.path.join(log_dir, "jobscript.sh")
 
-        if isinstance(walltime, str):
-            norm_walltime = int(parse_timedelta(walltime).total_seconds())
+        if walltime is None:
+            norm_walltime = None
+        elif isinstance(walltime, str):
+            if walltime == "None":
+                norm_walltime = None
+            else:
+                norm_walltime = int(parse_timedelta(walltime).total_seconds())
         elif isinstance(walltime, timedelta):
             norm_walltime = int(walltime.total_seconds())
         else:
