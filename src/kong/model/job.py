@@ -3,6 +3,7 @@ from concurrent.futures._base import Executor
 from contextlib import contextmanager
 from enum import IntFlag
 from functools import wraps
+from pathlib import Path
 from typing import Any, List, Dict, Union, cast, TYPE_CHECKING, Optional, Type, Iterator
 
 import peewee as pw
@@ -254,15 +255,13 @@ class Job(BaseModel):
         return self.status
 
     @with_driver  # type: ignore
-    @contextmanager  # type: ignore
-    def stdout(self, driver: DriverBase) -> Iterator[None]:
+    def stdout(self, driver: DriverBase) -> Path:
         """
         stdout()
 
         Convenience context manager to open a read file handle to the job's stdout.
         """
-        with driver.stdout(self) as fh:
-            yield fh
+        return driver.stdout(self)
 
     @with_driver  # type: ignore
     @contextmanager  # type: ignore

@@ -506,12 +506,10 @@ class State:
         :return: The created Job
         """
 
-        if "folder" in kwargs:
-            raise ValueError("To submit to explicit folder, use driver directly")
-        if "driver" in kwargs:
-            raise ValueError("To submit with explicit driver, use it directly")
-        kwargs["folder"] = self.cwd
-        return self.default_driver.create_job(*args, **kwargs)
+        kwargs.setdefault("folder", self.cwd)
+        driver = kwargs.pop("driver", self.default_driver)
+
+        return driver.create_job(*args, **kwargs)
 
     def _extract_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
         jobs: List[Job] = []

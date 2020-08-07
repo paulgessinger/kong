@@ -3,7 +3,9 @@ import functools
 import os
 import sys
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from pathlib import Path
+import shlex
 from typing import (
     Collection,
     Sequence,
@@ -16,7 +18,7 @@ from typing import (
     Dict,
     Any,
 )
-from concurrent.futures import Executor
+from concurrent.futures import Executor, ThreadPoolExecutor
 import re
 
 from .batch_driver_base import BatchDriverBase
@@ -255,61 +257,76 @@ class PrunDriver(DriverBase):
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
         raise NotImplementedError()
 
-    def stdout(self, job: "Job") -> ContextManager[None]:
+    def stdout(self, job: "Job") -> Path:
         self._check_driver(job)
 
         if not job.status in (Job.Status.COMPLETED, Job.Status.FAILED):
             raise ValueError("Job needs to have terminated")
 
-        datasets = job.data["datasets"]
-        # print(dataset)
-
-        # for dataset in datasets:
-        #     print(dataset["datasetname"])
-
-        # res = self._pandatools.Client.getJediTaskDetails({"jediTaskID": job.batch_job_id}, True, True, True)
-        # print(res)
-
-        rucio_home = self.prun_config["RUCIO_HOME"]
-
-        rucio = sh.Command("/usr/bin/python").bake(
-            os.path.join(rucio_home, "bin/rucio"),
-            "-S",
-            "x509",
-            _env={
-                "RUCIO_HOME": rucio_home,
-                "PYTHONPATH": self.prun_config["RUCIO_PYTHONPATH"],
-                "RUCIO_ACCOUNT": self.prun_config["RUCIO_ACCOUNT"],
-                "X509_USER_PROXY": self.prun_config["X509_USER_PROXY"],
-            },
-        )
-
-        # print(rucio())
-
-        def get_datasets(pattern: str) -> List[str]:
-            return rucio.ls("--short", pattern).strip().splitlines()
-
-        taskname = job.data["taskname"]
-
-        datasets = []
-        datasets += get_datasets(f"{taskname}.log.*")
-        datasets += get_datasets(f"panda.um.{taskname}.log.*")
-
-        logger.debug("Datasets: %s", datasets)
-
         log_dir = Path(job.data["log_dir"])
-        assert log_dir.exists()
 
-        download_dir = log_dir / "rucio_download"
-        download_dir.mkdir(exist_ok=True)
+        combined_log = log_dir / "combined_stdout.txt"
 
-        for d in datasets:
-            try:
-                rucio.download(d, no_subdir=True, _cwd=download_dir)
-            except BaseException as e:
-                print(e.stderr.decode("utf8"))
+        if not combined_log.exists():
 
-        raise ValueError()
+            bash = sh.Command("bash")
+
+            def rucio(*args, **kwargs):
+                args = " ".join(map(shlex.quote, args))
+                c = f"source ${{ATLAS_LOCAL_ROOT_BASE}}/user/atlasLocalSetup.sh > /dev/null 2>&1;lsetup rucio > /dev/null 2>&1; rucio {args}"
+                logger.debug(c)
+                return bash("-c", c, **kwargs)
+
+            tar = sh.Command("tar")
+
+            def get_datasets(pattern: str) -> List[str]:
+                return rucio("ls", "--short", pattern).strip().splitlines()
+
+            taskname = job.data["taskname"]
+            if taskname.endswith("/"):
+                taskname = taskname[:-1]
+
+            with ThreadPoolExecutor() as ex:
+                datasets = sum(
+                    ex.map(
+                        get_datasets,
+                        (f"{taskname}.log.*", f"panda.um.{taskname}.log.*"),
+                    ),
+                    [],
+                )
+
+                logger.debug("Datasets: %s", datasets)
+
+                assert log_dir.exists()
+
+                download_dir = log_dir / "rucio_download"
+                download_dir.mkdir(exist_ok=True)
+
+                def download(d):
+                    try:
+                        rucio("download", d, "--no-subdir", _cwd=download_dir)
+                    except BaseException as e:
+                        logger.error(e.stderr.decode("utf8"))
+
+                datasets = list(ex.map(download, datasets))
+
+            for file in download_dir.iterdir():
+                if file.suffix == ".tgz":
+                    tar("-xvf", file, "-C", log_dir)
+
+            with combined_log.open("w") as ofh:
+                for outfile in log_dir.rglob("*/payload.stdout"):
+                    logger.debug(outfile)
+                    with outfile.open("r") as ifh:
+                        head = f"#### {outfile} ####"
+                        ofh.write("#" * len(head) + "\n")
+                        ofh.write(f"{head}\n")
+                        ofh.write("#" * len(head) + "\n")
+                        ofh.write("\n\n")
+                        ofh.write(ifh.read())
+                        ofh.write("\n\n")
+
+        return combined_log
 
     def stderr(self, job: "Job") -> ContextManager[None]:
         raise NotImplementedError()

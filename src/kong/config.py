@@ -37,10 +37,6 @@ prun_schema = Schema(
         "PANDA_PYTHONPATH": And(str, len),
         "emi_path": And(str, len),
         "PATHENA_GRID_SETUP_SH": And(str, len),
-        "RUCIO_HOME": And(str, len),
-        "RUCIO_PYTHONPATH": And(str, len),
-        "RUCIO_ACCOUNT": And(str, len),
-        "X509_USER_PROXY": And(str, len),
     }
 )
 

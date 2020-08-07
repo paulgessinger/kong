@@ -665,7 +665,10 @@ class Repl(cmd.Cmd):
         # iter = reader()
         # click.echo_via_pager(iter)
 
-        with job.stdout() as fp:
+        with Spinner("Retrieving standard output"):
+            stdout = job.stdout()
+
+        with stdout.open() as fp:
             click.echo_via_pager(fp)
 
     @parse_arguments
