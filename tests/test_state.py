@@ -11,6 +11,7 @@ import peewee as pw
 
 import kong
 from kong.config import Config
+from kong.drivers.driver_base import DriverBase
 from kong.drivers.local_driver import LocalDriver
 from kong.model.folder import Folder
 from kong.model.job import Job
@@ -685,13 +686,32 @@ def test_create_job(state, db):
     assert j2.folder == f2
     assert len(f2.jobs) == 1 and f2.jobs[0] == j2
 
-    # no explicit folder
-    with pytest.raises(ValueError):
-        state.create_job(command="a", folder="blub")
 
-    # no explicit driver
-    with pytest.raises(ValueError):
-        state.create_job(command="a", driver="blub")
+def test_create_job_explicit_driver(state, monkeypatch):
+    monkeypatch.setattr(
+        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
+    )
+
+    driver = DriverBase(state.config)
+
+    with monkeypatch.context() as m:
+        m.setattr(driver, "create_job", Mock())
+
+        state.create_job(command="sleep 10")
+        assert driver.create_job.call_count == 0
+
+        state.create_job(command="sleep 10", driver=driver)
+        driver.create_job.assert_called_once_with(command="sleep 10", folder=state.cwd)
+
+    class FakeDriver(DriverBase):
+        pass
+
+    FakeDriver.__init__ = Mock(return_value=None)
+    FakeDriver.create_job = Mock()
+    state.create_job(command="sleep 10", driver=FakeDriver)
+
+    FakeDriver.__init__.assert_called_once_with(state.config)
+    FakeDriver.create_job.assert_called_once_with(command="sleep 10", folder=state.cwd)
 
 
 def test_get_jobs(state):

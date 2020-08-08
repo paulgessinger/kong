@@ -4,6 +4,7 @@ import tempfile
 import os
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from subprocess import Popen
 from typing import (
     Any,
@@ -330,15 +331,12 @@ class LocalDriver(DriverBase):
 
         logger.debug("Submitted job as %s", job)
 
-    @checked_job  # type: ignore
-    @contextmanager  # type: ignore
     def stdout(self, job: Job) -> Iterator[IO[str]]:
         self.sync_status(job)
         if job.status not in (Job.Status.FAILED, Job.Status.COMPLETED):
             raise InvalidJobStatus("Cannot get stdout for job in status %s", job.status)
 
-        with open(job.data["stdout"], "r") as fh:
-            yield fh
+        return Path(job.data["stdout"])
 
     @checked_job  # type: ignore
     @contextmanager  # type: ignore

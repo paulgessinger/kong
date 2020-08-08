@@ -182,7 +182,7 @@ def set_verbosity(verbosity: int) -> None:
         global_level = logging.WARNING
     elif verbosity <= 1:
         level = logging.INFO
-        global_level = logging.INFO
+        global_level = logging.WARNING
     elif verbosity <= 2:
         level = logging.DEBUG
         global_level = logging.INFO

@@ -35,6 +35,7 @@ import sh
 
 # from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
+from ..util import chunks
 
 
 def commands_get_status_output_decorator(emi_path, fn):
@@ -162,14 +163,27 @@ class PrunDriver(DriverBase):
         for job in jobs:
             self._check_driver(job)
 
-        task_ids = "|".join([str(job.batch_job_id) for job in jobs])
+        task_ids = [str(job.batch_job_id) for job in jobs]
+
+        def load(task_ids_chunk):
+            _, _, _data = self._pandatools.queryPandaMonUtils.query_tasks(
+                jeditaskid="|".join(task_ids_chunk)
+            )
+
+            if len(_data) == 0:
+                logger.warning("queryPandaMonUtils returned empty result")
+
+            return _data
+
+        with ThreadPoolExecutor(5) as ex:
+
+            data = sum(ex.map(load, chunks(task_ids, 20)), [])
+
+        logger.debug("Length of result data: %d", len(data))
 
         now = datetime.datetime.now()
 
         def proc() -> Iterable[Job]:
-            _, _, data = self._pandatools.queryPandaMonUtils.query_tasks(
-                jeditaskid=task_ids
-            )
 
             job_not_found = 0
             for item in data:
@@ -179,9 +193,9 @@ class PrunDriver(DriverBase):
                     continue
                 job.status = map_status(item["status"])
 
-                if "dsinfo" in item and item["dsinfo"]["nfilesfailed"] > 0:
-                    logger.debug("Update based on dsinfo: %s", item["dsinfo"])
-                    job.status = Job.Status.FAILED
+                # if "dsinfo" in item and item["dsinfo"]["nfilesfailed"] > 0:
+                #     logger.debug("Update based on dsinfo: %s", item["dsinfo"])
+                #     job.status = Job.Status.FAILED
 
                 if (
                     "scoutinghascritfailures" in item

@@ -13,6 +13,7 @@ import peewee as pw
 from click import UsageError
 from conftest import skip_lxplus
 
+from kong.drivers.driver_base import DriverBase
 from kong.model import BaseModel
 from kong.model.folder import Folder
 from kong.model.job import Job
@@ -807,6 +808,29 @@ def test_create_job(repl, state, tree, capsys):
     j4 = root.jobs[-1]
     assert j4.command == "exe --and --some arguments --and options"
 
+def test_create_job_explicit_driver(repl, state, monkeypatch):
+    monkeypatch.setattr(
+        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
+    )
+
+    driver = DriverBase(state.config)
+
+    with monkeypatch.context() as m:
+        m.setattr(state, "create_job", Mock())
+        fake_driver = Mock()
+        get_driver = Mock(return_value=fake_driver)
+        m.setattr("kong.repl.get_driver", get_driver)
+
+        repl.onecmd("create_job 'sleep 10'")
+        assert get_driver.call_count == 0
+        state.create_job.assert_called_once_with(command="sleep 10", driver=state.default_driver)
+
+        state.create_job.reset_mock()
+
+        repl.onecmd("create_job 'sleep 10' --driver BLUBDRIVER")
+        get_driver.assert_called_once_with("BLUBDRIVER")
+
+        state.create_job.assert_called_once_with(command="sleep 10", driver=fake_driver)
 
 def test_create_job_extra_arguments(repl, state, tree, monkeypatch):
     root = tree

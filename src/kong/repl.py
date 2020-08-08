@@ -20,6 +20,8 @@ import click
 import peewee as pw
 from click import style
 from kong.model.job import color_dict
+from .drivers import get_driver
+from .drivers.driver_base import DriverBase
 from .table import format_table
 
 from .util import shorten_path, Spinner, set_verbosity
@@ -505,7 +507,8 @@ class Repl(cmd.Cmd):
         multiple=True,
         help="Provide extra arguments like `--argument name=value`",
     )
-    def do_create_job(self, command: List[str], arguments_raw: List[str]) -> None:
+    @click.option("--driver", "-d")
+    def do_create_job(self, command: List[str], arguments_raw: List[str], driver: Optional[str]) -> None:
         """
         Create a job with command COMMAND for processing.
         Additional arguments can be provided and are passed to the driver for verification.
@@ -531,7 +534,12 @@ class Repl(cmd.Cmd):
 
         logger.debug("Got extra arguments: %s", arguments)
 
-        job = self.state.create_job(command=command_str, **arguments)
+        _driver: DriverBase = self.state.default_driver
+        if driver is not None:
+            _driver = get_driver(driver)
+
+
+        job = self.state.create_job(command=command_str, **arguments, driver=_driver)
         click.secho(f"Created job {job}")
 
     @parse_arguments

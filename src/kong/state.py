@@ -206,7 +206,7 @@ class State:
             else:
                 jobs = list(self.refresh_jobs(jobs))
 
-        return list(folder.children), jobs
+        return list(folder.children), list(jobs)
 
     def cd(self, target: Union[str, Folder] = ".") -> None:
         """
@@ -509,7 +509,12 @@ class State:
         kwargs.setdefault("folder", self.cwd)
         driver = kwargs.pop("driver", self.default_driver)
 
-        return driver.create_job(*args, **kwargs)
+        if isinstance(driver, DriverBase):
+            _driver = driver
+        elif issubclass(driver, DriverBase):
+            _driver = driver(self.config)
+
+        return _driver.create_job(*args, **kwargs)
 
     def _extract_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
         jobs: List[Job] = []

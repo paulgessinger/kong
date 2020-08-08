@@ -3,6 +3,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, Executor, as_completed
 from contextlib import contextmanager
+from pathlib import Path
 from typing import (
     Iterable,
     Dict,
@@ -120,11 +121,8 @@ class BatchDriverBase(DriverBase):
                 batch_size=self.batch_size,
             )
 
-    @checked_job  # type: ignore
-    @contextmanager  # type: ignore
     def stdout(self, job: Job) -> Iterator[IO[str]]:
-        with open(job.data["stdout"], "r") as fh:
-            yield fh
+        return Path(job.data["stdout"])
 
     def stderr(self, job: "Job") -> ContextManager[None]:
         raise NotImplementedError("Stderr goes to stdout in slurm")
