@@ -186,7 +186,7 @@ def test_fancy_operator(db):
     assert root / "f1" / "f2" / "f4" == f4
 
 
-def test_folders_recursive(db, state, monkeypatch):
+def test_folders_recursive(db, state, monkeypatch, sqlite_version):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
     f2 = f1.add_folder("f2")
@@ -202,7 +202,7 @@ def test_folders_recursive(db, state, monkeypatch):
         assert set(folders) == set([f1, f2, f3, f4])
 
 
-def test_jobs_recursive(db, state, monkeypatch):
+def test_jobs_recursive(db, state, monkeypatch, sqlite_version):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
     f2 = f1.add_folder("f2")
@@ -215,12 +215,6 @@ def test_jobs_recursive(db, state, monkeypatch):
     jobs = root.jobs_recursive()
     assert len(jobs) == 2
     assert all(a == b for a, b in zip(jobs, [j1, j2]))
-
-    with monkeypatch.context() as m:
-        m.setattr("sqlite3.sqlite_version_info", (3, 7, 17))
-        jobs = root.jobs_recursive()
-        assert len(jobs) == 2
-        assert all(a == b for a, b in zip(jobs, [j1, j2]))
 
 
 def test_job_stats(db, state, monkeypatch):
