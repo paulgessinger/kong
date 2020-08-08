@@ -198,15 +198,15 @@ class State:
         if folder is None:
             raise pw.DoesNotExist()
 
-        jobs = folder.jobs
+        if recursive:
+            jobs = folder.jobs_recursive()
+        else:
+            jobs = folder.jobs
 
-        if refresh and len(jobs) > 0:
-            if recursive:
-                jobs = list(self.refresh_jobs(list(folder.jobs_recursive())))
-            else:
-                jobs = list(self.refresh_jobs(jobs))
+        if refresh:
+            jobs = self.refresh_jobs(list(jobs))
 
-        return list(folder.children), jobs
+        return list(folder.children), list(jobs)
 
     def cd(self, target: Union[str, Folder] = ".") -> None:
         """
