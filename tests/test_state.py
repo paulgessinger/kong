@@ -84,9 +84,11 @@ def test_ls(tree, state, sample_jobs):
 def test_ls_recursive(state, monkeypatch, sqlite_version):
     root = Folder.get_root()
     f1 = root.add_folder("f1")
-    jobs1 = [state.create_job(command="sleep 1", folder=f1) for _ in range(10)]
+    with state.pushd(f1):
+        jobs1 = [state.create_job(command="sleep 1") for _ in range(10)]
     f2 = f1.add_folder("f2")
-    jobs2 = [state.create_job(command="sleep 1", folder=f2) for _ in range(10)]
+    with state.pushd(f2):
+        jobs2 = [state.create_job(command="sleep 1") for _ in range(10)]
 
     _, jobs = state.ls("/", recursive=True)
     assert jobs == jobs1 + jobs2
