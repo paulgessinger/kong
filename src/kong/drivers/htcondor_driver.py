@@ -1,4 +1,3 @@
-import itertools
 import json
 import os
 import re
@@ -406,11 +405,15 @@ class HTCondorDriver(BatchDriverBase):
 
         epoch = datetime.utcfromtimestamp(0)
 
+        item_map = {item.job_id: item for item in self.htcondor.condor_q()}
+        # only add history info if we didn't have info in queue
+        for item in self.htcondor.condor_history(self.log_file):
+            if item.job_id not in item_map:
+                item_map[item.job_id] = item
+
         def proc() -> Iterable[Job]:
             job_not_found = 0
-            for item in itertools.chain(
-                self.htcondor.condor_q(), self.htcondor.condor_history(self.log_file)
-            ):
+            for item in item_map.values():
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
                     job_not_found += 1
@@ -424,8 +427,8 @@ class HTCondorDriver(BatchDriverBase):
                 job.updated_at = updated_at
                 yield job
             if job_not_found > 0:
-                logger.warning(
-                    "Tried to fetch %d slurm jobs which where not found in the database",
+                logger.debug(
+                    "Tried to fetch %d htcondor jobs which where not found in the database",
                     job_not_found,
                 )
 
