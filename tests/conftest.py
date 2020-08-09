@@ -128,7 +128,7 @@ def state(app_env, db, monkeypatch):
             "click.prompt",
             Mock(
                 side_effect=[
-                    "kong.drivers.local_driver.LocalDriver",
+                    "kong.driver.local_driver.LocalDriver",
                     os.path.join(app_dir, "joblog"),
                     os.path.join(app_dir, "joboutput"),
                 ]

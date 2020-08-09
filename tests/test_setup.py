@@ -16,7 +16,7 @@ def test_setup(app_env, monkeypatch):
     with monkeypatch.context() as m:
         prompt = Mock(
             side_effect=[
-                "kong.drivers.local_driver.LocalDriver",
+                "kong.driver.local_driver.LocalDriver",
                 os.path.join(tmp_path, "jobs"),
                 os.path.join(tmp_path, "joboutput"),
             ]
@@ -25,7 +25,7 @@ def test_setup(app_env, monkeypatch):
         kong.setup.setup(None)
         prompt.assert_has_calls(
             [
-                call(mock.ANY, default="kong.drivers.local_driver.LocalDriver"),
+                call(mock.ANY, default="kong.driver.local_driver.LocalDriver"),
                 call(mock.ANY, default=os.path.join(app_dir, "jobdir")),
                 call(mock.ANY, default=os.path.join(app_dir, "joboutput")),
             ]
@@ -35,7 +35,7 @@ def test_setup(app_env, monkeypatch):
 
     with open(config_path) as f:
         data = yaml.safe_load(f)
-    assert data["default_driver"] == "kong.drivers.local_driver.LocalDriver"
+    assert data["default_driver"] == "kong.driver.local_driver.LocalDriver"
     assert data["jobdir"] == os.path.join(tmp_path, "jobs")
     assert data["joboutputdir"] == os.path.join(tmp_path, "joboutput")
     assert "history_length" in data
@@ -48,7 +48,7 @@ def test_setup(app_env, monkeypatch):
     with monkeypatch.context() as m:
         prompt = Mock(
             side_effect=[
-                "kong.drivers.local_driver.LocalDriver",
+                "kong.driver.local_driver.LocalDriver",
                 os.path.join(tmp_path, "jobs_new"),
                 os.path.join(tmp_path, "joboutput_new"),
             ]
@@ -58,7 +58,7 @@ def test_setup(app_env, monkeypatch):
         # should provide default from before
         prompt.assert_has_calls(
             [
-                call(mock.ANY, default="kong.drivers.local_driver.LocalDriver"),
+                call(mock.ANY, default="kong.driver.local_driver.LocalDriver"),
                 call(mock.ANY, default=os.path.join(tmp_path, "jobs")),
                 call(mock.ANY, default=os.path.join(tmp_path, "joboutput")),
             ]
@@ -67,7 +67,7 @@ def test_setup(app_env, monkeypatch):
     with open(config_path) as f:
         data = yaml.safe_load(f)
     assert (
-        data["default_driver"] == "kong.drivers.local_driver.LocalDriver"
+        data["default_driver"] == "kong.driver.local_driver.LocalDriver"
     )  # still the same
     assert data["jobdir"] == os.path.join(tmp_path, "jobs_new")  # this has changed
     assert data["joboutputdir"] == os.path.join(
@@ -84,5 +84,5 @@ def test_setup_invalid_driver(app_env, monkeypatch):
         with pytest.raises(ValueError):
             kong.setup.setup(None)
         prompt.assert_has_calls(
-            [call(mock.ANY, default="kong.drivers.local_driver.LocalDriver")]
+            [call(mock.ANY, default="kong.driver.local_driver.LocalDriver")]
         )

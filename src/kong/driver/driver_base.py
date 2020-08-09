@@ -16,7 +16,7 @@ from typing import (
 )
 from abc import abstractmethod, ABC
 
-from kong.drivers import DriverMismatch
+from kong.driver import DriverMismatch
 from kong.util import exhaust
 from ..executor import SerialExecutor
 from ..logger import logger

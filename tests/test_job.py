@@ -5,9 +5,9 @@ from unittest.mock import Mock, ANY, MagicMock
 import pytest
 
 from kong import config
-from kong.drivers.local_driver import LocalDriver
-import kong.drivers
-from kong.drivers import DriverMismatch
+from kong.driver.local_driver import LocalDriver
+import kong.driver
+from kong.driver import DriverMismatch
 from kong.model.job import Job
 from kong.model.folder import Folder
 import peewee as pw
@@ -80,11 +80,9 @@ def test_set_driver(state, monkeypatch):
     assert j1._driver_instance is None
 
     # bypass interface
-    monkeypatch.setattr(
-        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
-    )
+    monkeypatch.setattr("kong.driver.driver_base.DriverBase.__abstractmethods__", set())
 
-    class ValidDriver(kong.drivers.driver_base.DriverBase):
+    class ValidDriver(kong.driver.driver_base.DriverBase):
         def __init__(self):
             pass
 

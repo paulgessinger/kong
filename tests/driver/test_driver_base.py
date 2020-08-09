@@ -3,16 +3,14 @@ from unittest.mock import Mock
 import pytest
 import inspect
 
-from kong.drivers import DriverMismatch
-from kong.drivers.driver_base import DriverBase, checked_job
+from kong.driver import DriverMismatch
+from kong.driver.driver_base import DriverBase, checked_job
 from kong.model.job import Job
 
 
 @pytest.fixture
 def noabc(monkeypatch):
-    monkeypatch.setattr(
-        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
-    )
+    monkeypatch.setattr("kong.driver.driver_base.DriverBase.__abstractmethods__", set())
 
 
 @pytest.fixture

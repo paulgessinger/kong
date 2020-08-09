@@ -8,8 +8,8 @@ import pytest
 
 from kong import util
 from kong.config import Config, slurm_schema
-from kong.drivers import InvalidJobStatus
-from kong.drivers.slurm_driver import (
+from kong.driver import InvalidJobStatus
+from kong.driver.slurm_driver import (
     SlurmInterface,
     SlurmDriver,
     SlurmAccountingItem,
@@ -833,7 +833,7 @@ def test_cleanup_driver_already_deleted(driver, state, monkeypatch):
     assert not os.path.exists(j1.data["log_dir"])
     rmtree = Mock(wraps=util.rmtree)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         driver.cleanup(j1)
     rmtree.assert_has_calls([call(j1.data["output_dir"])])
 
@@ -868,7 +868,7 @@ def test_job_bulk_cleanup(driver, state, monkeypatch):
 
     rmtree = Mock(side_effect=OSError)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
     rmtree.assert_has_calls(
         [

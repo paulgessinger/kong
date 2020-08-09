@@ -17,7 +17,7 @@ from typing import (
     cast,
 )
 
-from kong.drivers import InvalidJobStatus
+from kong.driver import InvalidJobStatus
 from kong.logger import logger
 from kong.util import rmtree, chunks
 from .driver_base import DriverBase, checked_job

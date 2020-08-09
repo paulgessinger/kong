@@ -11,10 +11,10 @@ import peewee as pw
 
 import kong
 from kong.config import Config
-from kong.drivers.local_driver import LocalDriver
+from kong.driver.local_driver import LocalDriver
 from kong.model.folder import Folder
 from kong.model.job import Job
-import kong.drivers
+import kong.driver
 from kong.state import DoesNotExist, CannotCreateError, CannotRemoveIsFolder
 from kong.util import exhaust
 
@@ -27,7 +27,7 @@ def cfg(app_env, monkeypatch):
             "click.prompt",
             Mock(
                 side_effect=[
-                    "kong.drivers.local_driver.LocalDriver",
+                    "kong.driver.local_driver.LocalDriver",
                     os.path.join(app_dir, "joblog"),
                     os.path.join(app_dir, "joboutput"),
                 ]
@@ -136,7 +136,7 @@ def test_ls_refresh(tree, state, sample_jobs):
     assert all(j.status == Job.Status.COMPLETED for j in sample_jobs)
 
 
-class ValidDriver(kong.drivers.local_driver.LocalDriver):
+class ValidDriver(kong.driver.local_driver.LocalDriver):
     def __init__(self, config: Config):
         pass
 
@@ -998,7 +998,7 @@ def test_wait(state, monkeypatch):
     driver.bulk_sync_status = Mock(return_value=jobs[0])
 
     factory = Mock(return_value=driver)
-    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver", factory)
+    monkeypatch.setattr("kong.driver.local_driver.LocalDriver", factory)
 
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
 
@@ -1037,9 +1037,9 @@ def test_wait(state, monkeypatch):
 
 def test_wait_recursive(state, monkeypatch):
     monkeypatch.setattr(
-        "kong.drivers.driver_base.DriverBase._check_driver", Mock(return_value=True)
+        "kong.driver.driver_base.DriverBase._check_driver", Mock(return_value=True)
     )
-    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver.sync_status", Mock())
+    monkeypatch.setattr("kong.driver.local_driver.LocalDriver.sync_status", Mock())
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
 
     def wait(jobs, *args, **kwargs):
@@ -1050,7 +1050,7 @@ def test_wait_recursive(state, monkeypatch):
 
     with monkeypatch.context() as m:
         m.setattr(
-            "kong.drivers.local_driver.LocalDriver.wait_gen", Mock(side_effect=wait)
+            "kong.driver.local_driver.LocalDriver.wait_gen", Mock(side_effect=wait)
         )
 
         j1 = state.create_job(command="sleep 1")
@@ -1083,7 +1083,7 @@ def test_wait_timeout(state, monkeypatch):
     driver.wait.side_effect = TimeoutError
 
     factory = Mock(return_value=driver)
-    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver", factory)
+    monkeypatch.setattr("kong.driver.local_driver.LocalDriver", factory)
 
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
 
@@ -1106,7 +1106,7 @@ def test_wait_failure(state, monkeypatch):
     jarr = [[j1]]
 
     wait = Mock(return_value=iter(jarr))
-    monkeypatch.setattr("kong.drivers.local_driver.LocalDriver.wait", wait)
+    monkeypatch.setattr("kong.driver.local_driver.LocalDriver.wait", wait)
     monkeypatch.setattr("kong.state.Spinner", MagicMock())
 
     with monkeypatch.context() as m:

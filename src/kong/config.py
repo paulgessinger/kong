@@ -42,9 +42,9 @@ htcondor_schema = Schema(
 
 config_schema = Schema(
     {
-        Optional(
-            "default_driver", default="kong.drivers.local_driver.LocalDriver"
-        ): And(str, len),
+        Optional("default_driver", default="kong.driver.local_driver.LocalDriver"): And(
+            str, len
+        ),
         Optional(
             "jobdir", default=lambda: os.path.join(APP_DIR, "jobdir")
         ): os.path.exists,

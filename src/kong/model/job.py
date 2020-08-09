@@ -9,8 +9,8 @@ import peewee as pw
 
 from ..json_field import JSONField
 from ..db import AutoIncrementField
-from ..drivers import DriverMismatch
-from ..drivers.driver_base import DriverBase
+from ..driver import DriverMismatch
+from ..driver.driver_base import DriverBase
 from ..config import Config
 from ..model.folder import Folder
 from . import BaseModel
