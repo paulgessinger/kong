@@ -106,19 +106,11 @@ class BatchDriverBase(DriverBase):
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
         now = datetime.datetime.utcnow()
 
-        def sub() -> Iterable[Job]:
-            for job in jobs:
-                assert job.driver == self.__class__, "Not valid for different driver"
-                self.submit(job, save=False)
-                job.updated_at = now
-                yield job
-
-        with database.atomic():
-            Job.bulk_update(
-                sub(),
-                fields=[Job.batch_job_id, Job.status, Job.updated_at],
-                batch_size=self.batch_size,
-            )
+        for job in jobs:
+            assert job.driver == self.__class__, "Not valid for different driver"
+            self.submit(job, save=False)
+            job.updated_at = now
+            job.save()
 
     @checked_job  # type: ignore
     @contextmanager  # type: ignore
