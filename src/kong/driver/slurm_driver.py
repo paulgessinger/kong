@@ -19,8 +19,8 @@ from typing import (
 import sh
 from jinja2 import Environment, DictLoader
 
-from kong.drivers.batch_driver_base import BatchDriverBase
-from ..drivers import InvalidJobStatus
+from kong.driver.batch_driver_base import BatchDriverBase
+from ..driver import InvalidJobStatus
 from ..logger import logger
 from ..config import Config
 from ..db import database

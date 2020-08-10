@@ -6,8 +6,8 @@ import click
 
 from . import config
 from .logger import logger
-from . import drivers
-from .drivers import get_driver
+from . import driver
+from .driver import get_driver
 
 
 def setup(cfg: Optional[config.Config]) -> None:
@@ -28,7 +28,7 @@ def setup(cfg: Optional[config.Config]) -> None:
 
     try:
         assert issubclass(
-            get_driver(data["default_driver"]), drivers.driver_base.DriverBase
+            get_driver(data["default_driver"]), driver.driver_base.DriverBase
         ), "Please provide a valid driver"
     except Exception:
         raise ValueError(f"{data['default_driver']} is not a valid driver")

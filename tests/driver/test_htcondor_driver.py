@@ -9,8 +9,8 @@ import pytest
 
 from kong import util
 from kong.config import Config, slurm_schema
-from kong.drivers import InvalidJobStatus, get_driver
-from kong.drivers.htcondor_driver import (
+from kong.driver import InvalidJobStatus, get_driver
+from kong.driver.htcondor_driver import (
     HTCondorInterface,
     HTCondorDriver,
     HTCondorAccountingItem,
@@ -343,7 +343,7 @@ def test_driver_create(state, monkeypatch):
     monkeypatch.setattr("os.path.exists", Mock(return_value=True))
     monkeypatch.setattr("os.path.getsize", Mock(return_value=40 * 1e6))
     warning = Mock()
-    monkeypatch.setattr("kong.drivers.htcondor_driver.logger.warning", warning)
+    monkeypatch.setattr("kong.driver.htcondor_driver.logger.warning", warning)
 
     assert warning.call_count == 0
 
@@ -1087,7 +1087,7 @@ def test_cleanup_driver_already_deleted(driver, state, monkeypatch):
     assert not os.path.exists(j1.data["log_dir"])
     rmtree = Mock(wraps=util.rmtree)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         driver.cleanup(j1)
     rmtree.assert_has_calls([call(j1.data["output_dir"])])
 
@@ -1124,7 +1124,7 @@ def test_job_bulk_cleanup(driver, state, monkeypatch):
 
     rmtree = Mock(side_effect=OSError)
     with monkeypatch.context() as m:
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
     rmtree.assert_has_calls(
         [
@@ -1186,5 +1186,5 @@ def test_job_bulk_remove(driver, state, monkeypatch):
 
 
 def test_get_htcondor_driver():
-    driver_class = get_driver("kong.drivers.htcondor_driver.HTCondorDriver")
+    driver_class = get_driver("kong.driver.htcondor_driver.HTCondorDriver")
     assert driver_class == HTCondorDriver

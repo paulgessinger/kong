@@ -7,8 +7,8 @@ import psutil
 import pytest
 from unittest.mock import Mock, call
 
-from kong.drivers import DriverMismatch, InvalidJobStatus
-from kong.drivers.local_driver import LocalDriver
+from kong.driver import DriverMismatch, InvalidJobStatus
+from kong.driver.local_driver import LocalDriver
 import kong
 from kong.model.folder import Folder
 from conftest import skip_lxplus
@@ -24,7 +24,7 @@ def state(app_env, db, monkeypatch):
             "click.prompt",
             Mock(
                 side_effect=[
-                    "kong.drivers.local_driver.LocalDriver",
+                    "kong.driver.local_driver.LocalDriver",
                     os.path.join(app_dir, "joblog"),
                     os.path.join(app_dir, "joboutput"),
                 ]
@@ -81,7 +81,7 @@ def test_create_job(driver, tree, state):
     assert j1.batch_job_id != j2.batch_job_id
 
 
-class ValidDriver(kong.drivers.driver_base.DriverBase):
+class ValidDriver(kong.driver.driver_base.DriverBase):
     def __init__(self):
         pass
 
@@ -89,9 +89,7 @@ class ValidDriver(kong.drivers.driver_base.DriverBase):
 def test_driver_mismatch(driver, state, monkeypatch):
     root = Folder.get_root()
 
-    monkeypatch.setattr(
-        "kong.drivers.driver_base.DriverBase.__abstractmethods__", set()
-    )
+    monkeypatch.setattr("kong.driver.driver_base.DriverBase.__abstractmethods__", set())
 
     j1 = Job.create(folder=root, command="sleep 1", driver=ValidDriver)
     assert j1.driver == ValidDriver

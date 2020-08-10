@@ -4,14 +4,14 @@ from unittest.mock import Mock
 import pytest
 from typing import Optional
 
-from kong.drivers.batch_driver_base import BatchDriverBase
+from kong.driver.batch_driver_base import BatchDriverBase
 from kong.model.job import Job
 
 
 @pytest.fixture
 def noabc(monkeypatch):
     monkeypatch.setattr(
-        "kong.drivers.batch_driver_base.BatchDriverBase.__abstractmethods__", set()
+        "kong.driver.batch_driver_base.BatchDriverBase.__abstractmethods__", set()
     )
 
 
@@ -28,12 +28,12 @@ def test_bulk_cleanup(state, driver, monkeypatch):
 
     sync = Mock(side_effect=lambda j: j)
     monkeypatch.setattr(
-        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
+        "kong.driver.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
     )
 
     with monkeypatch.context() as m:
         rmtree = Mock()
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         driver.bulk_cleanup(jobs)
         assert rmtree.call_count == 3 * 2
 
@@ -63,7 +63,7 @@ def test_bulk_cleanup(state, driver, monkeypatch):
 
     with monkeypatch.context() as m:
         rmtree = Mock()
-        m.setattr("kong.drivers.batch_driver_base.rmtree", rmtree)
+        m.setattr("kong.driver.batch_driver_base.rmtree", rmtree)
         it = driver.bulk_cleanup(jobs, progress=True, ex=ex)
         assert rmtree.call_count == 0
         next(it)
@@ -81,7 +81,7 @@ def test_bulk_remove(state, driver, monkeypatch):
 
     sync = Mock(side_effect=lambda j: j)
     monkeypatch.setattr(
-        "kong.drivers.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
+        "kong.driver.batch_driver_base.BatchDriverBase.bulk_sync_status", sync
     )
 
     with monkeypatch.context() as m:
