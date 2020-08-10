@@ -37,18 +37,10 @@ class BatchDriverBase(DriverBase):
         now = datetime.datetime.utcnow()
         jobs = self.bulk_sync_status(jobs)
 
-        def delete() -> Iterable["Job"]:
-            for job in jobs:
-                self.kill(job, save=False)
-                job.updated_at = now
-                yield job
-
-        with database.atomic():
-            Job.bulk_update(
-                delete(),
-                fields=[Job.status, Job.updated_at],
-                batch_size=self.batch_size,
-            )
+        for job in jobs:
+            self.kill(job, save=False)
+            job.updated_at = now
+            job.save()
 
         return jobs
 
