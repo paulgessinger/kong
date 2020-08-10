@@ -22,7 +22,7 @@ def test_verbosity(app_env, cli):
     assert result.exit_code == 0
     assert result.exception is None
     assert logger.logger.getEffectiveLevel() == logging.INFO
-    assert logging.getLogger().getEffectiveLevel() == logging.INFO
+    assert logging.getLogger().getEffectiveLevel() == logging.WARNING
 
     result = cli.invoke(main, ["--version", "-vv"])
     assert result.exit_code == 0
