@@ -127,7 +127,7 @@ class BatchDriverBase(DriverBase):
     def stderr(self, job: "Job") -> ContextManager[None]:
         raise NotImplementedError("Stderr goes to stdout in slurm")
 
-    def resubmit(self, job: "Job") -> "Job":
+    def resubmit(self, job: "Job", do_cleanup:bool = True) -> "Job":
         logger.debug("Resubmit job %s", job)
         job = self.sync_status(job)
         if job.status not in (
@@ -143,19 +143,23 @@ class BatchDriverBase(DriverBase):
             pass
 
         # need to make sure the output artifacts are gone, since we're reusing the same job dir
-        for name in ["stdout"]:
-            path = job.data[name]
-            if os.path.exists(path):
-                logger.debug("Removing %s", path)
-                os.remove(path)
-            assert not os.path.exists(path)
+        if do_cleanup:
+            logger.debug("Performing cleanup for job %s", job)
+            for name in ["stdout"]:
+                path = job.data[name]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    os.remove(path)
+                assert not os.path.exists(path)
 
-        for d in ["output_dir"]:
-            path = job.data[d]
-            if os.path.exists(path):
-                logger.debug("Removing %s", path)
-                rmtree(path)
-                os.makedirs(path)
+            for d in ["output_dir"]:
+                path = job.data[d]
+                if os.path.exists(path):
+                    logger.debug("Removing %s", path)
+                    rmtree(path)
+                    os.makedirs(path)
+        else:
+            logger.debug("Skipping cleanup for job %s", job)
 
         # reset to created
         job.status = Job.Status.CREATED
@@ -165,7 +169,7 @@ class BatchDriverBase(DriverBase):
         return job
 
     def bulk_resubmit(
-        self, jobs: Iterable["Job"], do_submit: bool = True
+        self, jobs: Iterable["Job"], do_submit: bool = True, do_cleanup: bool = True
     ) -> Iterable["Job"]:
 
         logger.debug("Resubmitting jobs")
@@ -203,10 +207,13 @@ class BatchDriverBase(DriverBase):
 
             return job
 
-        nthreads = 40
-        logger.debug("Cleaning up on %d threads", nthreads)
-        with ThreadPoolExecutor(nthreads) as ex:
-            jobs = list(ex.map(clean, jobs))
+        if do_cleanup:
+            nthreads = 40
+            logger.debug("Cleaning %d jobs up on %d threads", len(jobs), nthreads)
+            with ThreadPoolExecutor(nthreads) as ex:
+                jobs = list(ex.map(clean, jobs))
+        else:
+            logger.debug("Skipping cleanup of %d jobs", len(jobs))
 
         # update status
         with database.atomic():

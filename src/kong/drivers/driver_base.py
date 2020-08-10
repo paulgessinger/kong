@@ -125,12 +125,12 @@ class DriverBase(ABC):  # pragma: no-cover
         raise NotImplementedError()
 
     @abstractmethod
-    def resubmit(self, job: "Job") -> "Job":
+    def resubmit(self, job: "Job", do_cleanup: bool = True) -> "Job":
         raise NotImplementedError()
 
     @abstractmethod
     def bulk_resubmit(
-        self, jobs: Collection["Job"], do_submit: bool = True
+        self, jobs: Collection["Job"], do_submit: bool = True, do_cleanup: bool =True
     ) -> Iterable["Job"]:
         raise NotImplementedError()
 
