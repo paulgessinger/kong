@@ -45,6 +45,9 @@ def pandatools(monkeypatch):
     query = Mock()
     monkeypatch.setitem(sys.modules, "pandatools.queryPandaMonUtils", query)
 
+    query = Mock()
+    monkeypatch.setitem(sys.modules, "pandatools.Client", query)
+
     PsubUtils = Mock()
     PsubUtils.commands_get_status_output = Mock()
     monkeypatch.setitem(sys.modules, "pandatools.PsubUtils", PsubUtils)
