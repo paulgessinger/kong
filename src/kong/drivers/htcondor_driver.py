@@ -156,7 +156,12 @@ class ShellHTCondorInterface(HTCondorInterface):
         data = json.loads(output)
         for item in data:
             job_id = item["ClusterId"]
-            assert item["ProcId"] == 0, "Clusters with more than one jobs not supported"
+            if item["ProcId"] != 0:
+                logger.info(
+                    "ProcId = %d, Clusters with more than one job not supported, skipping",
+                    item["ProcId"],
+                )
+                continue
             condor_status = item["JobStatus"]
             exit_code = item["ExitCode"] if "ExitCode" in item else -1
             yield HTCondorAccountingItem.from_parts(
@@ -247,6 +252,7 @@ export HTCONDOR_CLUSTER_ID=$(grep "^ClusterId" $_CONDOR_JOB_AD | cut -d= - -f2 |
 mkdir -p $KONG_JOB_SCRATCHDIR
 
 stdout={{stdout}}
+echo "Job start: $(date)" > $stdout
 
 ({{command}}) > $stdout 2>&1
 """.strip()
