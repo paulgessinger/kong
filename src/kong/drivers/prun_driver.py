@@ -197,12 +197,12 @@ class PrunDriver(DriverBase):
                 #     logger.debug("Update based on dsinfo: %s", item["dsinfo"])
                 #     job.status = Job.Status.FAILED
 
-                if (
-                    "scoutinghascritfailures" in item
-                    and item["scoutinghascritfailures"]
-                ):
-                    logger.debug("Info says job has 'scoutinghascritfailures'")
-                    job.status = Job.Status.FAILED
+                #  if (
+                    #  "scoutinghascritfailures" in item
+                    #  and item["scoutinghascritfailures"]
+                #  ):
+                    #  logger.debug("Info says job has 'scoutinghascritfailures'")
+                    #  job.status = Job.Status.FAILED
 
                 job.data.update(item)
                 job.data["url"] = f"https://bigpanda.cern.ch/task/{job.batch_job_id}"
