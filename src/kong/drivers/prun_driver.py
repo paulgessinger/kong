@@ -20,6 +20,8 @@ from typing import (
 )
 from concurrent.futures import Executor, ThreadPoolExecutor
 import re
+from unittest.mock import patch
+import io
 
 from .batch_driver_base import BatchDriverBase
 from .driver_base import DriverBase
@@ -35,7 +37,7 @@ import sh
 
 # from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
-from ..util import chunks
+from ..util import chunks, rmtree
 
 
 def commands_get_status_output_decorator(emi_path, fn):
@@ -131,6 +133,7 @@ class PrunDriver(DriverBase):
         import pandatools
         import pandatools.queryPandaMonUtils
         import pandatools.Client
+        import pandatools.PBookCore
 
         self._pandatools = pandatools
 
@@ -198,11 +201,11 @@ class PrunDriver(DriverBase):
                 #     job.status = Job.Status.FAILED
 
                 #  if (
-                    #  "scoutinghascritfailures" in item
-                    #  and item["scoutinghascritfailures"]
+                #  "scoutinghascritfailures" in item
+                #  and item["scoutinghascritfailures"]
                 #  ):
-                    #  logger.debug("Info says job has 'scoutinghascritfailures'")
-                    #  job.status = Job.Status.FAILED
+                #  logger.debug("Info says job has 'scoutinghascritfailures'")
+                #  job.status = Job.Status.FAILED
 
                 job.data.update(item)
                 job.data["url"] = f"https://bigpanda.cern.ch/task/{job.batch_job_id}"
@@ -269,7 +272,7 @@ class PrunDriver(DriverBase):
         job.status = Job.Status.SUBMITTED
 
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
-        raise NotImplementedError()
+        logger.warning("Not implemented")
 
     def stdout(self, job: "Job") -> Path:
         self._check_driver(job)
@@ -346,12 +349,51 @@ class PrunDriver(DriverBase):
         raise NotImplementedError()
 
     def resubmit(self, job: "Job") -> "Job":
-        raise NotImplementedError()
+        logger.debug("Resubmit job %s", job)
+        job = self.sync_status(job)
+        if job.status not in (
+            Job.Status.FAILED,
+            Job.Status.COMPLETED,
+            Job.Status.UNKNOWN,
+        ):
+            raise InvalidJobStatus(f"Job {job} not in valid status for resubmit")
+
+        # need to make sure the output artifacts are gone, since we're reusing the same job dir
+        for d in ["log_dir"]:
+            path = job.data[d]
+            if os.path.exists(path):
+                logger.debug("Removing %s", path)
+                rmtree(path)
+                os.makedirs(path)
+
+        out = io.StringIO()
+        err = io.StringIO()
+
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            pbook = self._pandatools.PBookCore.PBookCore()
+            s = pbook.retry(int(job.batch_job_id))
+
+        if not s:
+            logger.error("Retry of %s failed!", job)
+            logger.debug("STDOUT:\n%s", out.getvalue())
+            logger.debug("STDERR:\n%s", out.getvalue())
+            raise RuntimeError("Failed to retry panda job")
+
+        logger.debug("Updating job after retry succeeded")
+        job.status = Job.Status.SUBMITTED
+        job.updated_at = datetime.datetime.utcnow()
+        job.save()
+        logger.debug("Job is now: %s", job)
+
+        return job
 
     def bulk_resubmit(
         self, jobs: Collection["Job"], do_submit: bool = True
     ) -> Iterable["Job"]:
-        raise NotImplementedError()
+        for job in jobs:
+            self.resubmit(job)
+
+        return list(self.bulk_sync_status(jobs))
 
     def cleanup(self, job: "Job") -> "Job":
         raise NotImplementedError()

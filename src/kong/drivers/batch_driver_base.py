@@ -18,9 +18,9 @@ from typing import (
     cast,
 )
 
-from kong.drivers import InvalidJobStatus
-from kong.logger import logger
-from kong.util import rmtree, chunks
+from ..drivers import InvalidJobStatus
+from ..logger import logger
+from ..util import rmtree, chunks
 from .driver_base import DriverBase, checked_job
 from ..executor import SerialExecutor
 from ..model.job import Job
