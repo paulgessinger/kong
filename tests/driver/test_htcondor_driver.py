@@ -411,8 +411,7 @@ def test_create_job(driver, state):
     assert os.path.exists(j1.data["batchfile"])
     assert is_executable(j1.data["jobscript"])
 
-    j2 = driver.create_job(command="sleep 1", walltime="03:00:00", folder=root)
-    assert j2.data["walltime"] == 3 * 60 * 60
+    j2 = driver.create_job(command="sleep 1", folder=root)
 
     with open(j2.data["jobscript"]) as f:
         jobscript = f.read()
@@ -429,6 +428,18 @@ def test_create_job(driver, state):
             assert str(j2.data[v]) in batchfile
 
     assert extra in batchfile
+
+
+def test_create_job_walltime_input(driver):
+    root = Folder.get_root()
+    job = driver.create_job(command="sleep 1", walltime="03:00:00", folder=root)
+    assert job.data["walltime"] == 3 * 60 * 60
+
+    job = driver.create_job(command="blubb", folder=root, walltime=None)
+    assert job.data["walltime"] is None
+
+    job = driver.create_job(command="blubb", folder=root, walltime="None")
+    assert job.data["walltime"] is None
 
     with pytest.raises(ValueError):
         driver.create_job(command="sleep 1", walltime="100:00:00", folder=root)
@@ -774,12 +785,31 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     condor_q = Mock(
         return_value=[
+            HTAI(i + 1, Job.Status.RUNNING, -1, t3, t3) for i in range(len(jobs))
+        ]
+    )
+
+    # running but with garbage timestamps
+    with monkeypatch.context() as m:
+        m.setattr(driver.htcondor, "condor_q", condor_q)
+        m.setattr(driver.htcondor, "condor_history", Mock(return_value=[]))
+
+        jobs = driver.bulk_sync_status(jobs)
+
+        driver.htcondor.condor_history.assert_called_once_with(ANY)
+        condor_q.assert_called_once_with()
+
+    for job in jobs:
+        assert job.status == Job.Status.RUNNING
+        assert job.updated_at == job.created_at
+
+    condor_q = Mock(
+        return_value=[
             HTAI(i + 1, Job.Status.RUNNING, -1, t1, t3) for i in range(len(jobs))
         ]
     )
 
     # pretend they're all running now
-
     with monkeypatch.context() as m:
         m.setattr(driver.htcondor, "condor_q", condor_q)
         m.setattr(driver.htcondor, "condor_history", Mock(return_value=[]))

@@ -253,13 +253,21 @@ stdout={{stdout}}
 """.strip()
 
 batchfile_tpl_str = """
-universe = vanilla
 log = {{htcondor_out}}
 executable = {{jobscript}}
+{%- if universe is not none %}
+universe = {{universe}}
+{%- endif %}
+{%- if cores > 1 %}
 request_cpus = {{cores}}
+{%- endif %}
+{%- if memory > 0 %}
 request_memory = {{memory}}
+{%- endif %}
 batch_name = {{name}}
+{%- if walltime is not none %}
 +MaxRuntime = {{walltime}}
+{%- endif %}
 
 {{submitfile_extra}}
 
@@ -300,10 +308,10 @@ class HTCondorDriver(BatchDriverBase):
         folder: "Folder",
         command: str,
         cores: int = 1,
-        memory: int = 2000,
+        memory: int = 0,
         universe: Optional[str] = None,
         name: Optional[str] = None,
-        walltime: Union[timedelta, str] = timedelta(minutes=30),
+        walltime: Optional[Union[timedelta, str]] = timedelta(minutes=30),
     ) -> "Job":  # type: ignore
 
         if universe is None:
@@ -333,8 +341,13 @@ class HTCondorDriver(BatchDriverBase):
         batchfile = os.path.join(log_dir, "batchfile.sh")
         jobscript = os.path.join(log_dir, "jobscript.sh")
 
-        if isinstance(walltime, str):
-            norm_walltime = int(parse_timedelta(walltime).total_seconds())
+        if walltime is None:
+            norm_walltime = None
+        elif isinstance(walltime, str):
+            if walltime == "None":
+                norm_walltime = None
+            else:
+                norm_walltime = int(parse_timedelta(walltime).total_seconds())
         elif isinstance(walltime, timedelta):
             norm_walltime = int(walltime.total_seconds())
         else:
@@ -391,6 +404,8 @@ class HTCondorDriver(BatchDriverBase):
         for job in jobs:
             self._check_driver(job)
 
+        epoch = datetime.utcfromtimestamp(0)
+
         def proc() -> Iterable[Job]:
             job_not_found = 0
             for item in itertools.chain(
@@ -403,7 +418,10 @@ class HTCondorDriver(BatchDriverBase):
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
 
-                job.updated_at = max([item.start_date, item.completion_date])
+                updated_at = max([item.start_date, item.completion_date])
+                if updated_at == epoch:
+                    updated_at = job.created_at
+                job.updated_at = updated_at
                 yield job
             if job_not_found > 0:
                 logger.warning(

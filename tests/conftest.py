@@ -6,6 +6,7 @@ import pytest
 import click
 from click.testing import CliRunner
 from unittest.mock import Mock
+import peewee
 
 from kong.db import database
 from kong import model
@@ -137,3 +138,8 @@ def state(app_env, db, monkeypatch):
     cfg = kong.config.Config()
     _state = kong.state.State(cfg, Folder.get_root())
     return _state
+
+
+@pytest.fixture(params=[peewee.sqlite3.sqlite_version_info, (3, 7, 17)])
+def sqlite_version(monkeypatch, request):
+    monkeypatch.setattr("peewee.sqlite3.sqlite_version_info", request.param)
