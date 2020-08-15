@@ -25,7 +25,6 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     set_verbosity(verbosity)
 
     if show_version:
-        print("HALLO")
         click.echo(f"{config.APP_NAME} version: {__version__}")
         return
 
