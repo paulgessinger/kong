@@ -48,6 +48,9 @@ def pandatools(monkeypatch):
     query = Mock()
     monkeypatch.setitem(sys.modules, "pandatools.Client", query)
 
+    query = Mock()
+    monkeypatch.setitem(sys.modules, "pandatools.PBookCore", Mock())
+
     PsubUtils = Mock()
     PsubUtils.commands_get_status_output = Mock()
     monkeypatch.setitem(sys.modules, "pandatools.PsubUtils", PsubUtils)
