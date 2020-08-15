@@ -17,6 +17,8 @@ from typing import (
     Iterable,
     Iterator,
     cast,
+    Dict,
+    Type,
 )
 
 import peewee as pw
@@ -25,7 +27,7 @@ from contextlib import contextmanager
 from click import style
 
 from .util import Progress, Spinner, exhaust, strip_colors
-from .drivers import DriverMismatch, get_driver
+from .drivers import get_driver
 from .drivers.driver_base import DriverBase
 from . import config
 from .db import database
@@ -166,25 +168,20 @@ class State:
         if len(jobs) == 0:
             return jobs
 
-        first_job: Job = jobs[0]
-
-        jobs_by_drivers = {}
-        driver_instances = {}
+        jobs_by_drivers: Dict[Type[DriverBase], List[Job]] = {}
 
         for job in jobs:
             driver_cls = job.driver
-            if driver_cls not in driver_instances:
-                driver_instances[driver_cls] = driver_cls(self.config)
             jobs_by_drivers.setdefault(driver_cls, [])
             jobs_by_drivers[driver_cls].append(job)
 
         res_jobs = []
         for driver_cls, _jobs in jobs_by_drivers.items():
             logger.debug("Refreshing %d jobs using driver '%s'", len(_jobs), driver_cls)
-            driver = driver_instances[driver_cls]
+            driver = driver_cls(self.config)
             res_jobs += list(driver.bulk_sync_status(_jobs))
 
-        # try bulk refresh first
+        return res_jobs
 
     def ls(
         self, path: str = ".", refresh: bool = False, recursive: bool = False
