@@ -14,7 +14,7 @@ packages = [
 python = "^3.6"
 click = "^7.1.2"
 pyyaml = "^5.3.1"
-halo = "^0.0.29"
+halo = ">=0.0.29,<0.0.31"
 sh = "^1.13.1"
 python-dateutil = "^2.8.1"
 peewee = "^3.13.3"
