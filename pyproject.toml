@@ -54,6 +54,9 @@ commit_subject = "Bump and tag {version}"
 commit_message = ""
 build_command = "pip install poetry && poetry build"
 
+[tool.pytest.ini_options]
+addopts = "--reruns 3"
+
 
 [build-system]
 requires = ["poetry>=0.12"]
