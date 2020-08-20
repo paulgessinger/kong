@@ -123,19 +123,16 @@ def sample_jobs(tree, state):
 @pytest.fixture
 def state(app_env, db, monkeypatch):
     app_dir, config_path, tmp_path = app_env
-    with monkeypatch.context() as m:
-        m.setattr(
-            "click.prompt",
-            Mock(
-                side_effect=[
-                    "kong.drivers.local_driver.LocalDriver",
-                    os.path.join(app_dir, "joblog"),
-                    os.path.join(app_dir, "joboutput"),
-                ]
-            ),
-        )
-        kong.setup.setup(None)
-    cfg = kong.config.Config()
+
+    cfg = kong.config.Config(
+        default_driver="kong.drivers.local_driver.LocalDriver",
+        jobdir=os.path.join(app_dir, "joblog"),
+        joboutputdir=os.path.join(app_dir, "joboutput"),
+    )
+    os.makedirs(cfg.jobdir)
+    os.makedirs(cfg.joboutputdir)
+    assert os.path.exists(cfg.jobdir)
+    assert os.path.exists(cfg.joboutputdir)
     _state = kong.state.State(cfg, Folder.get_root())
     return _state
 

@@ -8,7 +8,7 @@ from unittest.mock import Mock, ANY, call
 import pytest
 
 from kong import util
-from kong.config import Config, slurm_schema
+from kong.config import Config, HTCondorConfig
 from kong.drivers import InvalidJobStatus, get_driver
 from kong.drivers.htcondor_driver import (
     HTCondorInterface,
@@ -24,9 +24,7 @@ from kong.util import is_executable
 @pytest.fixture
 def driver(monkeypatch, state):
     # set some config values
-    data = state.config.data.copy()
-    data["htcondor_driver"] = dict()
-    state.config = Config(data)
+    state.config.htcondor_driver = HTCondorConfig.construct()
 
     monkeypatch.setattr(HTCondorInterface, "__abstractmethods__", set())
     monkeypatch.setattr(ShellHTCondorInterface, "__init__", Mock(return_value=None))
@@ -330,9 +328,7 @@ def test_condor_history(driver, monkeypatch, state):
 
 def test_driver_create(state, monkeypatch):
     # set some config values
-    data = state.config.data.copy()
-    data["htcondor_driver"] = dict()
-    state.config = Config(data)
+    state.config.htcondor_driver = {}
 
     monkeypatch.setattr(HTCondorInterface, "__abstractmethods__", set())
     monkeypatch.setattr(ShellHTCondorInterface, "__init__", Mock(return_value=None))
@@ -388,6 +384,11 @@ def test_repr():
 
 
 def test_create_job(driver, state):
+    extra = 'requirements = (OpSysAndVer =?= "CentOS7")'
+    driver.htcondor_config = HTCondorConfig(
+        submitfile_extra=extra, default_universe="vanilla"
+    )
+
     root = Folder.get_root()
     j1 = driver.create_job(
         command="sleep 1",
@@ -398,9 +399,6 @@ def test_create_job(driver, state):
         universe="amazing",
         walltime=timedelta(hours=5),
     )
-
-    extra = 'requirements = (OpSysAndVer =?= "CentOS7")'
-    driver.htcondor_config["submitfile_extra"] = extra
 
     assert j1.status == Job.Status.CREATED
     assert len(root.jobs) == 1 and root.jobs[0] == j1
@@ -413,19 +411,20 @@ def test_create_job(driver, state):
 
     j2 = driver.create_job(command="sleep 1", folder=root)
 
-    with open(j2.data["jobscript"]) as f:
-        jobscript = f.read()
-        assert str(j2.job_id) in jobscript
-        assert str(j2.cores) in jobscript
-        assert j2.command in jobscript
-        for v in ["output_dir", "log_dir", "stdout"]:
-            assert j2.data[v] in jobscript
-    with open(j2.data["batchfile"]) as f:
-        batchfile = f.read()
-        assert str(j2.cores) in batchfile
-        assert str(j2.memory) in batchfile
-        for v in ["name", "htcondor_out", "universe", "walltime", "jobscript"]:
-            assert str(j2.data[v]) in batchfile
+    for j in (j1, j2):
+        with open(j.data["jobscript"]) as f:
+            jobscript = f.read()
+            assert str(j.job_id) in jobscript
+            assert str(j.cores) in jobscript
+            assert j.command in jobscript
+            for v in ["output_dir", "log_dir", "stdout"]:
+                assert j.data[v] in jobscript
+        with open(j.data["batchfile"]) as f:
+            batchfile = f.read()
+            assert str(j.cores) in batchfile
+            assert str(j.memory) in batchfile
+            for v in ["name", "htcondor_out", "universe", "walltime", "jobscript"]:
+                assert str(j.data[v]) in batchfile, v
 
     assert extra in batchfile
 

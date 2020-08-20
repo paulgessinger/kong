@@ -42,13 +42,8 @@ class DriverBase(ABC):  # pragma: no-cover
     batch_size: int = 50
     select_batch_size: int = 500
 
-    def __init__(self, config: Optional["Config"]) -> None:
-        if config is None:
-            logger.debug("Attempt to default-construct configuration object")
-            self.config = Config()
-        else:
-            logger.debug("Taking explicit config")
-            self.config = config
+    def __init__(self, config: Config) -> None:
+        self.config = config
 
         logger.debug("Checking jobdir filesystem at %s", self.config.jobdir)
         assert os.path.exists(self.config.jobdir)

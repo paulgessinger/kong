@@ -21,13 +21,13 @@ peewee = "^3.13.3"
 coloredlogs = "^14.0"
 humanfriendly = "^8.2"
 psutil = "^5.7.2"
-schema = "^0.7.2"
 tqdm = "^4.48.0"
 notifiers = "^1.2.1"
 jinja2 = "^2.11.2"
 pytimeparse = "^1.1.8"
 ipython = {version = "^7.16.1", optional = true}
 pytz = "^2020.1"
+pydantic = "^1.6.1"
 
 [tool.poetry.scripts]
 kong = 'kong.cli:main'

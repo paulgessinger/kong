@@ -5,18 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import timedelta, datetime
 
 import humanfriendly
-from typing import (
-    Any,
-    Iterator,
-    Iterable,
-    Optional,
-    Union,
-    List,
-    Dict,
-    Sequence,
-    cast,
-    Collection,
-)
+from typing import Iterator, Iterable, Optional, Union, List, Sequence, cast, Collection
 
 import sh
 from jinja2 import Environment, DictLoader
@@ -25,7 +14,7 @@ from .batch_driver_base import BatchDriverBase
 from . import InvalidJobStatus
 from .. import config as config_mod
 from ..logger import logger
-from ..config import Config
+from ..config import Config, HTCondorConfig
 from ..db import database
 from ..model.job import Job
 from ..model.folder import Folder
@@ -139,11 +128,11 @@ class ShellHTCondorInterface(HTCondorInterface):
     _condor_history: Optional[sh.Command] = None
     _condor_rm: Optional[sh.Command] = None
 
-    config: Dict[str, Any]
+    config: HTCondorConfig
 
     subreg = re.compile(r".* (\d+)\.$")
 
-    def __init__(self, config: Dict[str, Any]) -> None:  # pragma: no cover
+    def __init__(self, config: HTCondorConfig) -> None:  # pragma: no cover
         self.config = config
         self._condor_submit = sh.Command("condor_submit")
         self._condor_q = sh.Command("condor_q")
@@ -292,7 +281,8 @@ class HTCondorDriver(BatchDriverBase):
 
     def __init__(self, config: Config, htcondor: Optional[HTCondorInterface] = None):
         DriverBase.__init__(self, config)
-        self.htcondor_config = self.config.data["htcondor_driver"]
+        assert self.config.htcondor_driver is not None
+        self.htcondor_config = self.config.htcondor_driver
         self.htcondor = htcondor or ShellHTCondorInterface(self.htcondor_config)
         log_dir = os.path.join(config_mod.APP_DIR, "htcondor_log")
         os.makedirs(log_dir, exist_ok=True)
@@ -320,7 +310,7 @@ class HTCondorDriver(BatchDriverBase):
     ) -> "Job":  # type: ignore
 
         if universe is None:
-            universe = self.htcondor_config["default_universe"]
+            universe = self.htcondor_config.default_universe
 
         job: Job = Job.create(
             folder=folder,
@@ -369,7 +359,7 @@ class HTCondorDriver(BatchDriverBase):
             exit_code=0,
             universe=universe,
             walltime=norm_walltime,
-            submitfile_extra=self.htcondor_config["submitfile_extra"],
+            submitfile_extra=self.htcondor_config.submitfile_extra,
         )
         job.save()
 
@@ -387,7 +377,7 @@ class HTCondorDriver(BatchDriverBase):
             universe=universe,
             name=name,
             walltime=norm_walltime,
-            submitfile_extra=self.htcondor_config["submitfile_extra"],
+            submitfile_extra=self.htcondor_config.submitfile_extra,
         )
 
         batchfile_content = batchfile_tpl.render(**values)

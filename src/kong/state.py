@@ -24,6 +24,7 @@ from contextlib import contextmanager
 
 from click import style
 
+from .config import NotificationManager
 from .util import Progress, Spinner, exhaust, strip_colors
 from .drivers import DriverMismatch, get_driver
 from .drivers.driver_base import DriverBase
@@ -102,6 +103,7 @@ class State:
         :param cwd: Current working directory to start in
         """
         self.config = config
+        self.notifications = NotificationManager(self.config)
         self.cwd = cwd
         self.default_driver: DriverBase = get_driver(self.config.default_driver)(
             self.config
@@ -139,7 +141,7 @@ class State:
         :return: state object
         """
         cfg = config.Config()
-        logger.debug("Initialized config: %s", cfg.data)
+        logger.debug("Initialized config: %s", cfg.dict())
 
         logger.debug(
             "Initializing database '%s' at '%s'", config.APP_NAME, config.DB_FILE
@@ -790,7 +792,7 @@ class State:
         wait_start = datetime.datetime.now()
         last_update = datetime.datetime.now()
 
-        if update_interval is not None and notify and self.config.notifications.enabled:
+        if update_interval is not None and notify and self.notifications.enabled:
             print(f"Will notify every {humanfriendly.format_timespan(update_interval)}")
 
         try:
@@ -820,7 +822,7 @@ class State:
                         if delta > update_interval:
                             prog = humanfriendly.format_timespan(now - wait_start)
                             last_update = now
-                            self.config.notifications.notify(
+                            self.notifications.notify(
                                 title="kong: Job wait progress",
                                 message=f"Progress after {prog}:\n{strip_colors(', '.join(out))}",
                             )
@@ -841,13 +843,13 @@ class State:
                     result = "FAILURE"
                 else:
                     result = "COMPLETED"
-                self.config.notifications.notify(
+                self.notifications.notify(
                     title=f"kong: Job wait {result}",
                     message=f"Successfully waited for {len(jobs)} job(s) to finish:\n{', '.join(out)}",
                 )
         except TimeoutError:
             if notify:
-                self.config.notifications.notify(
+                self.notifications.notify(
                     title="kong: Job wait TIMEOUT",
                     message=f"Timeout waiting for {len(jobs)} job(s) after {timeout}s",
                 )

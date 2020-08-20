@@ -43,7 +43,6 @@ def test_driver_base_all_methods(driver):
 
 
 def test_init(noabc, state):
-    DriverBase(None)
     DriverBase(state.config)
 
 
@@ -97,7 +96,7 @@ def test_wait(driver, monkeypatch):
 
 
 def test_make_log_path(driver, monkeypatch):
-    monkeypatch.setitem(driver.config.data, "jobdir", "JOB_BASE")
+    monkeypatch.setattr(driver.config, "jobdir", "JOB_BASE")
 
     job = Mock()
 
@@ -115,7 +114,7 @@ def test_make_log_path(driver, monkeypatch):
 
 
 def test_make_output_path(driver, monkeypatch):
-    monkeypatch.setitem(driver.config.data, "joboutputdir", "JOB_BASE")
+    monkeypatch.setattr(driver.config, "joboutputdir", "JOB_BASE")
 
     job = Mock()
 

@@ -3,6 +3,8 @@ import logging
 
 from unittest.mock import Mock
 
+import pytest
+
 from kong.cli import main
 import kong
 from kong.model.folder import Folder
@@ -37,6 +39,7 @@ def test_verbosity(app_env, cli):
     assert logging.getLogger().getEffectiveLevel() == logging.DEBUG
 
 
+@pytest.mark.skip(reason="Setup flow needs to be reworked")
 def test_setup_implicit(app_env, db, cli, monkeypatch):
     app_dir, config_path, tmp_path = app_env
     print("APPDIR:", kong.config.APP_DIR)
@@ -70,6 +73,7 @@ def test_setup_invalid_driver(app_env, db, cli):
     assert result.exception is not None
 
 
+@pytest.mark.skip(reason="Setup flow needs to be reworked")
 def test_setup_explicit(app_env, db, cli):
     app_dir, config_path, tmp_path = app_env
 
@@ -95,6 +99,7 @@ def test_repl_raises(app_env, db, cli, monkeypatch):
     assert result.exception is not None
 
 
+@pytest.mark.skip(reason="Setup flow needs to be reworked")
 def test_interactive(app_env, cli, monkeypatch):
     mock = Mock()
     monkeypatch.setattr("IPython.embed", mock)

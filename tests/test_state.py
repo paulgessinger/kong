@@ -22,20 +22,16 @@ from kong.util import exhaust
 @pytest.fixture
 def cfg(app_env, monkeypatch):
     app_dir, config_path, tmp_path = app_env
-    with monkeypatch.context() as m:
-        m.setattr(
-            "click.prompt",
-            Mock(
-                side_effect=[
-                    "kong.drivers.local_driver.LocalDriver",
-                    os.path.join(app_dir, "joblog"),
-                    os.path.join(app_dir, "joboutput"),
-                ]
-            ),
-        )
-        kong.setup.setup(None)
-    _cfg = kong.config.Config()
-    return _cfg
+    cfg = kong.config.Config(
+        default_driver="kong.drivers.local_driver.LocalDriver",
+        jobdir=os.path.join(app_dir, "joblog"),
+        joboutputdir=os.path.join(app_dir, "joboutput"),
+    )
+    os.makedirs(cfg.jobdir)
+    os.makedirs(cfg.joboutputdir)
+    assert os.path.exists(cfg.jobdir)
+    assert os.path.exists(cfg.joboutputdir)
+    return cfg
 
 
 def test_init(cfg, db):
@@ -48,6 +44,7 @@ def test_get_instance(cfg, monkeypatch):
     orig_init = kong.db.database.init
     init = Mock(side_effect=lambda _: orig_init(":memory:"))
     monkeypatch.setattr("kong.db.database.init", init)
+    monkeypatch.setattr("kong.state.config.Config", Mock(return_value=cfg))
     s = kong.state.State.get_instance()
     assert s is not None
     init.assert_called_once()
@@ -58,6 +55,7 @@ def test_module_get_instance(cfg, monkeypatch):
     orig_init = kong.db.database.init
     init = Mock(side_effect=lambda _: orig_init(":memory:"))
     monkeypatch.setattr("kong.db.database.init", init)
+    monkeypatch.setattr("kong.state.config.Config", Mock(return_value=cfg))
     s = kong.get_instance()
     assert s is not None
     init.assert_called_once()
@@ -1025,7 +1023,7 @@ def test_wait(state, monkeypatch):
 
     nm = Mock()
     nm.notify = Mock()
-    monkeypatch.setattr(state.config, "notifications", nm)
+    monkeypatch.setattr(state, "notifications", nm)
 
     state.wait("*", notify=False, poll_interval=0.1)
     assert nm.notify.call_count == 0
@@ -1110,7 +1108,7 @@ def test_wait_timeout(state, monkeypatch):
 
     with monkeypatch.context() as m:
         nm = MagicMock()
-        m.setattr(state.config, "notifications", nm)
+        m.setattr(state, "notifications", nm)
         state.wait("*", notify=False, poll_interval=0.1)
         assert nm.notify.call_count == 0
         state.wait("*", notify=True, poll_interval=0.1)
@@ -1132,7 +1130,7 @@ def test_wait_failure(state, monkeypatch):
 
     with monkeypatch.context() as m:
         nm = MagicMock()
-        m.setattr(state.config, "notifications", nm)
+        m.setattr(state, "notifications", nm)
         state.wait("*", notify=False)
         assert nm.notify.call_count == 0
         state.wait("*", notify=True)

@@ -7,7 +7,7 @@ from unittest.mock import Mock, ANY, call
 import pytest
 
 from kong import util
-from kong.config import Config, slurm_schema
+from kong.config import Config, SlurmConfig
 from kong.drivers import InvalidJobStatus
 from kong.drivers.slurm_driver import (
     SlurmInterface,
@@ -23,11 +23,9 @@ from kong.util import is_executable, exhaust
 @pytest.fixture
 def driver(monkeypatch, state):
     # set some config values
-    data = state.config.data.copy()
-    data["slurm_driver"] = dict(
+    state.config.slurm_driver = SlurmConfig(
         account="pseudo_account", node_size=42, default_queue="somequeue"
     )
-    state.config = Config(data)
 
     monkeypatch.setattr(SlurmInterface, "__abstractmethods__", set())
     monkeypatch.setattr(ShellSlurmInterface, "__init__", Mock(return_value=None))
@@ -775,15 +773,6 @@ def test_wait_single(driver, monkeypatch):
 
     with pytest.raises(TypeError):
         driver.wait("nope")
-
-
-def test_config_schema():
-    assert slurm_schema.is_valid(dict())
-    assert slurm_schema.is_valid(
-        dict(account="bla", node_size=80, default_queue="whatever")
-    )
-    assert not slurm_schema.is_valid(dict(account="bla", node_size="blub"))
-    assert not slurm_schema.is_valid(dict(account=42))
 
 
 def test_cleanup_driver(driver, state, monkeypatch):

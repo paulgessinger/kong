@@ -3,21 +3,14 @@ from unittest.mock import Mock, ANY
 
 import pytest
 import os
-from schema import SchemaError
 
-from kong.config import Config, Notifier, NotificationManager, slurm_schema
+from pydantic import ValidationError
+
+from kong.config import Config, Notifier, NotificationManager, SlurmConfig
 
 
 def test_config_creation(state):
-    config = Config({})
-
-
-def test_attribute_access(state):
-    config = Config({"exist": 42})
-    assert config.exist == 42
-
-    with pytest.raises(AttributeError):
-        config.noexist
+    config = Config()
 
 
 def test_notifier(monkeypatch):
@@ -68,17 +61,12 @@ def test_notificationmanager(monkeypatch):
 
     config = Mock()
 
-    config.data = {}
+    config.notify = []
     nm = NotificationManager(config)
     assert notifier.call_count == 0
     assert not nm.enabled
 
-    config.data = {"notify": []}
-    nm = NotificationManager(config)
-    assert notifier.call_count == 0
-    assert not nm.enabled
-
-    config.data = {"notify": [{"name": "foo", "arg1": 5, "arg2": "yep"}]}
+    config.notify = [{"name": "foo", "arg1": 5, "arg2": "yep"}]
 
     nm = NotificationManager(config)
     assert nm.enabled
@@ -96,21 +84,13 @@ def test_notificationmanager(monkeypatch):
 
 
 def test_slurm_schema():
-    assert slurm_schema.is_valid({"node_size": 2})
-    assert not slurm_schema.is_valid({"node_size": -1})
+    SlurmConfig(account="abc", default_queue="queue", node_size=2).node_size == 2
+    with pytest.raises(ValidationError):
+        SlurmConfig(account="abc", default_queue="queue", node_size=-1)
 
-    defs = slurm_schema.validate({})
-    assert "sacct_delta" in defs
-    assert isinstance(defs["sacct_delta"], timedelta)
-
-    cfg = slurm_schema.validate({"sacct_delta": "10 weeks"})
-    assert cfg["sacct_delta"] == timedelta(weeks=10)
-
-    cfg = slurm_schema.validate({"sacct_delta": "50 weeks"})
-    assert cfg["sacct_delta"] == timedelta(weeks=50)
-
-    with pytest.raises(SchemaError):
-        slurm_schema.validate({"sacct_delta": "blablurz"})
+    defs = SlurmConfig(account="blubb", default_queue="queue")
+    assert isinstance(defs.sacct_delta, timedelta)
+    assert defs.sacct_delta > timedelta(seconds=0)
 
 
 def test_slurm_schema_file(app_env):
@@ -121,32 +101,36 @@ def test_slurm_schema_file(app_env):
         fh.write(
             """
 slurm_driver:
+    account: blub
+    default_queue: queue
     sacct_delta: blablurz
         """.strip()
         )
 
-    with pytest.raises(SchemaError):
-        Config()
+    with pytest.raises(ValidationError):
+        Config.from_yaml(config_path)
 
     with open(config_path, "w") as fh:
         fh.write(
             """
 slurm_driver:
+    default_queue: queue
+    account: blub
     sacct_delta: 10 weeks
         """.strip()
         )
 
-    cfg = Config()
-    assert cfg.data["slurm_driver"]["sacct_delta"] == timedelta(weeks=10)
+    cfg = Config.from_yaml(config_path)
+    assert cfg.slurm_driver.sacct_delta == timedelta(weeks=10)
 
     with open(config_path, "w") as fh:
         fh.write(
             """
 slurm_driver:
+    default_queue: queue
+    account: blub
     sacct_delta: 50 weeks
         """.strip()
         )
-
-    cfg = Config()
-    print(cfg.data)
-    assert cfg.data["slurm_driver"]["sacct_delta"] == timedelta(weeks=50)
+    cfg = Config.from_yaml(config_path)
+    assert cfg.slurm_driver.sacct_delta == timedelta(weeks=50)

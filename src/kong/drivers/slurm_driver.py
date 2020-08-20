@@ -218,7 +218,8 @@ class SlurmDriver(BatchDriverBase):
     def __init__(self, config: Config, slurm: Optional[SlurmInterface] = None):
         self.slurm = slurm or ShellSlurmInterface()
         super().__init__(config)
-        self.slurm_config = self.config.data["slurm_driver"]
+        assert self.config.slurm_driver is not None
+        self.slurm_config = self.config.slurm_driver
 
     def create_job(
         self,
@@ -235,7 +236,7 @@ class SlurmDriver(BatchDriverBase):
     ) -> "Job":
 
         if queue is None:
-            queue = self.slurm_config["default_queue"]
+            queue = self.slurm_config.default_queue
 
         job: Job = Job.create(
             folder=folder,
@@ -282,7 +283,7 @@ class SlurmDriver(BatchDriverBase):
             ntasks=ntasks,
             exit_code=0,
             walltime=norm_walltime,
-            account=self.config.slurm_driver["account"],
+            account=self.slurm_config.account,
             licenses=licenses,
         )
         job.save()
@@ -300,7 +301,7 @@ class SlurmDriver(BatchDriverBase):
             nnodes=nnodes,
             ntasks=ntasks,
             memory=memory,
-            account=self.config.slurm_driver["account"],
+            account=self.slurm_config.account,
             name=name,
             queue=queue,
             walltime=norm_walltime,
@@ -330,7 +331,7 @@ class SlurmDriver(BatchDriverBase):
 
         def proc() -> Iterable[Job]:
             job_not_found = 0
-            for item in self.slurm.sacct(jobs, self.slurm_config["sacct_delta"]):
+            for item in self.slurm.sacct(jobs, self.slurm_config.sacct_delta):
                 job = Job.get_or_none(batch_job_id=item.job_id)
                 if job is None:
                     job_not_found += 1

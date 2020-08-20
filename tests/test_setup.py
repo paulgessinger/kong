@@ -9,6 +9,7 @@ import kong.setup
 import kong
 
 
+@pytest.mark.skip(reason="Setup flow needs to be reworked")
 def test_setup(app_env, monkeypatch):
     app_dir, config_path, tmp_path = app_env
 
@@ -75,6 +76,7 @@ def test_setup(app_env, monkeypatch):
     )  # this has changed
 
 
+@pytest.mark.skip(reason="Setup flow needs to be reworked")
 def test_setup_invalid_driver(app_env, monkeypatch):
     app_dir, config_path, tmp_path = app_env
 
