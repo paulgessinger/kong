@@ -665,8 +665,8 @@ category = "dev"
 description = "pytest plugin to re-run tests to eliminate flaky failures"
 name = "pytest-rerunfailures"
 optional = false
-python-versions = "*"
-version = "9.0"
+python-versions = ">=3.5"
+version = "9.1"
 
 [package.dependencies]
 pytest = ">=5.0"
@@ -1051,7 +1051,7 @@ testing = ["jaraco.itertools", "func-timeout"]
 ipython = ["ipython"]
 
 [metadata]
-content-hash = "51d5b3e0239e076e065092dc1ae4dd07b63c0b0d47f77c23c3791b904317cca9"
+content-hash = "41b80e69ed09554420c4fee0067929e04f14cbea38a0a5dbf8a4906929ae0b50"
 python-versions = "^3.6"
 
 [metadata.files]
@@ -1371,8 +1371,8 @@ pytest-cov = [
     {file = "pytest_cov-2.10.1-py2.py3-none-any.whl", hash = "sha256:45ec2d5182f89a81fc3eb29e3d1ed3113b9e9a873bcddb2a71faaab066110191"},
 ]
 pytest-rerunfailures = [
-    {file = "pytest-rerunfailures-9.0.tar.gz", hash = "sha256:895ac2a6486c0da0468ae31768b818d9f3f7fceddef110970c7dbb09e7b4b8e4"},
-    {file = "pytest_rerunfailures-9.0-py3-none-any.whl", hash = "sha256:f215f2b6da866f01df2e0d12c25687d7f6f0182cefed541afc442230d2d94e6b"},
+    {file = "pytest-rerunfailures-9.1.tar.gz", hash = "sha256:0b17968efab57b24808fa7c05e8298236811b780debdb020cabec970fa386ca0"},
+    {file = "pytest_rerunfailures-9.1-py3-none-any.whl", hash = "sha256:4fa87c84af9f35622e0d4895521f7997bef62633face80ad139c47c3367f012a"},
 ]
 python-dateutil = [
     {file = "python-dateutil-2.8.1.tar.gz", hash = "sha256:73ebfe9dbf22e832286dafa60473e4cd239f8592f699aa5adaf10050e6e1823c"},
