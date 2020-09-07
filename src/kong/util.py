@@ -11,6 +11,7 @@ from typing import Optional, Any, TypeVar, Iterable, Iterator, List
 import sys
 import contextlib
 from collections import deque
+import threading
 
 from tqdm import tqdm  # type: ignore
 from halo import Halo  # type: ignore
@@ -108,6 +109,7 @@ T = TypeVar("T")
 
 
 def Progress(*args: Any, **kwargs: Any) -> Iterable[T]:
+    tqdm.get_lock()
     return tqdm(*args, **kwargs)  # type: ignore
 
 

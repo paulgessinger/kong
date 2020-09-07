@@ -28,6 +28,8 @@ jinja2 = "^2.11.2"
 pytimeparse = "^1.1.8"
 ipython = {version = "^7.16.1", optional = true}
 pytz = "^2020.1"
+ratelimit = "^2.2.1"
+backoff = "^1.10.0"
 
 [tool.poetry.scripts]
 kong = 'kong.cli:main'
