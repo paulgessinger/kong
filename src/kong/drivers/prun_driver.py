@@ -23,6 +23,10 @@ import re
 from unittest.mock import patch
 import io
 
+import sh
+import ratelimit
+import backoff
+
 from .batch_driver_base import BatchDriverBase
 from .driver_base import DriverBase
 from . import InvalidJobStatus
@@ -33,7 +37,6 @@ from ..db import database
 from ..model.job import Job
 from ..model.folder import Folder
 
-import sh
 
 # from ..util import make_executable, format_timedelta, parse_timedelta
 from .driver_base import checked_job
@@ -168,6 +171,10 @@ class PrunDriver(DriverBase):
 
         task_ids = [str(job.batch_job_id) for job in jobs]
 
+        @backoff.on_exception(
+            backoff.constant, ratelimit.RateLimitException, interval=1
+        )
+        @ratelimit.limits(calls=2, period=1)
         def load(task_ids_chunk):
             _, _, _data = self._pandatools.queryPandaMonUtils.query_tasks(
                 jeditaskid="|".join(task_ids_chunk)
@@ -179,7 +186,6 @@ class PrunDriver(DriverBase):
             return _data
 
         with ThreadPoolExecutor(5) as ex:
-
             data = sum(ex.map(load, chunks(task_ids, 20)), [])
 
         logger.debug("Length of result data: %d", len(data))
@@ -369,9 +375,8 @@ class PrunDriver(DriverBase):
         out = io.StringIO()
         err = io.StringIO()
 
-        with patch("sys.stdout", out), patch("sys.stderr", err):
-            pbook = self._pandatools.PBookCore.PBookCore()
-            s = pbook.retry(int(job.batch_job_id))
+        pbook = self._pandatools.PBookCore.PBookCore()
+        s = pbook.retry(int(job.batch_job_id))
 
         if not s:
             logger.error("Retry of %s failed!", job)

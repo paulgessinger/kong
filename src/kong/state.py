@@ -184,7 +184,7 @@ class State:
             driver = driver_instances[driver_cls]
             res_jobs += list(driver.bulk_sync_status(_jobs))
 
-        # try bulk refresh first
+        return res_jobs
 
     def ls(
         self, path: str = ".", refresh: bool = False, recursive: bool = False
@@ -608,6 +608,8 @@ class State:
         else:
             jobs = self._extract_jobs(name)
 
+        jobs = [j for j in jobs if j.status == Job.Status.CREATED]
+
         if not confirm(f"Submit {len(jobs)} jobs?"):
             return
 
@@ -616,12 +618,12 @@ class State:
         first_job.ensure_driver_instance(self.config)
         driver = first_job.driver_instance
 
-        def job_iter() -> Iterable[Job]:
-            job: Job
-            for job in Progress(jobs, desc="Submitting jobs"):
-                yield job
+        prog = Progress(jobs, desc="Submitting jobs")
 
-        driver.bulk_submit(job_iter())
+        try:
+            driver.bulk_submit(jobs, on_progress=lambda _: prog.update(n=1))
+        finally:
+            prog.close()
 
     def kill_job(
         self, name: JobSpec, recursive: bool = False, confirm: Confirmation = YES
@@ -648,10 +650,18 @@ class State:
         if not confirm(f"Kill {len(jobs)}?"):
             return
         job: Job
-        for job in Progress(jobs, desc="Killing jobs"):
+        first_job = jobs[0]
+        first_job.ensure_driver_instance(self.config)
+        driver = first_job.driver_instance
+        prog = Progress(desc="Killing jobs", total=len(jobs))
 
-            job.ensure_driver_instance(self.config)  # type: ignore
-            job.kill()  # type: ignore
+        def advance(job: Job) -> None:
+            prog.update(n=1)
+
+        try:
+            driver.bulk_kill(jobs, on_progress=advance)
+        finally:
+            prog.close()
 
     def resubmit_job(
         self,
@@ -690,12 +700,11 @@ class State:
         with Spinner(f"Preparing for resubmission for {len(jobs)} jobs"):
             jobs = list(driver.bulk_resubmit(jobs, do_submit=False))
 
-        def job_iter() -> Iterable[Job]:
-            job: Job
-            for job in Progress(jobs, desc="Submitting jobs"):
-                yield job
-
-        driver.bulk_submit(job_iter())
+        prog = Progress(total=len(jobs), desc="Submitting jobs")
+        try:
+            driver.bulk_submit(jobs, on_progress=lambda _: prog.update())
+        finally:
+            prog.close()
 
     def get_jobs(self, name: JobSpec, recursive: bool = False) -> List[Job]:
         """

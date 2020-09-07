@@ -16,15 +16,19 @@ from typing import (
     ContextManager,
     Sequence,
     cast,
+    Callable,
 )
+import threading
 
 from ..drivers import InvalidJobStatus
 from ..logger import logger
-from ..util import rmtree, chunks
+from ..util import rmtree, chunks, exhaust
 from .driver_base import DriverBase, checked_job
 from ..executor import SerialExecutor
 from ..model.job import Job
 from ..db import database
+
+_noop = lambda _: None
 
 
 class BatchDriverBase(DriverBase):
@@ -34,14 +38,35 @@ class BatchDriverBase(DriverBase):
     def sync_status(self, job: "Job") -> Job:
         return self.bulk_sync_status([job])[0]
 
-    def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
+    def bulk_kill(
+        self, jobs: Sequence["Job"], on_progress: Callable[[Job], None] = _noop
+    ) -> Sequence["Job"]:
         now = datetime.datetime.utcnow()
         jobs = self.bulk_sync_status(jobs)
 
-        for job in jobs:
-            self.kill(job, save=False)
-            job.updated_at = now
-            job.save()
+        nthreads = 5
+        logger.debug("Killing on %d threads", nthreads)
+        nfailed = 0
+
+        lock = TimeoutLock()
+
+        def proc(job: Job) -> None:
+            nonlocal nfailed
+            try:
+                self.kill(job, save=False)
+                job.updated_at = now
+                job.save()
+                with lock:
+                    on_progress(job)
+            except:
+                with lock.acquire_timeout(5):
+                    nfailed += 1
+
+        with ThreadPoolExecutor(nthreads) as ex:
+            exhaust(ex.map(proc, jobs))
+
+        if nfailed > 0:
+            logger.warning("%d did not successfully get killed", nfailed)
 
         return jobs
 
@@ -96,14 +121,26 @@ class BatchDriverBase(DriverBase):
             )
             time.sleep(poll_interval)
 
-    def bulk_submit(self, jobs: Iterable["Job"]) -> None:
+    def bulk_submit(
+        self, jobs: Iterable["Job"], on_progress: Callable[[Job], None] = _noop
+    ) -> None:
         now = datetime.datetime.utcnow()
 
-        for job in jobs:
+        nthreads = 5
+        logger.debug("Killing on %d threads", nthreads)
+
+        lock = threading.Lock()
+
+        def proc(job: Job) -> None:
             assert job.driver == self.__class__, "Not valid for different driver"
             self.submit(job, save=False)
             job.updated_at = now
             job.save()
+            with lock:
+                on_progress(job)
+
+        with ThreadPoolExecutor(nthreads) as ex:
+            exhaust(ex.map(proc, jobs))
 
     def stdout(self, job: Job) -> Iterator[IO[str]]:
         return Path(job.data["stdout"])
