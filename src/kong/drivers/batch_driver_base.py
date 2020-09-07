@@ -44,11 +44,11 @@ class BatchDriverBase(DriverBase):
         now = datetime.datetime.utcnow()
         jobs = self.bulk_sync_status(jobs)
 
-        nthreads = 5
+        nthreads = 40
         logger.debug("Killing on %d threads", nthreads)
         nfailed = 0
 
-        lock = TimeoutLock()
+        lock = threading.Lock()
 
         def proc(job: Job) -> None:
             nonlocal nfailed
@@ -59,7 +59,7 @@ class BatchDriverBase(DriverBase):
                 with lock:
                     on_progress(job)
             except:
-                with lock.acquire_timeout(5):
+                with lock:
                     nfailed += 1
 
         with ThreadPoolExecutor(nthreads) as ex:
@@ -126,18 +126,15 @@ class BatchDriverBase(DriverBase):
     ) -> None:
         now = datetime.datetime.utcnow()
 
-        nthreads = 5
-        logger.debug("Killing on %d threads", nthreads)
-
-        lock = threading.Lock()
+        nthreads = 40
+        logger.debug("Submitting on %d threads", nthreads)
 
         def proc(job: Job) -> None:
             assert job.driver == self.__class__, "Not valid for different driver"
             self.submit(job, save=False)
             job.updated_at = now
             job.save()
-            with lock:
-                on_progress(job)
+            on_progress(job)
 
         with ThreadPoolExecutor(nthreads) as ex:
             exhaust(ex.map(proc, jobs))

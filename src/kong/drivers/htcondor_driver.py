@@ -3,6 +3,7 @@ import os
 import re
 from abc import ABC, abstractmethod
 from datetime import timedelta, datetime
+import subprocess
 
 import humanfriendly
 from typing import (
@@ -19,6 +20,8 @@ from typing import (
 )
 
 import sh
+import ratelimit
+import backoff
 from jinja2 import Environment, DictLoader
 
 from .batch_driver_base import BatchDriverBase
@@ -145,10 +148,20 @@ class ShellHTCondorInterface(HTCondorInterface):
 
     def __init__(self, config: Dict[str, Any]) -> None:  # pragma: no cover
         self.config = config
-        self._condor_submit = sh.Command("condor_submit")
         self._condor_q = sh.Command("condor_q")
         self._condor_history = sh.Command("condor_history")
-        self._condor_rm = sh.Command("condor_rm")
+
+    @backoff.on_exception(backoff.constant, ratelimit.RateLimitException, interval=1)
+    @ratelimit.limits(calls=10, period=1)
+    def _condor_rm(self, batch_job_id: int) -> None:
+        res = subprocess.check_output(["condor_rm", str(batch_job_id)])
+        return res.decode("utf-8").strip()
+
+    @backoff.on_exception(backoff.constant, ratelimit.RateLimitException, interval=1)
+    @ratelimit.limits(calls=10, period=1)
+    def _condor_submit(self, batchfile: str) -> str:
+        res = subprocess.check_output(["condor_submit", batchfile])
+        return res.decode("utf-8").strip()
 
     def _parse_output(self, output: str) -> Iterator[HTCondorAccountingItem]:
         if output.strip() == "":
