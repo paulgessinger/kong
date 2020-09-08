@@ -55,9 +55,9 @@ class BatchDriverBase(DriverBase):
             try:
                 self.kill(job, save=False)
                 job.updated_at = now
-                job.save()
                 with lock:
-                    on_progress(job)
+                    job.save()
+                on_progress(job)
             except:
                 with lock:
                     nfailed += 1
@@ -129,11 +129,14 @@ class BatchDriverBase(DriverBase):
         nthreads = 40
         logger.debug("Submitting on %d threads", nthreads)
 
+        lock = threading.Lock()
+
         def proc(job: Job) -> None:
             assert job.driver == self.__class__, "Not valid for different driver"
             self.submit(job, save=False)
             job.updated_at = now
-            job.save()
+            with lock:
+                job.save()
             on_progress(job)
 
         with ThreadPoolExecutor(nthreads) as ex:
