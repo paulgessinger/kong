@@ -4,6 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from datetime import timedelta, datetime
 import subprocess
+import tempfile
 
 import humanfriendly
 from typing import (
@@ -17,6 +18,7 @@ from typing import (
     Sequence,
     cast,
     Collection,
+    IO,
 )
 
 import sh
@@ -42,6 +44,8 @@ class HTCondorAccountingItem:
     exit_code: int
     status: Job.Status
 
+    raw: Dict[str, Any]
+
     start_date: datetime
     completion_date: datetime
 
@@ -58,6 +62,7 @@ class HTCondorAccountingItem:
         self.exit_code = exit_code
         self.start_date = start_date
         self.completion_date = completion_date
+        self.raw = {}
 
     @classmethod
     def from_parts(
@@ -163,10 +168,8 @@ class ShellHTCondorInterface(HTCondorInterface):
         res = subprocess.check_output(["condor_submit", batchfile])
         return res.decode("utf-8").strip()
 
-    def _parse_output(self, output: str) -> Iterator[HTCondorAccountingItem]:
-        if output.strip() == "":
-            return []
-        data = json.loads(output)
+    def _parse_output(self, fh: IO[str]) -> Iterator[HTCondorAccountingItem]:
+        data = json.load(fh)
         for item in data:
             job_id = item["ClusterId"]
             if item["ProcId"] != 0:
@@ -177,34 +180,30 @@ class ShellHTCondorInterface(HTCondorInterface):
                 continue
             condor_status = item["JobStatus"]
             exit_code = item["ExitCode"] if "ExitCode" in item else -1
-            yield HTCondorAccountingItem.from_parts(
+            acc = HTCondorAccountingItem.from_parts(
                 job_id,
                 condor_status,
                 exit_code,
                 item.get("JobCurrentStartDate", 0),
                 item.get("CompletionDate", 0),
             )
+            acc.raw = item
+            yield acc
 
     def condor_q(self) -> Iterator[HTCondorAccountingItem]:
 
         logger.debug("Getting job infos")
 
         args = [
-            "-attributes",
-            ",".join(
-                [
-                    "ClusterId",
-                    "ProcId",
-                    "JobStatus",
-                    "JobCurrentStartDate",
-                    "CompletionDate",
-                ]
-            ),
             "-json",
         ]
 
-        assert self._condor_q is not None
-        return self._parse_output(str(self._condor_q(*args)))
+        with tempfile.TemporaryFile("r+") as fh:
+            fh.truncate()
+            subprocess.call(["condor_q"] + args, stdout=fh)
+            fh.flush()
+            fh.seek(0)
+            yield from self._parse_output(fh)
 
     def condor_history(self, log_file: str) -> Iterator[HTCondorAccountingItem]:
 
@@ -219,24 +218,17 @@ class ShellHTCondorInterface(HTCondorInterface):
         args = [
             "-userlog",
             log_file,
-            "-attributes",
-            ",".join(
-                [
-                    "ClusterId",
-                    "ProcId",
-                    "JobStatus",
-                    "ExitCode",
-                    "JobCurrentStartDate",
-                    "CompletionDate",
-                ]
-            ),
             "-json",
             "-limit",
             "10000",
         ]
 
-        assert self._condor_history is not None
-        return self._parse_output(str(self._condor_history(*args)))
+        with tempfile.TemporaryFile("r+") as fh:
+            fh.truncate()
+            subprocess.call(["condor_history"] + args, stdout=fh)
+            fh.flush()
+            fh.seek(0)
+            yield from self._parse_output(fh)
 
     def condor_submit(self, job: Job) -> int:
         assert self._condor_submit is not None
@@ -263,6 +255,7 @@ export KONG_JOB_SCRATCHDIR=$_CONDOR_SCRATCH_DIR
 export HTCONDOR_CLUSTER_ID=$(grep "^ClusterId" $_CONDOR_JOB_AD | cut -d= - -f2 | awk '{$1=$1};1')
 
 mkdir -p $KONG_JOB_SCRATCHDIR
+cd $KONG_JOB_SCRATCHDIR
 
 stdout={{stdout}}
 echo "Job start: $(date)" > $stdout
@@ -386,35 +379,67 @@ class HTCondorDriver(BatchDriverBase):
         )
         job.save()
 
-        values = dict(
-            batchfile=batchfile,
-            jobscript=jobscript,
-            command=command,
-            stdout=stdout,
-            htcondor_out=self.log_file,
-            internal_job_id=job.job_id,
-            log_dir=log_dir,
-            output_dir=output_dir,
-            cores=cores,
-            memory=memory,
-            universe=universe,
-            name=name,
-            walltime=norm_walltime,
-            submitfile_extra=self.htcondor_config["submitfile_extra"],
-        )
-
-        batchfile_content = batchfile_tpl.render(**values)
+        batchfile_content = self._render_batchfile(job)
 
         with open(batchfile, "w") as fh:
             fh.write(batchfile_content)
 
-        jobscript_content = jobscript_tpl.render(**values)
+        jobscript_content = self._render_jobscript(job)
         with open(job.data["jobscript"], "w") as fh:
             fh.write(jobscript_content)
 
         make_executable(job.data["jobscript"])
 
         job._driver_instance = self
+        return job
+
+    def _render_batchfile(self, job: Job) -> str:
+        d = job.data
+        values = dict(
+            batchfile=d["batchfile"],
+            jobscript=d["jobscript"],
+            command=job.command,
+            stdout=d["stdout"],
+            htcondor_out=self.log_file,
+            internal_job_id=job.job_id,
+            log_dir=d["log_dir"],
+            output_dir=d["output_dir"],
+            cores=job.cores,
+            memory=job.memory,
+            universe=d["universe"],
+            name=d["name"],
+            walltime=d["walltime"],
+            submitfile_extra=self.htcondor_config["submitfile_extra"],
+        )
+        return batchfile_tpl.render(**values)
+
+    def _render_jobscript(self, job: Job) -> str:
+        d = job.data
+        values = dict(
+            batchfile=d["batchfile"],
+            jobscript=d["jobscript"],
+            command=job.command,
+            stdout=d["stdout"],
+            htcondor_out=self.log_file,
+            internal_job_id=job.job_id,
+            log_dir=d["log_dir"],
+            output_dir=d["output_dir"],
+            cores=job.cores,
+            memory=job.memory,
+            universe=d["universe"],
+            name=d["name"],
+            walltime=d["walltime"],
+            submitfile_extra=self.htcondor_config["submitfile_extra"],
+        )
+        return jobscript_tpl.render(**values)
+
+    def prepare_resubmit(self, job: Job) -> Job:
+        batchfile_content = self._render_batchfile(job)
+        with open(job.data["batchfile"], "w") as fh:
+            fh.write(batchfile_content)
+        jobscript_content = self._render_jobscript(job)
+        with open(job.data["jobscript"], "w") as fh:
+            fh.write(jobscript_content)
         return job
 
     def bulk_sync_status(self, jobs: Collection["Job"]) -> Sequence["Job"]:
@@ -439,6 +464,7 @@ class HTCondorDriver(BatchDriverBase):
                     continue
                 job.status = item.status
                 job.data["exit_code"] = item.exit_code
+                job.data["htcondor_raw"] = item.raw
 
                 updated_at = max([item.start_date, item.completion_date])
                 if updated_at == epoch:

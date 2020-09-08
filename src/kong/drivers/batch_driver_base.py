@@ -148,6 +148,27 @@ class BatchDriverBase(DriverBase):
     def stderr(self, job: "Job") -> ContextManager[None]:
         raise NotImplementedError("Stderr goes to stdout in slurm")
 
+    def _prepare_resubmit(self, job: Job) -> Job:
+        for name in ["stdout"]:
+            path = job.data[name]
+            if os.path.exists(path):
+                logger.debug("Removing %s", path)
+                os.remove(path)
+            assert not os.path.exists(path)
+
+        for d in ["output_dir"]:
+            path = job.data[d]
+            if os.path.exists(path):
+                logger.debug("Removing %s", path)
+                rmtree(path)
+                os.makedirs(path)
+
+        return self.prepare_resubmit(job)
+
+    def prepare_resubmit(self, job: Job) -> Job:
+        # default impl, do nothing
+        return job
+
     def resubmit(self, job: "Job") -> "Job":
         logger.debug("Resubmit job %s", job)
         job = self.sync_status(job)
@@ -164,19 +185,7 @@ class BatchDriverBase(DriverBase):
             pass
 
         # need to make sure the output artifacts are gone, since we're reusing the same job dir
-        for name in ["stdout"]:
-            path = job.data[name]
-            if os.path.exists(path):
-                logger.debug("Removing %s", path)
-                os.remove(path)
-            assert not os.path.exists(path)
-
-        for d in ["output_dir"]:
-            path = job.data[d]
-            if os.path.exists(path):
-                logger.debug("Removing %s", path)
-                rmtree(path)
-                os.makedirs(path)
+        job = self._prepare_resubmit(job)
 
         # reset to created
         job.status = Job.Status.CREATED
@@ -208,21 +217,6 @@ class BatchDriverBase(DriverBase):
 
         def clean(job: Job) -> Job:
             # need to make sure the output artifacts are gone, since we're reusing the same job dir
-            for name in ["stdout"]:
-                path = job.data[name]
-                if os.path.exists(path):
-                    logger.debug("Removing %s", path)
-                    os.remove(path)
-                assert not os.path.exists(path)
-
-            for d in ["output_dir"]:
-                path = job.data[d]
-                if os.path.exists(path):
-                    logger.debug("Removing %s", path)
-                    rmtree(path)
-                    os.makedirs(path)
-
-            return job
 
         nthreads = 40
         logger.debug("Cleaning up on %d threads", nthreads)
