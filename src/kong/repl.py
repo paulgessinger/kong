@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import wait, ThreadPoolExecutor
+from pprint import pformat
 
 import humanfriendly
 import sh
@@ -458,11 +459,14 @@ class Repl(cmd.Cmd):
 
                 click.secho(f"{field}: {str(getattr(job, field))}", fg=fg)
             click.echo("data:")
-            for k, v in job.data.items():
-                vs = str(v)
-                if len(vs) > 500 and not full:
-                    vs = vs[:500] + "..."
-                click.secho(f"- {k}: {vs}")
+            if full:
+                click.secho(pformat(job.data))
+            else:
+                for k, v in job.data.items():
+                    vs = str(v)
+                    if len(vs) > 500 and not full:
+                        vs = vs[:500] + "..."
+                    click.secho(f"- {k}: {vs}")
 
     @parse_arguments
     @click.argument("path")
@@ -508,7 +512,9 @@ class Repl(cmd.Cmd):
         help="Provide extra arguments like `--argument name=value`",
     )
     @click.option("--driver", "-d")
-    def do_create_job(self, command: List[str], arguments_raw: List[str], driver: Optional[str]) -> None:
+    def do_create_job(
+        self, command: List[str], arguments_raw: List[str], driver: Optional[str]
+    ) -> None:
         """
         Create a job with command COMMAND for processing.
         Additional arguments can be provided and are passed to the driver for verification.
@@ -537,7 +543,6 @@ class Repl(cmd.Cmd):
         _driver: DriverBase = self.state.default_driver
         if driver is not None:
             _driver = get_driver(driver)
-
 
         job = self.state.create_job(command=command_str, **arguments, driver=_driver)
         click.secho(f"Created job {job}")
