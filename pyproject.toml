@@ -30,6 +30,7 @@ ipython = {version = "^7.16.1", optional = true}
 pytz = "^2020.1"
 ratelimit = "^2.2.1"
 backoff = "^1.10.0"
+pysqlite3-binary = "^0.4.3"
 
 [tool.poetry.scripts]
 kong = 'kong.cli:main'

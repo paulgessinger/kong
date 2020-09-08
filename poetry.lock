@@ -628,6 +628,14 @@ version = "0.16.0"
 six = "*"
 
 [[package]]
+category = "main"
+description = "DB-API 2.0 interface for Sqlite 3.x"
+name = "pysqlite3-binary"
+optional = false
+python-versions = "*"
+version = "0.4.3"
+
+[[package]]
 category = "dev"
 description = "pytest: simple powerful testing with Python"
 name = "pytest"
@@ -1067,7 +1075,7 @@ testing = ["jaraco.itertools", "func-timeout"]
 ipython = ["ipython"]
 
 [metadata]
-content-hash = "35da0d0144d1aa52d2dbb1bd7bb97bae1eb063b91cc8e2ff1f085f6c6be19eef"
+content-hash = "0fc634f6b6671d9e666048b26f8d3924a3b27dd2fb9a18192f8399c523606bcc"
 lock-version = "1.0"
 python-versions = "^3.6"
 
@@ -1381,6 +1389,11 @@ pyreadline = [
 ]
 pyrsistent = [
     {file = "pyrsistent-0.16.0.tar.gz", hash = "sha256:28669905fe725965daa16184933676547c5bb40a5153055a8dee2a4bd7933ad3"},
+]
+pysqlite3-binary = [
+    {file = "pysqlite3_binary-0.4.3-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:6435ddb41cc9b7a301b0734375d2cf99f5f595a87bb71c790685f11b2a10a43d"},
+    {file = "pysqlite3_binary-0.4.3-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:b85af4d3d2d3f7cf9c29949f0c5cf7f0da9260cf71ef49685c20acc0e21f233d"},
+    {file = "pysqlite3_binary-0.4.3-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:4cd5579d3126e3a762766c17bde13acba173485bc2a5b551e29184f7b948f25b"},
 ]
 pytest = [
     {file = "pytest-5.4.3-py3-none-any.whl", hash = "sha256:5c0db86b698e8f170ba4582a492248919255fcd4c79b1ee64ace34301fb589a1"},
