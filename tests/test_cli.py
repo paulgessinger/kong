@@ -99,9 +99,11 @@ def test_repl_raises(app_env, db, cli, monkeypatch):
 
 try:
     import IPython
+
     have_ipython = True
 except:
     have_ipython = False
+
 
 @pytest.mark.skipif(not have_ipython, reason="IPython needs to be installed")
 def test_interactive(app_env, cli, monkeypatch):
