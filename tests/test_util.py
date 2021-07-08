@@ -273,7 +273,7 @@ def test_progress(monkeypatch):
     assert tqdm.call_count == 1
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def cleaned_tmpdir(tmpdir):
     sub = Path(tmpdir) / "subdir"
     sub.mkdir(exist_ok=True)
