@@ -21,7 +21,7 @@ skip_lxplus = pytest.mark.skipif(
 )
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def db():
     database.init(":memory:")
     database.connect()
