@@ -606,7 +606,9 @@ class Repl(cmd.Cmd):
         assert len(jobs) == 1
         job = jobs[0]
 
+        logger.debug("Checking if %s exists", job.data["stdout"])
         if not os.path.exists(job.data["stdout"]):
+            logger.debug("Waiting for job to create stdout file %s", job.data["stdout"])
             with Spinner(
                 text=f"Waiting for job to create stdout file '{job.data['stdout']}'"
             ):

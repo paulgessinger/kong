@@ -12,7 +12,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.6"
-click = "^7.1.2"
+click = "^8.0.1"
 pyyaml = "^5.3.1"
 halo = ">=0.0.29,<0.0.31"
 sh = "^1.13.1"
