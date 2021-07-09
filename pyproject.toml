@@ -11,14 +11,14 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.6.2"
 click = "^8.0.1"
 pyyaml = "^5.3.1"
 halo = "^0.0.31"
 sh = "^1.13.1"
 python-dateutil = "^2.8.1"
 peewee = "^3.13.3"
-coloredlogs = "^14.0"
+coloredlogs = "^15.0.1"
 humanfriendly = "^9.2"
 psutil = "^5.7.2"
 schema = "^0.7.2"
@@ -43,7 +43,7 @@ pytest-cov = "^2.10.1"
 pytest-rerunfailures = "^9.0"
 mypy = "^0.910"
 flake8 = "^3.8.3"
-black = "^19.10b0"
+black = "^21.6b0"
 tox = "^3.19.0"
 sphinx-autodoc-typehints = "^1.11.0"
 
