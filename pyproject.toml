@@ -14,20 +14,21 @@ packages = [
 python = "^3.6"
 click = "^8.0.1"
 pyyaml = "^5.3.1"
-halo = ">=0.0.29,<0.0.31"
+halo = "^0.0.31"
 sh = "^1.13.1"
 python-dateutil = "^2.8.1"
 peewee = "^3.13.3"
 coloredlogs = "^14.0"
-humanfriendly = "^8.2"
+humanfriendly = "^9.2"
 psutil = "^5.7.2"
 schema = "^0.7.2"
 tqdm = "^4.48.0"
 notifiers = "^1.2.1"
-jinja2 = "^2.11.2"
+jinja2 = "^3.0.0"
 pytimeparse = "^1.1.8"
 ipython = {version = "^7.16.1", optional = true}
-pytz = "^2020.1"
+pytz = "^2021.1"
+Jinja2 = "^3.0.1"
 
 [tool.poetry.scripts]
 kong = 'kong.cli:main'
