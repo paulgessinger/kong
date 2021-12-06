@@ -43,7 +43,7 @@ pytest-cov = "^2.10.1"
 pytest-rerunfailures = "^9.0"
 mypy = "^0.910"
 flake8 = "^3.8.3"
-black = "^21.6b0"
+black = "^21.12b0"
 tox = "^3.24.0"
 sphinx-autodoc-typehints = "^1.11.0"
 
