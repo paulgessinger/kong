@@ -39,7 +39,7 @@ ipython = ["ipython"]
 [tool.poetry.dev-dependencies]
 pytest = "^6.0.1"
 coverage = "^5.2"
-pytest-cov = "^2.10.1"
+pytest-cov = "^4.0.0"
 pytest-rerunfailures = "^9.0"
 mypy = "^0.910"
 flake8 = "^3.8.3"
