@@ -17,7 +17,7 @@ from kong.drivers.slurm_driver import (
 )
 from kong.model.folder import Folder
 from kong.model.job import Job
-from kong.util import is_executable, exhaust
+from kong.util import is_executable
 
 
 @pytest.fixture
@@ -755,7 +755,7 @@ def test_wait(driver, state, monkeypatch):
 
 def test_wait_single(driver, monkeypatch):
     root = Folder.get_root()
-    j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
+    j1 = driver.create_job(folder=root, command="sleep 0.1; echo 'JOB'")
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(return_value=[j1]))
 

@@ -1,18 +1,18 @@
 import os
 import functools
 import socket
+import sys
 
 import pytest
-import click
 from click.testing import CliRunner
 from unittest.mock import Mock
 import peewee
 
 from kong.db import database
-from kong import model
 from kong.model.folder import Folder
 from kong.model.job import Job
 import kong.setup
+import kong.config
 import kong
 
 skip_lxplus = pytest.mark.skipif(
@@ -47,7 +47,7 @@ def app_env(tmp_path, monkeypatch):
 @pytest.fixture
 def cli():
     """Yield a click.testing.CliRunner to invoke the CLI."""
-    class_ = click.testing.CliRunner
+    class_ = CliRunner
 
     def invoke_wrapper(f):
         """Augment CliRunner.invoke to emit its output to stdout.
@@ -79,19 +79,19 @@ def cli():
 
 
 @pytest.fixture
-def tree(db, state):
+def tree(db):
     root = Folder.get_root()
 
-    f1 = root.add_folder("f1")
+    root.add_folder("f1")
     f2 = root.add_folder("f2")
 
-    alpha = f2.add_folder("alpha")
-    beta = f2.add_folder("beta")
+    f2.add_folder("alpha")
+    f2.add_folder("beta")
 
     gamma = f2.add_folder("gamma")
-    delta = gamma.add_folder("delta")
+    gamma.add_folder("delta")
     f3 = root.add_folder("f3")
-    omega = f3.add_folder("omega")
+    f3.add_folder("omega")
     return root
 
 
@@ -99,21 +99,24 @@ def tree(db, state):
 def sample_jobs(tree, state):
     driver = state.default_driver
     jobs = []
-    job = lambda f: jobs.append(
-        driver.create_job(command="sleep 0.1", folder=Folder.find_by_path(f, state.cwd))
-    )
-    root = tree
 
-    for i in range(3):
+    def job(f):
+        return jobs.append(
+            driver.create_job(
+                command="sleep 0.1", folder=Folder.find_by_path(f, state.cwd)
+            )
+        )
+
+    for _ in range(3):
         job("/")
 
-    for i in range(4):
+    for _ in range(4):
         job("/f1")
 
-    for i in range(4):
+    for _ in range(4):
         job("/f2")
 
-    for i in range(2):
+    for _ in range(2):
         job("/f2/beta")
 
     return jobs

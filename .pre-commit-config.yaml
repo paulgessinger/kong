@@ -4,14 +4,9 @@ repos:
     rev: v0.12.12
     hooks:
         # Run the linter.
-        # - id: ruff-check
+        - id: ruff-check
         # Run the formatter.
         - id: ruff-format
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.0.0
-    hooks:
-      - id: flake8
-        files: src/kong/.*\.py
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.782
     hooks:

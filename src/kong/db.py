@@ -54,6 +54,8 @@ else:  # pragma: no cover
             self, query: str, params: Tuple[Any]
         ) -> Iterable[Tuple[Any]]: ...
 
+        def close(self) -> None: ...
+
     class AutoIncrementField:
         """
         Type stub

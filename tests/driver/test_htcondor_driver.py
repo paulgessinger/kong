@@ -2,13 +2,13 @@ import os
 import shutil
 import tempfile
 from datetime import timedelta, datetime
-from typing import Collection, Iterator
+from typing import Iterator
 from unittest.mock import Mock, ANY, call
 
 import pytest
 
 from kong import util
-from kong.config import Config, slurm_schema
+from kong.config import Config
 from kong.drivers import InvalidJobStatus, get_driver
 from kong.drivers.htcondor_driver import (
     HTCondorInterface,
@@ -346,10 +346,10 @@ def test_driver_create(state, monkeypatch):
 
     assert warning.call_count == 0
 
-    driver = HTCondorDriver(state.config, sif)
+    HTCondorDriver(state.config, sif)
 
     monkeypatch.setattr("os.path.getsize", Mock(return_value=60 * 1e6))
-    driver = HTCondorDriver(state.config, sif)
+    HTCondorDriver(state.config, sif)
     warning.assert_called_once()
 
 
@@ -1018,7 +1018,7 @@ def test_wait(driver, state, monkeypatch):
 
 def test_wait_single(driver, monkeypatch):
     root = Folder.get_root()
-    j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
+    j1 = driver.create_job(folder=root, command="sleep 0.1; echo 'JOB'")
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(return_value=[j1]))
 

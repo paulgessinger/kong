@@ -6,7 +6,8 @@ def test_SerialExecutor():
 
     results = []
 
-    func = lambda n: results.append(n)
+    def func(n):
+        return results.append(n)
 
     f = ex.submit(func, 1)
     assert results == [1]
@@ -22,7 +23,8 @@ def test_SerialExecutor():
     f = ex.submit(error)
     assert isinstance(f.exception(), ValueError)
 
-    ret = lambda x: x * x
+    def ret(x):
+        return x * x
 
     f = ex.submit(ret, 4)
     assert f.result() == 16

@@ -5,7 +5,6 @@ import inspect
 
 from kong.drivers import DriverMismatch
 from kong.drivers.driver_base import DriverBase, checked_job
-from kong.model.job import Job
 
 
 @pytest.fixture
@@ -23,9 +22,7 @@ def driver(noabc, state):
 def test_driver_base_all_methods(driver):
     methods = inspect.getmembers(driver, predicate=inspect.ismethod)
 
-    excl = ["__init__", "_check_driver"]
-
-    for name, method in methods:
+    for _, method in methods:
         if not hasattr(method, "__isabstractmethod__"):
             continue
 

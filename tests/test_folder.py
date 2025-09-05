@@ -1,9 +1,6 @@
-import os
-
 import pytest
 import peewee as pw
 
-from kong.db import database
 from kong.model.folder import Folder
 
 import logging
@@ -95,7 +92,7 @@ def test_get_root_creates(db):
 
 
 def test_only_one_root(db):
-    root = Folder.get_root()
+    Folder.get_root()
     # try to create another one
 
     with pytest.raises(AssertionError):
@@ -104,7 +101,7 @@ def test_only_one_root(db):
         Folder.create(name="something else", parent=None)
 
     # make sure it wasnt created
-    assert Folder.select().where(Folder.parent == None).count() == 1
+    assert Folder.select().where(Folder.parent.is_null()).count() == 1
 
 
 def test_path(db):
@@ -136,7 +133,7 @@ def test_find_by_path(db):
 
     # Check it works with implicit CWD
     assert Folder.find_by_path("/") == root
-    assert Folder.find_by_path("../blubb") == None
+    assert Folder.find_by_path("../blubb") is None
     assert Folder.find_by_path("/f1") == f1
     assert Folder.find_by_path("/f1/f2") == f2
     assert Folder.find_by_path("/f1/f2/f3") == f3
@@ -224,7 +221,7 @@ def test_job_stats(db, state, monkeypatch):
     f2 = f1.add_folder("f2")
 
     state.cd(f1)
-    j1 = state.create_job(command="sleep 1")
+    state.create_job(command="sleep 1")
     j2 = state.create_job(command="sleep 1")
     j3 = state.create_job(command="sleep 1")
 
@@ -255,7 +252,3 @@ def test_job_stats(db, state, monkeypatch):
 
     assert exp == f1.job_stats()
     assert exp == root.job_stats()
-
-    with monkeypatch.context() as m:
-        assert exp == f1.job_stats()
-        assert exp == root.job_stats()

@@ -2,10 +2,8 @@ import logging
 import os
 import shutil
 import stat
-import subprocess
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import timedelta
-from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, ANY
 
@@ -136,10 +134,10 @@ def test_make_executable(tmp_path):
 def test_is_executable(tmp_path):
     p = tmp_path.joinpath("test.sh")
     p.write_text("hallo")
-    assert is_executable(p) == False
+    assert not is_executable(p)
 
     os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
-    assert is_executable(p) == True
+    assert is_executable(p)
 
 
 def test_rmtree(monkeypatch):
@@ -163,8 +161,8 @@ def test_rmtree(monkeypatch):
 
 
 def test_chunks():
-    l = [1, 2, 3, 4, 5, 6, 7]
-    ch = list(chunks(l, 2))
+    nums = [1, 2, 3, 4, 5, 6, 7]
+    ch = list(chunks(nums, 2))
 
     assert ch == [[1, 2], [3, 4], [5, 6], [7]]
 
