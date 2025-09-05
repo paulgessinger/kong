@@ -32,9 +32,9 @@ class EnumField(pw.IntegerField):
 def with_driver(f: Any) -> Any:
     @wraps(f)
     def wrapper(self: "Job", *args: Any, **kwargs: Any) -> Any:
-        assert (
-            self._driver_instance is not None
-        ), "Cannot call this method without a driver instance"
+        assert self._driver_instance is not None, (
+            "Cannot call this method without a driver instance"
+        )
         return f(self, self._driver_instance, *args, **kwargs)
 
     return wrapper

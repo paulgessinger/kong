@@ -1174,20 +1174,20 @@ def test_job_bulk_remove(driver, state, monkeypatch):
     ]
     for job in jobs:
         assert os.path.exists(job.data["log_dir"]), "Does not create job directory"
-        assert os.path.exists(
-            job.data["output_dir"]
-        ), "Does not create output directory"
+        assert os.path.exists(job.data["output_dir"]), (
+            "Does not create output directory"
+        )
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(side_effect=lambda j: j))
     driver.bulk_remove(jobs)
 
     for job in jobs:
-        assert not os.path.exists(
-            job.data["log_dir"]
-        ), "Driver does not cleanup job directory"
-        assert not os.path.exists(
-            job.data["output_dir"]
-        ), "Driver does not cleanup output directory"
+        assert not os.path.exists(job.data["log_dir"]), (
+            "Driver does not cleanup job directory"
+        )
+        assert not os.path.exists(job.data["output_dir"]), (
+            "Driver does not cleanup output directory"
+        )
 
 
 def test_get_htcondor_driver():
