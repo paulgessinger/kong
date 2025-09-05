@@ -1,64 +1,61 @@
-[tool.poetry]
+[project]
 name = "kong-batch"
 version = "0.9.4"
 description = "Batch job submission and management tool"
-authors = ["Paul Gessinger <hello@paulgessinger.com>"]
-license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/paulgessinger/kong/"
-packages = [
-    { include = "kong", from = "src" },
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+  { name = "Paul Gessinger", email = "hello@paulgessinger.com" }
+]
+dependencies = [
+  "click>=8.0.1,<9.0.0",
+  "PyYAML>=6.0.2,<7.0.0",
+  "halo>=0.0.31,<0.1.0",
+  "sh>=1.13.1,<2.0.0",
+  "python-dateutil>=2.8.1,<3.0.0",
+  "peewee>=3.13.3,<4.0.0",
+  "coloredlogs>=15.0.1,<16.0.0",
+  "humanfriendly>=9.2,<10.0",
+  "psutil>=5.7.2,<6.0.0",
+  "schema>=0.7.2,<0.8.0",
+  "tqdm>=4.48.0,<5.0.0",
+  "notifiers>=1.2.1,<2.0.0",
+  "Jinja2>=3.0.1,<4.0.0",      # normalized; replaces duplicate poetry entries
+  "pytimeparse>=1.1.8,<2.0.0",
+  "pytz>=2021.1,<2022.0",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.6.2"
-click = "^8.0.1"
-pyyaml = "^5.3.1"
-halo = "^0.0.31"
-sh = "^1.13.1"
-python-dateutil = "^2.8.1"
-peewee = "^3.13.3"
-coloredlogs = "^15.0.1"
-humanfriendly = "^9.2"
-psutil = "^5.7.2"
-schema = "^0.7.2"
-tqdm = "^4.48.0"
-notifiers = "^1.2.1"
-jinja2 = "^3.0.0"
-pytimeparse = "^1.1.8"
-ipython = {version = "^7.16.1", optional = true}
-pytz = "^2021.1"
-Jinja2 = "^3.0.1"
+[project.urls]
+Homepage = "https://github.com/paulgessinger/kong/"
 
-[tool.poetry.scripts]
-kong = 'kong.cli:main'
+[project.scripts]
+kong = "kong.cli:main"
 
-[tool.poetry.extras]
-ipython = ["ipython"]
-
-[tool.poetry.dev-dependencies]
-pytest = "^6.0.1"
-coverage = "^5.2"
-pytest-cov = "^2.10.1"
-pytest-rerunfailures = "^9.0"
-mypy = "^0.910"
-flake8 = "^3.8.3"
-black = "^21.6b0"
-tox = "^3.24.0"
-sphinx-autodoc-typehints = "^1.11.0"
-
-[tool.semantic_release]
-version_pattern = [
-    'pyproject.toml:version = "{version}"',
+[project.optional-dependencies]
+ipython = [
+  "ipython>=7.16.1,<8.0.0"
 ]
-commit_subject = "Bump and tag {version}"
-commit_message = ""
-build_command = "pip install poetry && poetry build"
+
+[dependency-groups]
+dev = [
+  "pytest>=6.0.1,<7.0.0",
+  "coverage>=5.2,<6.0.0",
+  "pytest-cov>=2.10.1,<3.0.0",
+  "pytest-rerunfailures>=9.0,<10.0",
+  "mypy>=0.910,<1.0.0",
+  "flake8>=3.8.3,<4.0.0",
+  "black>=21.6b0,<22.0",
+  "tox>=3.24.0,<4.0.0",
+  "sphinx-autodoc-typehints>=1.11.0,<2.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "kong"
 
 [tool.pytest.ini_options]
 addopts = "--reruns 3"
-
-
-[build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
