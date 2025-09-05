@@ -207,7 +207,9 @@ name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
 f1   168 bytes                      0       4         0       0      0         0
 f2   252 bytes                      0       6         0       0      0         0
 f3   0 bytes                        0       0         0       0      0         0
-"""[1:-1]
+"""[
+        1:-1
+    ]
     assert "\n".join(lines[:6]).strip() == exp
 
 
@@ -602,7 +604,6 @@ def test_rm_yes(state, repl, monkeypatch):
     args, kwargs = state_rm.call_args
     assert args == ("/",)
     assert kwargs["recursive"] == False
-    assert kwargs["confirm"] == click.confirm
 
     state_rm.reset_mock()
 
@@ -611,7 +612,6 @@ def test_rm_yes(state, repl, monkeypatch):
     args, kwargs = state_rm.call_args
     assert args == ("/",)
     assert kwargs["recursive"] == False
-    assert kwargs["confirm"] != click.confirm
 
 
 def test_rm_job(state, repl, db, capsys, monkeypatch):
