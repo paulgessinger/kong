@@ -34,7 +34,7 @@ class BatchDriverBase(DriverBase):
         return self.bulk_sync_status([job])[0]
 
     def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence["Job"]:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
         jobs = self.bulk_sync_status(jobs)
 
         for job in jobs:
@@ -96,7 +96,7 @@ class BatchDriverBase(DriverBase):
             time.sleep(poll_interval)
 
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
 
         for job in jobs:
             assert job.driver == self.__class__, "Not valid for different driver"
@@ -196,7 +196,9 @@ class BatchDriverBase(DriverBase):
         # update status
         with database.atomic():
             with database.atomic():
-                now = datetime.datetime.utcnow()
+                now = datetime.datetime.now(tz=datetime.timezone.utc).replace(
+                    tzinfo=None
+                )
 
                 def jobit() -> Iterable[Job]:
                     for job in jobs:

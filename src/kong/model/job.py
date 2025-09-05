@@ -1,7 +1,7 @@
 import datetime
 from concurrent.futures._base import Executor
 from contextlib import contextmanager
-from enum import IntFlag
+from enum import IntEnum
 from functools import wraps
 from typing import Any, List, Dict, Union, cast, TYPE_CHECKING, Optional, Type, Iterator
 
@@ -32,9 +32,9 @@ class EnumField(pw.IntegerField):
 def with_driver(f: Any) -> Any:
     @wraps(f)
     def wrapper(self: "Job", *args: Any, **kwargs: Any) -> Any:
-        assert self._driver_instance is not None, (
-            "Cannot call this method without a driver instance"
-        )
+        assert (
+            self._driver_instance is not None
+        ), "Cannot call this method without a driver instance"
         return f(self, self._driver_instance, *args, **kwargs)
 
     return wrapper
@@ -82,7 +82,7 @@ class Job(BaseModel):
                   honored by all drivers.
     """
 
-    class Status(IntFlag):
+    class Status(IntEnum):
         """
         Status enum which lists the various status types
         The exact meaning might vary from driver to driver.
@@ -133,7 +133,9 @@ class Job(BaseModel):
         memory = pw.IntegerField(null=False, default=1000)  # memory in Megabytes
         status = EnumField(choices=Status, null=False, default=Status.CREATED)
 
-        created_at = pw.DateTimeField(default=datetime.datetime.utcnow)
+        created_at = pw.DateTimeField(
+            default=datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
+        )
         updated_at = pw.DateTimeField()
 
     _driver_instance: Optional[DriverBase] = None

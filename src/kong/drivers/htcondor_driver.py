@@ -2,7 +2,7 @@ import json
 import os
 import re
 from abc import ABC, abstractmethod
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 
 import humanfriendly
 from typing import (
@@ -99,8 +99,10 @@ class HTCondorAccountingItem:
             job_id,
             status,
             exit_code,
-            datetime.utcfromtimestamp(start_date),
-            datetime.utcfromtimestamp(completion_date),
+            datetime.fromtimestamp(start_date, tz=timezone.utc).replace(tzinfo=None),
+            datetime.fromtimestamp(completion_date, tz=timezone.utc).replace(
+                tzinfo=None
+            ),
         )
 
     def __repr__(self) -> str:
@@ -406,7 +408,7 @@ class HTCondorDriver(BatchDriverBase):
         for job in jobs:
             self._check_driver(job)
 
-        epoch = datetime.utcfromtimestamp(0)
+        epoch = datetime.fromtimestamp(0, tz=timezone.utc).replace(tzinfo=None)
 
         item_map = {item.job_id: item for item in self.htcondor.condor_q()}
         # only add history info if we didn't have info in queue

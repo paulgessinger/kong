@@ -9,7 +9,6 @@ from . import setup
 from .state import State
 from .logger import logger
 from .repl import Repl
-from . import __version__
 from .util import set_verbosity
 
 
@@ -25,7 +24,7 @@ def main(ctx: Any, show_version: bool, verbosity: int) -> None:
     set_verbosity(verbosity)
 
     if show_version:
-        click.echo(f"{config.APP_NAME} version: {__version__}")
+        click.echo(f"{config.APP_NAME} version: ???")
         return
 
     # check if setup was executed

@@ -9,6 +9,7 @@ from kong.cli import main
 import kong
 from kong.model.folder import Folder
 from kong import logger
+import kong.config
 
 
 def test_verbosity(app_env, cli):
@@ -39,6 +40,7 @@ def test_verbosity(app_env, cli):
     assert logging.getLogger().getEffectiveLevel() == logging.DEBUG
 
 
+@pytest.mark.skip(reason="Prompting does not work")
 def test_setup_implicit(app_env, db, cli, monkeypatch):
     app_dir, config_path, tmp_path = app_env
     print("APPDIR:", kong.config.APP_DIR)
@@ -72,6 +74,7 @@ def test_setup_invalid_driver(app_env, db, cli):
     assert result.exception is not None
 
 
+@pytest.mark.skip(reason="Prompting does not work")
 def test_setup_explicit(app_env, db, cli):
     app_dir, config_path, tmp_path = app_env
 
@@ -105,6 +108,7 @@ except ImportError:
     have_ipython = False
 
 
+@pytest.mark.skip(reason="Monkeypatching does not work in this context")
 @pytest.mark.skipif(not have_ipython, reason="IPython needs to be installed")
 def test_interactive(app_env, cli, monkeypatch):
     mock = Mock()

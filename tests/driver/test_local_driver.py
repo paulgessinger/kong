@@ -59,9 +59,9 @@ def test_create_job(driver, tree, state):
 
     assert os.path.exists(j1.data["output_dir"]), "Does not create job output directory"
 
-    assert os.path.isfile(os.path.join(j1.data["log_dir"], "jobscript.sh")), (
-        "Does not create job script"
-    )
+    assert os.path.isfile(
+        os.path.join(j1.data["log_dir"], "jobscript.sh")
+    ), "Does not create job script"
 
     f2 = tree.subfolder(("f2"))
     j2 = driver.create_job(f2, command="sleep 1")
@@ -72,9 +72,9 @@ def test_create_job(driver, tree, state):
     assert j2.status == Job.Status.CREATED
     assert os.path.exists(j2.data["log_dir"]), "Does not create job directory"
     assert os.path.exists(j2.data["output_dir"]), "Does not create job output directory"
-    assert os.path.isfile(os.path.join(j2.data["log_dir"], "jobscript.sh")), (
-        "Does not create job script"
-    )
+    assert os.path.isfile(
+        os.path.join(j2.data["log_dir"], "jobscript.sh")
+    ), "Does not create job script"
 
     print(j2.data)
 
@@ -114,15 +114,15 @@ def test_job_rm_cleans_up(driver, state):
 
     driver.remove(j1)
 
-    assert not os.path.exists(j1.data["log_dir"]), (
-        "Driver does not cleanup job directory"
-    )
-    assert not os.path.exists(j1.data["output_dir"]), (
-        "Driver does not cleanup output directory"
-    )
-    assert not os.path.exists(j1.data["scratch_dir"]), (
-        "Does not cleanup scratch directory"
-    )
+    assert not os.path.exists(
+        j1.data["log_dir"]
+    ), "Driver does not cleanup job directory"
+    assert not os.path.exists(
+        j1.data["output_dir"]
+    ), "Driver does not cleanup output directory"
+    assert not os.path.exists(
+        j1.data["scratch_dir"]
+    ), "Does not cleanup scratch directory"
 
     j2 = driver.create_job(command="sleep 1", folder=state.cwd)
     assert j2 is not None
@@ -135,15 +135,15 @@ def test_job_rm_cleans_up(driver, state):
 
     driver.remove(j2)
 
-    assert not os.path.exists(j2.data["log_dir"]), (
-        "Driver does not cleanup job directory"
-    )
-    assert not os.path.exists(j2.data["output_dir"]), (
-        "Driver does not cleanup output directory"
-    )
-    assert not os.path.exists(j2.data["scratch_dir"]), (
-        "Does not cleanup scratch directory"
-    )
+    assert not os.path.exists(
+        j2.data["log_dir"]
+    ), "Driver does not cleanup job directory"
+    assert not os.path.exists(
+        j2.data["output_dir"]
+    ), "Driver does not cleanup output directory"
+    assert not os.path.exists(
+        j2.data["scratch_dir"]
+    ), "Does not cleanup scratch directory"
 
 
 def test_job_bulk_remove(driver, state):
@@ -154,25 +154,25 @@ def test_job_bulk_remove(driver, state):
     ]
     for job in jobs:
         assert os.path.exists(job.data["log_dir"]), "Does not create job directory"
-        assert os.path.exists(job.data["output_dir"]), (
-            "Does not create output directory"
-        )
-        assert os.path.exists(job.data["scratch_dir"]), (
-            "Does not create scratch directory"
-        )
+        assert os.path.exists(
+            job.data["output_dir"]
+        ), "Does not create output directory"
+        assert os.path.exists(
+            job.data["scratch_dir"]
+        ), "Does not create scratch directory"
 
     driver.bulk_remove(jobs)
 
     for job in jobs:
-        assert not os.path.exists(job.data["log_dir"]), (
-            "Driver does not cleanup job directory"
-        )
-        assert not os.path.exists(job.data["output_dir"]), (
-            "Driver does not cleanup output directory"
-        )
-        assert not os.path.exists(job.data["scratch_dir"]), (
-            "Does not cleanup scratch directory"
-        )
+        assert not os.path.exists(
+            job.data["log_dir"]
+        ), "Driver does not cleanup job directory"
+        assert not os.path.exists(
+            job.data["output_dir"]
+        ), "Driver does not cleanup output directory"
+        assert not os.path.exists(
+            job.data["scratch_dir"]
+        ), "Does not cleanup scratch directory"
 
 
 def test_job_cleanup_status(driver, state):
@@ -439,7 +439,6 @@ def test_wait(driver, state):
         driver.wait(j1, poll_interval=0.05, timeout=0.2)
 
 
-@pytest.mark.flaky(reruns=5)
 def test_run_terminated(driver, state):
     root = Folder.get_root()
     j1 = driver.create_job(command="echo 'begin'; sleep 10 ; echo 'end'", folder=root)
