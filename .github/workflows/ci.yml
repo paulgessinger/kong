@@ -20,7 +20,7 @@ jobs:
 
     - name: Run tests
       run: |
-        uv run --python ${{ matrix.python-version }} pytest --cov-report-xml --cov=kong --log-level DEBUG
+        uv run --python ${{ matrix.python-version }} pytest --cov-report=xml --cov=kong --log-level DEBUG
 
   lint:
     runs-on: ubuntu-latest
