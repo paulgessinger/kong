@@ -31,7 +31,7 @@ jobs:
       uses: astral-sh/setup-uv@v6
 
     - name: Run linters
-      run: uvx pre-commit run --all-files
+      run: uvx --python 3.8 pre-commit run --all-files
 
 
   # publish:
