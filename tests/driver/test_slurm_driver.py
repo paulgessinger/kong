@@ -17,7 +17,7 @@ from kong.drivers.slurm_driver import (
 )
 from kong.model.folder import Folder
 from kong.model.job import Job
-from kong.util import is_executable, exhaust
+from kong.util import is_executable
 
 
 @pytest.fixture
@@ -68,7 +68,6 @@ def test_sacct_parse(driver, monkeypatch, state):
     """.strip()
 
     with monkeypatch.context() as m:
-
         mock = Mock(return_value=sacct_output.split("\n"))
         m.setattr(driver.slurm, "_sacct", mock)
 
@@ -542,7 +541,6 @@ def test_bulk_submit(driver, state, monkeypatch):
 
 
 def test_bulk_sync_status(driver, state, monkeypatch):
-
     root = Folder.get_root()
 
     jobs = [
@@ -605,7 +603,6 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
 
 def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
-
     root = Folder.get_root()
 
     jobs = driver.bulk_create_jobs(
@@ -758,7 +755,7 @@ def test_wait(driver, state, monkeypatch):
 
 def test_wait_single(driver, monkeypatch):
     root = Folder.get_root()
-    j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
+    j1 = driver.create_job(folder=root, command="sleep 0.1; echo 'JOB'")
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(return_value=[j1]))
 
@@ -913,16 +910,16 @@ def test_job_bulk_remove(driver, state):
     ]
     for job in jobs:
         assert os.path.exists(job.data["log_dir"]), "Does not create job directory"
-        assert os.path.exists(
-            job.data["output_dir"]
-        ), "Does not create output directory"
+        assert os.path.exists(job.data["output_dir"]), (
+            "Does not create output directory"
+        )
 
     driver.bulk_remove(jobs)
 
     for job in jobs:
-        assert not os.path.exists(
-            job.data["log_dir"]
-        ), "Driver does not cleanup job directory"
-        assert not os.path.exists(
-            job.data["output_dir"]
-        ), "Driver does not cleanup output directory"
+        assert not os.path.exists(job.data["log_dir"]), (
+            "Driver does not cleanup job directory"
+        )
+        assert not os.path.exists(job.data["output_dir"]), (
+            "Driver does not cleanup output directory"
+        )

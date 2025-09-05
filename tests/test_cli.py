@@ -98,10 +98,10 @@ def test_repl_raises(app_env, db, cli, monkeypatch):
 
 
 try:
-    import IPython
+    import IPython  # noqa: F401
 
     have_ipython = True
-except:
+except ImportError:
     have_ipython = False
 
 

@@ -61,7 +61,10 @@ class DriverBase(ABC):  # pragma: no-cover
 
     @abstractmethod
     def create_job(
-        self, folder: "Folder", command: str, cores: int  # , *args: Any, **kwargs: Any
+        self,
+        folder: "Folder",
+        command: str,
+        cores: int,  # , *args: Any, **kwargs: Any
     ) -> "Job":
         raise NotImplementedError()
 

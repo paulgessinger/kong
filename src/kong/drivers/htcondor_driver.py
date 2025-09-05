@@ -173,7 +173,6 @@ class ShellHTCondorInterface(HTCondorInterface):
             )
 
     def condor_q(self) -> Iterator[HTCondorAccountingItem]:
-
         logger.debug("Getting job infos")
 
         args = [
@@ -194,7 +193,6 @@ class ShellHTCondorInterface(HTCondorInterface):
         return self._parse_output(str(self._condor_q(*args)))
 
     def condor_history(self, log_file: str) -> Iterator[HTCondorAccountingItem]:
-
         logger.debug("Getting job infos")
 
         if not os.path.exists(log_file):
@@ -318,7 +316,6 @@ class HTCondorDriver(BatchDriverBase):
         name: Optional[str] = None,
         walltime: Optional[Union[timedelta, str]] = timedelta(minutes=30),
     ) -> "Job":  # type: ignore
-
         if universe is None:
             universe = self.htcondor_config["default_universe"]
 

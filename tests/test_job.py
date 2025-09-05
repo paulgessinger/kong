@@ -1,10 +1,9 @@
 from contextlib import contextmanager
 from io import StringIO
-from unittest.mock import Mock, ANY, MagicMock
+from unittest.mock import Mock, ANY
 
 import pytest
 
-from kong import config
 from kong.drivers.local_driver import LocalDriver
 import kong.drivers
 from kong.drivers import DriverMismatch

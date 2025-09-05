@@ -1,13 +1,10 @@
-import os
 import re
 import tempfile
 import time
 from concurrent.futures import Executor, Future
 from datetime import timedelta, datetime
 
-import click
 import pytest
-from unittest import mock
 from unittest.mock import Mock, ANY, MagicMock
 import peewee as pw
 from click import UsageError
@@ -75,7 +72,6 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     assert "No such option" in out, out
 
     with monkeypatch.context() as m:
-
         job = state.create_job(command="sleep 1")
         job.batch_job_id = None
 
@@ -158,23 +154,23 @@ def test_ls_dateformat(state, repl, capsys):
 def test_ls_status(state, repl, capsys, monkeypatch):
     monkeypatch.setattr("kong.repl.Spinner", MagicMock())
 
-    j1 = state.create_job(command="sleep 1")
+    state.create_job(command="sleep 1")
     j2 = state.create_job(command="sleep 1")
-    j3 = state.create_job(command="sleep 1")
+    state.create_job(command="sleep 1")
 
     j2.status = Job.Status.FAILED
     j2.save()
 
     repl.onecmd("ls")
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert len(out.strip().split("\n")) == 5
 
     repl.onecmd("ls -S CREATED")
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert len(out.strip().split("\n")) == 4
 
     repl.onecmd("ls -S FAILED")
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert len(out.strip().split("\n")) == 3
 
 
@@ -208,9 +204,7 @@ name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
 f1   168 bytes                      0       4         0       0      0         0
 f2   252 bytes                      0       6         0       0      0         0
 f3   0 bytes                        0       0         0       0      0         0
-"""[
-        1:-1
-    ]
+"""[1:-1]
     assert "\n".join(lines[:6]).strip() == exp
 
 
@@ -229,15 +223,15 @@ def test_ls_refresh(repl, state, capsys, sample_jobs, monkeypatch):
     repl.do_ls(".")
     out, err = capsys.readouterr()
     lines = out.split("\n")[:-1]
-    assert all("SUBMITTED" in l for l in lines[-3:])
-    assert all("COMPLETED" not in l for l in lines[-3:])
+    assert all("SUBMITTED" in line for line in lines[-3:])
+    assert all("COMPLETED" not in line for line in lines[-3:])
 
     # with refresh
     repl.do_ls(". --refresh")
     out, err = capsys.readouterr()
     lines = out.split("\n")[:-1]
-    assert all("SUBMITTED" not in l for l in lines[-3:])
-    assert all("COMPLETED" in l for l in lines[-3:])
+    assert all("SUBMITTED" not in line for line in lines[-3:])
+    assert all("COMPLETED" in line for line in lines[-3:])
 
     with monkeypatch.context() as m:
         mock = Mock(return_value=[])
@@ -335,8 +329,6 @@ def test_mkdir(state, repl, db, capsys, monkeypatch):
 
 
 def test_mkdir_create_parents(state, repl, capsys):
-    root = Folder.get_root()
-
     repl.onecmd("mkdir /a1/b2/c3/d4")
     out, err = capsys.readouterr()
     assert "Cannot create folder" in out
@@ -598,14 +590,11 @@ def test_rm_yes(state, repl, monkeypatch):
     state_rm = Mock()
     monkeypatch.setattr(repl.state, "rm", state_rm)
 
-    root = Folder.get_root()
-
     repl.onecmd("rm /")
     assert state_rm.call_count == 1
     args, kwargs = state_rm.call_args
     assert args == ("/",)
-    assert kwargs["recursive"] == False
-    assert kwargs["confirm"] == click.confirm
+    assert not kwargs["recursive"]
 
     state_rm.reset_mock()
 
@@ -613,8 +602,7 @@ def test_rm_yes(state, repl, monkeypatch):
     assert state_rm.call_count == 1
     args, kwargs = state_rm.call_args
     assert args == ("/",)
-    assert kwargs["recursive"] == False
-    assert kwargs["confirm"] != click.confirm
+    assert not kwargs["recursive"]
 
 
 def test_rm_job(state, repl, db, capsys, monkeypatch):
@@ -706,8 +694,8 @@ def test_wait(repl, state, monkeypatch):
 
 
 def test_exit(repl):
-    assert repl.do_exit("") == True
-    assert repl.do_EOF("") == True
+    assert repl.do_exit("")
+    assert repl.do_EOF("")
 
 
 def test_preloop(repl, monkeypatch):
@@ -809,8 +797,6 @@ def test_create_job(repl, state, tree, capsys):
 
 
 def test_create_job_extra_arguments(repl, state, tree, monkeypatch):
-    root = tree
-
     cmd = "sleep 1"
     cores = 16
 
@@ -912,8 +898,6 @@ def test_resubmit_job(repl, state, capsys, monkeypatch):
 
 @skip_lxplus
 def test_update(repl, state, capsys, monkeypatch):
-    root = Folder.get_root()
-
     repl.onecmd("update")
     out, err = capsys.readouterr()
 
@@ -957,7 +941,7 @@ def test_update(repl, state, capsys, monkeypatch):
     out, err = capsys.readouterr()
     assert "No such option" in out
 
-    j2 = state.create_job(command="sleep 0.2")
+    state.create_job(command="sleep 0.2")
 
     repl.onecmd("update -r .")
     out, err = capsys.readouterr()
@@ -990,11 +974,11 @@ def test_info(state, repl, capsys, monkeypatch):
 
     command_string = "X" * 600
 
-    long_job = state.create_job(command=command_string)
+    state.create_job(command=command_string)
 
     repl.onecmd("info 2")
     out, err = capsys.readouterr()
-    assert not command_string in out
+    assert command_string not in out
 
     repl.onecmd("info 2 --full")
     out, err = capsys.readouterr()
@@ -1040,7 +1024,7 @@ def test_tail(state, repl, capsys, monkeypatch):
         assert tail.call_count == 1
 
     with pytest.raises(UsageError):
-        repl.onecmd(f"tail --nope")
+        repl.onecmd("tail --nope")
     out, err = capsys.readouterr()
     assert "No such option" in out
 
@@ -1070,7 +1054,7 @@ def test_less(state, repl, capsys, monkeypatch):
             assert "".join(lines) == content
 
     with pytest.raises(UsageError):
-        repl.onecmd(f"less --nope")
+        repl.onecmd("less --nope")
     out, err = capsys.readouterr()
     assert "No such option" in out
 

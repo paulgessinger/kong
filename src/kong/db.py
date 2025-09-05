@@ -1,6 +1,7 @@
 """
 Singleton database instance
 """
+
 from typing import TYPE_CHECKING, Any, List, ContextManager, Tuple, Iterable
 
 if not TYPE_CHECKING:
@@ -49,8 +50,11 @@ else:  # pragma: no cover
             """
             ...
 
-        def execute_sql(self, query: str, params: Tuple[Any]) -> Iterable[Tuple[Any]]:
-            ...
+        def execute_sql(
+            self, query: str, params: Tuple[Any]
+        ) -> Iterable[Tuple[Any]]: ...
+
+        def close(self) -> None: ...
 
     class AutoIncrementField:
         """

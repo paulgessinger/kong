@@ -9,7 +9,7 @@ from kong.config import Config, Notifier, NotificationManager, slurm_schema
 
 
 def test_config_creation(state):
-    config = Config({})
+    Config({})
 
 
 def test_attribute_access(state):

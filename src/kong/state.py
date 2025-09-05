@@ -436,7 +436,6 @@ class State:
                 raise DoesNotExist(f"No such folder or job: {name}")
 
             if confirm(f"Remove {len(folders)} folders and {len(jobs)} jobs?"):
-
                 if len(jobs) > 0:
                     first_job = jobs[0]
                     first_job.ensure_driver_instance(self.config)
@@ -641,7 +640,6 @@ class State:
             return
         job: Job
         for job in Progress(jobs, desc="Killing jobs"):
-
             job.ensure_driver_instance(self.config)  # type: ignore
             job.kill()  # type: ignore
 
@@ -652,7 +650,6 @@ class State:
         recursive: bool = False,
         failed_only: bool = False,
     ) -> None:
-
         """
         Resubmit one or more jobs. This causes them to run with the same
         settings as before.

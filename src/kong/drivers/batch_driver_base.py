@@ -153,7 +153,6 @@ class BatchDriverBase(DriverBase):
     def bulk_resubmit(
         self, jobs: Iterable["Job"], do_submit: bool = True
     ) -> Iterable["Job"]:
-
         logger.debug("Resubmitting jobs")
 
         jobs = self.bulk_sync_status(list(jobs))
@@ -196,7 +195,6 @@ class BatchDriverBase(DriverBase):
 
         # update status
         with database.atomic():
-
             with database.atomic():
                 now = datetime.datetime.utcnow()
 

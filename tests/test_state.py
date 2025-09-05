@@ -6,7 +6,7 @@ from datetime import timedelta
 from conftest import skip_lxplus
 
 import pytest
-from unittest.mock import Mock, MagicMock, ANY
+from unittest.mock import Mock, MagicMock
 import peewee as pw
 
 import kong
@@ -175,7 +175,7 @@ class ValidDriver(kong.drivers.local_driver.LocalDriver):
 
 
 @skip_lxplus
-def test_refresh_jobs(state, sample_jobs, monkeypatch):
+def test_refresh_jobs(state, sample_jobs):
     _, jobs = state.ls(".")
     for job in jobs:
         assert job.status == Job.Status.CREATED
@@ -281,7 +281,7 @@ def test_cd_invalid(state):
         state.cd(42)
 
 
-def test_mv_folder(state, db):
+def test_mv_folder(state):
     root = Folder.get_root()
 
     f1, f2, f3, f4, f5 = [root.add_folder(n) for n in ("f1", "f2", "f3", "f4", "f5")]
@@ -323,7 +323,7 @@ def test_mv_folder(state, db):
         state.mv("../nope", f1)
 
 
-def test_mv_job(state, db):
+def test_mv_job(state):
     root = Folder.get_root()
 
     f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
@@ -424,7 +424,7 @@ def test_mv_bulk_both(state):
 def test_mv_invalid(state):
     root = Folder.get_root()
     f1, f2 = [root.add_folder(n) for n in ("f1", "f2")]
-    f3 = f1.add_folder("f3")
+    f1.add_folder("f3")
 
     job = state.create_job(command="sleep 1")
 
@@ -517,7 +517,7 @@ def test_get_folders_pattern(state):
     assert all(a == b for a, b in zip(globbed_beta, folders_beta))
 
 
-def test_mkdir(state, db):
+def test_mkdir(state):
     root = Folder.get_root()
     sub = root.add_folder("sub")
     for cwd in [root, sub]:
@@ -559,7 +559,7 @@ def test_mkdir(state, db):
 
 def test_mkdir_existing(state, db):
     root = Folder.get_root()
-    f1 = root.add_folder("f1")
+    root.add_folder("f1")
     assert len(root.children) == 1
 
     with pytest.raises(CannotCreateError):
@@ -570,8 +570,6 @@ def test_mkdir_existing(state, db):
 
 
 def test_mkdir_create_parent(state):
-    root = Folder.get_root()
-
     with pytest.raises(CannotCreateError):
         state.mkdir("/a1/b2/c3/d4")
     assert Folder.find_by_path("/a1/b2/c3/d4", state.cwd) is None
@@ -594,7 +592,7 @@ def test_mkdir_create_parent(state):
     assert Folder.find_by_path("/basic2", state.cwd) is not None
 
 
-def test_rm_folder(state, db):
+def test_rm_folder(state):
     root = Folder.get_root()
 
     with pytest.raises(DoesNotExist):
@@ -632,7 +630,7 @@ def test_rm_folder(state, db):
 
     # works further down
     beta = root.add_folder("beta")
-    gamma = beta.add_folder("gamma")
+    beta.add_folder("gamma")
     assert beta.subfolder("gamma") is not None
     state.rm("/beta/gamma", recursive=True)
     assert beta.subfolder("gamma") is None
@@ -692,11 +690,11 @@ def test_rm_recursive(state, sample_jobs):
         assert confirm.call_count == 0
 
         confirm = Mock(return_value=False)
-        assert state.rm(f, recursive=True, confirm=confirm) == False
+        assert not state.rm(f, recursive=True, confirm=confirm)
         assert confirm.call_count == 1
 
         confirm = Mock(return_value=True)
-        assert state.rm(f, recursive=True, confirm=confirm) == True
+        assert state.rm(f, recursive=True, confirm=confirm)
         assert confirm.call_count == 1
 
     all_jobs = Job.select().execute()
@@ -708,12 +706,12 @@ def test_rm_invalid(state):
         state.rm(4.5)
 
 
-def test_get_driver(state, db):
+def test_get_driver(state):
     driver = state.default_driver
     assert isinstance(driver, LocalDriver)
 
 
-def test_create_job(state, db):
+def test_create_job(state):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
     assert j1.folder == root
@@ -738,7 +736,7 @@ def test_get_jobs(state):
     root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
 
-    f2 = root.add_folder("f2")
+    root.add_folder("f2")
     state.cd("f2")
     j2 = state.create_job(command="sleep 1")
     j3 = state.create_job(command="sleep 1")
@@ -790,7 +788,10 @@ def test_get_folders_jobs_pattern(state):
 
     globbed_beta = state.get_jobs("beta_*/*")
     assert len(globbed_beta) == len(jobs_beta)
-    jobid = lambda j: j.job_id
+
+    def jobid(j):
+        return j.job_id
+
     assert all(
         a == b
         for a, b in zip(sorted(globbed_beta, key=jobid), sorted(jobs_beta, key=jobid))
@@ -798,8 +799,6 @@ def test_get_folders_jobs_pattern(state):
 
 
 def test_get_jobs_range(state):
-    root = Folder.get_root()
-
     f1, f2, f3, f4, f5 = [state.create_job(command="sleep 1") for _ in range(5)]
 
     jobs = state.get_jobs("2..4")
@@ -818,7 +817,7 @@ def test_get_jobs_range(state):
         state.get_jobs("4..2")
 
 
-def test_submit_job(state, db):
+def test_submit_job(state):
     root = Folder.get_root()
 
     j1 = state.create_job(command="sleep 1")
@@ -872,8 +871,6 @@ def test_submit_job_non_recursive(state, sample_jobs):
 
 
 def test_submit_job_recursive(state, sample_jobs):
-    root = Folder.get_root()
-
     assert all(j.status == Job.Status.CREATED for j in sample_jobs)
     state.submit_job("/", recursive=True)
 
@@ -884,7 +881,6 @@ def test_submit_job_recursive(state, sample_jobs):
 
 
 def test_kill_job(state):
-    root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
     j1.submit()
     assert j1.status == Job.Status.SUBMITTED
@@ -918,8 +914,6 @@ def test_kill_job_non_recursive(state, sample_jobs):
 
 
 def test_kill_job_recursive(state, sample_jobs):
-    root = Folder.get_root()
-
     assert all(j.status == Job.Status.CREATED for j in sample_jobs)
     state.kill_job("/", recursive=True)
 
@@ -930,7 +924,6 @@ def test_kill_job_recursive(state, sample_jobs):
 
 
 def test_job_resubmit(state):
-    root = Folder.get_root()
     j1 = state.create_job(command="sleep 1")
     j1.submit()
     assert j1.status == Job.Status.SUBMITTED
@@ -969,7 +962,6 @@ def test_job_resubmit_non_recursive(state, sample_jobs):
 
 
 def test_job_resubmit_recursive(state, sample_jobs):
-    root = Folder.get_root()
     for job in sample_jobs:
         job.status = Job.Status.FAILED
         job.save()
@@ -984,7 +976,6 @@ def test_job_resubmit_recursive(state, sample_jobs):
 
 @skip_lxplus
 def test_job_resubmit_failed_only(state):
-    root = Folder.get_root()
     j1 = state.create_job(command="sleep 0.1")
     j2 = state.create_job(command="sleep 0.1")
     j3 = state.create_job(command="exit 1")
@@ -1006,7 +997,6 @@ def test_job_resubmit_failed_only(state):
 
 
 def test_wait(state, monkeypatch):
-    root = Folder.get_root()
     j1 = state.create_job(command="sleep 0.1")
     j2 = state.create_job(command="sleep 0.1")
     j3 = state.create_job(command="exit 1")
@@ -1092,12 +1082,9 @@ def test_wait_recursive(state, monkeypatch):
 
 
 def test_wait_timeout(state, monkeypatch):
-    root = Folder.get_root()
-    j1 = state.create_job(command="sleep 0.1")
-    j2 = state.create_job(command="sleep 0.1")
-    j3 = state.create_job(command="exit 1")
-
-    jobs = [[j1, j2, j3]]
+    state.create_job(command="sleep 0.1")
+    state.create_job(command="sleep 0.1")
+    state.create_job(command="exit 1")
 
     driver = Mock()
     driver.wait = Mock()
@@ -1118,7 +1105,6 @@ def test_wait_timeout(state, monkeypatch):
 
 
 def test_wait_failure(state, monkeypatch):
-    root = Folder.get_root()
     j1 = state.create_job(command="sleep 0.1")
 
     j1.status = Job.Status.FAILED

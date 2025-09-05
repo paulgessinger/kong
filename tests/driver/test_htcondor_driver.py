@@ -2,13 +2,13 @@ import os
 import shutil
 import tempfile
 from datetime import timedelta, datetime
-from typing import Collection, Iterator
+from typing import Iterator
 from unittest.mock import Mock, ANY, call
 
 import pytest
 
 from kong import util
-from kong.config import Config, slurm_schema
+from kong.config import Config
 from kong.drivers import InvalidJobStatus, get_driver
 from kong.drivers.htcondor_driver import (
     HTCondorInterface,
@@ -105,7 +105,6 @@ def test_condor_q(driver, monkeypatch, state):
     """.strip()
 
     with monkeypatch.context() as m:
-
         mock = Mock(return_value=condor_q_output)
         m.setattr(driver.htcondor, "_condor_q", mock)
 
@@ -347,10 +346,10 @@ def test_driver_create(state, monkeypatch):
 
     assert warning.call_count == 0
 
-    driver = HTCondorDriver(state.config, sif)
+    HTCondorDriver(state.config, sif)
 
     monkeypatch.setattr("os.path.getsize", Mock(return_value=60 * 1e6))
-    driver = HTCondorDriver(state.config, sif)
+    HTCondorDriver(state.config, sif)
     warning.assert_called_once()
 
 
@@ -761,7 +760,6 @@ def test_bulk_submit(driver, state, monkeypatch):
 
 
 def test_bulk_sync_status(driver, state, monkeypatch):
-
     root = Folder.get_root()
 
     jobs = [
@@ -852,7 +850,6 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
 
 def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
-
     root = Folder.get_root()
 
     jobs = driver.bulk_create_jobs(
@@ -1021,7 +1018,7 @@ def test_wait(driver, state, monkeypatch):
 
 def test_wait_single(driver, monkeypatch):
     root = Folder.get_root()
-    j1 = driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB'")
+    j1 = driver.create_job(folder=root, command="sleep 0.1; echo 'JOB'")
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(return_value=[j1]))
 
@@ -1169,20 +1166,20 @@ def test_job_bulk_remove(driver, state, monkeypatch):
     ]
     for job in jobs:
         assert os.path.exists(job.data["log_dir"]), "Does not create job directory"
-        assert os.path.exists(
-            job.data["output_dir"]
-        ), "Does not create output directory"
+        assert os.path.exists(job.data["output_dir"]), (
+            "Does not create output directory"
+        )
 
     monkeypatch.setattr(driver, "bulk_sync_status", Mock(side_effect=lambda j: j))
     driver.bulk_remove(jobs)
 
     for job in jobs:
-        assert not os.path.exists(
-            job.data["log_dir"]
-        ), "Driver does not cleanup job directory"
-        assert not os.path.exists(
-            job.data["output_dir"]
-        ), "Driver does not cleanup output directory"
+        assert not os.path.exists(job.data["log_dir"]), (
+            "Driver does not cleanup job directory"
+        )
+        assert not os.path.exists(job.data["output_dir"]), (
+            "Driver does not cleanup output directory"
+        )
 
 
 def test_get_htcondor_driver():

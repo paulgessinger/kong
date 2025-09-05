@@ -9,56 +9,43 @@ jobs:
       max-parallel: 4
       matrix:
         python-version:
-          - 3.6
-          - 3.7
           - 3.8
           - 3.9
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - uses: actions/checkout@v5
+
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@v6
+
+    - name: Run tests
       run: |
-        python -m pip install --upgrade pip
-        pip install tox tox-gh-actions poetry
-    - name: Test with tox
-      run: tox
-    - uses: codecov/codecov-action@v1
-      with:
-        file: ./coverage.xml # optional
+        uv run --python ${{ matrix.python-version }} pytest --cov-report=xml --cov=kong --log-level DEBUG
 
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
-    - name: Install dependencies
-      run: |
-        pip install poetry pre-commit
-        poetry config virtualenvs.create false
-        poetry install --no-root
+    - uses: actions/checkout@v5
+
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@v6
+
     - name: Run linters
-      run: pre-commit run --all-files
+      run: uvx --python 3.8 pre-commit run --all-files
 
 
-  publish:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs:
-      - test
-      - lint
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Python Semantic Release
-        uses: relekang/python-semantic-release@v7.2.1
-        with:
-          github_token: ${{ secrets.GH_TOKEN }}
-          pypi_token: ${{ secrets.PYPI_TOKEN }}
+  # publish:
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  #   needs:
+  #     - test
+  #     - lint
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #       with:
+  #         fetch-depth: 0
+  #     - name: Python Semantic Release
+  #       uses: relekang/python-semantic-release@v7.2.1
+  #       with:
+  #         github_token: ${{ secrets.GH_TOKEN }}
+  #         pypi_token: ${{ secrets.PYPI_TOKEN }}

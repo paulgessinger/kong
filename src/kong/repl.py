@@ -199,7 +199,6 @@ class Repl(cmd.Cmd):
                 jobs = list(arg_folder.jobs_recursive())
 
             with Spinner("Refreshing jobs", persist=False, enabled=refresh):
-
                 if refresh:
                     jobs = cast(list, self.state.refresh_jobs(jobs))
 
@@ -296,7 +295,6 @@ class Repl(cmd.Cmd):
                         else None
                     )
                     for idx, job in enumerate(jobs):
-
                         if status_filter is not None:
                             if job.status != status_filter:
                                 continue
@@ -469,11 +467,16 @@ class Repl(cmd.Cmd):
 
         If rm deletes jobs, cleanup routines will be run. Use `rm -r` to delete folders.
         """
-        confirm: Callable[[str], bool] = click.confirm
+
         if yes:
 
             def confirm(arg: str) -> bool:
                 return True  # pragma: no cover
+
+        else:
+
+            def confirm(arg: str) -> bool:
+                return click.confirm(arg)
 
         try:
             if self.state.rm(path, recursive=recursive, confirm=confirm):
