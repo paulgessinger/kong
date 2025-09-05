@@ -46,7 +46,7 @@ dev = [
   "mypy>=0.910,<1.0.0",
   "flake8>=3.8.3,<4.0.0",
   "black>=21.6b0,<22.0",
-  "tox>=3.24.0,<4.0.0",
+  "tox>=3.24.0,<5.0.0",
   "sphinx-autodoc-typehints>=1.11.0,<2.0.0",
   "pytest-xdist>=3.5.0",
   "ipython",
