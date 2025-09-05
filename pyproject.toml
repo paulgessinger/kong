@@ -34,7 +34,7 @@ kong = "kong.cli:main"
 
 [project.optional-dependencies]
 ipython = [
-  "ipython>=7.16.1,<8.0.0"
+  "ipython",
 ]
 
 [dependency-groups]
@@ -49,6 +49,7 @@ dev = [
   "tox>=3.24.0,<4.0.0",
   "sphinx-autodoc-typehints>=1.11.0,<2.0.0",
   "pytest-xdist>=3.5.0",
+  "ipython",
 ]
 
 [build-system]
