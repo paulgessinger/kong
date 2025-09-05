@@ -106,7 +106,6 @@ class ShellSlurmInterface(SlurmInterface):
     def sacct(
         self, jobs: Collection["Job"], start_delta: timedelta
     ) -> Iterator[SlurmAccountingItem]:
-
         logger.debug("Getting job info for %d jobs", len(jobs))
         starttime = date.today() - start_delta
 
@@ -233,7 +232,6 @@ class SlurmDriver(BatchDriverBase):
         walltime: Union[timedelta, str] = timedelta(minutes=30),
         licenses: Optional[str] = None,
     ) -> "Job":
-
         if queue is None:
             queue = self.slurm_config["default_queue"]
 

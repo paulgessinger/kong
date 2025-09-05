@@ -25,9 +25,7 @@ def test_no_stretch():
        delta  omega  psi  
         echo charlie bingo
 nebukadnezar  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     s = format_table(headers, rows, align, width=80)
@@ -41,9 +39,7 @@ nebukadnezar  otto   kilo
        delta  omega  psi  
         echo charlie bingo
 nebukadnezar  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
 
@@ -64,9 +60,7 @@ def test_stretch():
                                                              delta  omega  psi  
                                                               echo charlie bingo
                                                       nebukadnezar  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     for line in s.split("\n"):
@@ -82,9 +76,7 @@ alpha                                                                           
 delta                                                                                    omega psi  
 echo                                                                                   charlie bingo
 nebukadnezar                                                                              otto kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     for line in s.split("\n"):
@@ -102,9 +94,7 @@ nebukadnezar                                                                    
                                                                                  delta   omega psi  
                                                                                   echo charlie bingo
                                                                           nebukadnezar    otto kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     for line in s.split("\n"):
@@ -127,9 +117,7 @@ alpha                beta          gamma
 delta                omega         psi  
 echo         charlie t...rple rain bingo
 nebukadnezar         otto          kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     for line in s.split("\n"):
@@ -157,9 +145,7 @@ def test_colors():
        delta  omega  psi  
         echo charlie bingo
 nebukadnezar  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
     align = ["r+", "c", "l"]
@@ -176,9 +162,7 @@ nebukadnezar  otto   kilo
                                                                                  delta  omega  psi  
                                                                                   echo charlie bingo
                                                                           nebukadnezar  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
 
@@ -206,9 +190,7 @@ def test_stretch_shorten():
                                delta  omega  psi  
                                 echo charlie bingo
 nebukadnezar pro...us apollo jupiter  otto   kilo 
-"""[
-            1:-1
-        ]
+"""[1:-1]
     )
 
 

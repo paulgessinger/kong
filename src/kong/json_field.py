@@ -3,6 +3,7 @@ Polyfill for a JSON field in SQLite.
 Newer versions of sqlite (>= 3.9.0) have a native JSON extension, which we use.
 If the sqlite version is lower, we roll a less-optimal replacement.
 """
+
 from typing import Dict, cast
 
 import peewee as pw

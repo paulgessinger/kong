@@ -80,7 +80,6 @@ def cli():
 
 @pytest.fixture
 def tree(db, state):
-
     root = Folder.get_root()
 
     f1 = root.add_folder("f1")

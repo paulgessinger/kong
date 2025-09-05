@@ -2,6 +2,7 @@
 Holds the config schema, a class to load the config, and some helpers to
 perform notifications that can be configured in the config file
 """
+
 import os
 from datetime import timedelta
 

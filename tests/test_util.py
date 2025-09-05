@@ -59,7 +59,7 @@ def test_format_timedelta():
     assert fmt(timedelta(minutes=42, seconds=14)) == "00:42:14"
     assert fmt(timedelta(hours=8)) == "08:00:00"
     assert fmt(timedelta(hours=99)) == "99:00:00"
-    assert fmt(timedelta(days=3)) == f"{3*24}:00:00"
+    assert fmt(timedelta(days=3)) == f"{3 * 24}:00:00"
     with pytest.raises(ValueError):
         fmt(timedelta(days=5))
     assert fmt(timedelta(hours=99, minutes=59, seconds=59)) == "99:59:59"
@@ -170,7 +170,6 @@ def test_chunks():
 
 
 def test_spinner(monkeypatch):
-
     with monkeypatch.context() as m:
         write = Mock()
         isatty = Mock(return_value=False)

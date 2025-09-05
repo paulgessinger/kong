@@ -62,7 +62,6 @@ def test_check_driver(driver):
 
 
 def test_checked_job(driver):
-
     inner = Mock()
     wrapped = checked_job(inner)
 

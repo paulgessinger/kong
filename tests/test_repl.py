@@ -75,7 +75,6 @@ def test_ls(tree, state, repl, capsys, sample_jobs, monkeypatch):
     assert "No such option" in out, out
 
     with monkeypatch.context() as m:
-
         job = state.create_job(command="sleep 1")
         job.batch_job_id = None
 
@@ -208,9 +207,7 @@ name output size              UNKNOWN CREATED SUBMITTED RUNNING FAILED COMPLETED
 f1   168 bytes                      0       4         0       0      0         0
 f2   252 bytes                      0       6         0       0      0         0
 f3   0 bytes                        0       0         0       0      0         0
-"""[
-        1:-1
-    ]
+"""[1:-1]
     assert "\n".join(lines[:6]).strip() == exp
 
 

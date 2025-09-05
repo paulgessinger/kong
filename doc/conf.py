@@ -12,16 +12,17 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+
+sys.path.insert(0, os.path.abspath(".."))
 
 from recommonmark.transform import AutoStructify
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'kong'
-copyright = '2020, Paul Gessinger'
-author = 'Paul Gessinger'
+project = "kong"
+copyright = "2020, Paul Gessinger"
+author = "Paul Gessinger"
 
 
 # -- General configuration ---------------------------------------------------
@@ -30,18 +31,17 @@ author = 'Paul Gessinger'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'recommonmark', 
-    'sphinx.ext.autodoc', 
-    'sphinx.ext.coverage', 
-    'sphinx.ext.napoleon', 
+    "recommonmark",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.coverage",
+    "sphinx.ext.napoleon",
     # 'sphinx_autodoc_typehints',
 ]
 
-qualname_overrides = {
-}
+qualname_overrides = {}
 
 autodoc_default_options = {
-    'no-undoc-members': True,
+    "no-undoc-members": True,
     "special-members": "__init__",
     "autodoc_docstring_signature": True,
 }
@@ -54,12 +54,12 @@ always_document_param_types = False
 
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -79,7 +79,11 @@ html_static_path = [
 
 
 def setup(app):
-    app.add_config_value('recommonmark_config', {
-        'enable_eval_rst': True,
-    }, True)
+    app.add_config_value(
+        "recommonmark_config",
+        {
+            "enable_eval_rst": True,
+        },
+        True,
+    )
     app.add_transform(AutoStructify)

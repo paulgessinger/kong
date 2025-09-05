@@ -218,7 +218,6 @@ def test_jobs_recursive(db, state, monkeypatch, sqlite_version):
 
 
 def test_job_stats(db, state, monkeypatch):
-
     root = Folder.get_root()
 
     f1 = root.add_folder("f1")
