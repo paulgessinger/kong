@@ -14,7 +14,6 @@ import sh
 from typing import Any, Callable, List, Optional, Union, Iterable, cast, Dict, Tuple
 import shutil
 import dateutil.tz
-import pytz
 
 import click
 import peewee as pw
@@ -281,7 +280,7 @@ class Repl(cmd.Cmd):
                     align += ["r+", "l", "l", "l"]
 
                     def dfcnv(dt: datetime.datetime) -> datetime.datetime:
-                        return dt.replace(tzinfo=pytz.utc).astimezone(
+                        return dt.replace(tzinfo=datetime.timezone.utc).astimezone(
                             dateutil.tz.tzlocal()
                         )
 
@@ -301,7 +300,7 @@ class Repl(cmd.Cmd):
 
                         job_id = str(job.job_id)
                         batch_job_id = str(job.batch_job_id)
-                        _, status_name = str(job.status).split(".", 1)
+                        status_name = job.status.name
                         color = color_dict[job.status]
                         row = [job_id]
                         if show_sizes:

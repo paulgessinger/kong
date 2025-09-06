@@ -230,7 +230,7 @@ class LocalDriver(DriverBase):
 
     def bulk_sync_status(self, jobs: Sequence[Job]) -> Sequence[Job]:
         # simply implemented as loop over single sync status for local driver
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
 
         def sync() -> Iterable[Job]:
             for job in jobs:
@@ -265,7 +265,7 @@ class LocalDriver(DriverBase):
             job.save()
 
     def bulk_kill(self, jobs: Sequence["Job"]) -> Sequence[Job]:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
 
         def k() -> Iterable[Job]:
             for job in jobs:
@@ -281,7 +281,7 @@ class LocalDriver(DriverBase):
         return jobs
 
     def bulk_submit(self, jobs: Iterable["Job"]) -> None:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
 
         def sub() -> Iterable[Job]:
             for job in jobs:

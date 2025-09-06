@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from typing import Iterator
 from unittest.mock import Mock, ANY, call
 
@@ -116,9 +116,13 @@ def test_condor_q(driver, monkeypatch, state):
             "-json",
         )
 
-        start_date = datetime.utcfromtimestamp(1596724732)
-        completion_date = datetime.utcfromtimestamp(1596724743)
-        t0 = datetime.utcfromtimestamp(0)
+        start_date = datetime.fromtimestamp(1596724732, tz=timezone.utc).replace(
+            tzinfo=None
+        )
+        completion_date = datetime.fromtimestamp(1596724743, tz=timezone.utc).replace(
+            tzinfo=None
+        )
+        t0 = datetime.fromtimestamp(0, tz=timezone.utc).replace(tzinfo=None)
 
         ref = [
             HTCondorAccountingItem(
@@ -285,9 +289,13 @@ def test_condor_history(driver, monkeypatch, state):
             ANY,
         )
 
-        start_date = datetime.utcfromtimestamp(1596724732)
-        completion_date = datetime.utcfromtimestamp(1596724743)
-        t0 = datetime.utcfromtimestamp(0)
+        start_date = datetime.fromtimestamp(1596724732, tz=timezone.utc).replace(
+            tzinfo=None
+        )
+        completion_date = datetime.fromtimestamp(1596724743, tz=timezone.utc).replace(
+            tzinfo=None
+        )
+        t0 = datetime.fromtimestamp(0, tz=timezone.utc).replace(tzinfo=None)
 
         ref = [
             HTCondorAccountingItem(
@@ -707,7 +715,7 @@ def test_sync_status(driver, monkeypatch):
 
     t1 = datetime(2020, 8, 3, 20, 15)
     t2 = datetime(2020, 8, 3, 22, 15)
-    t3 = datetime.utcfromtimestamp(0)
+    t3 = datetime.fromtimestamp(0)
 
     condor_q_return = [
         [HTCondorAccountingItem(batch_job_id, Job.Status.RUNNING, 0, t1, t3)],
@@ -779,7 +787,7 @@ def test_bulk_sync_status(driver, state, monkeypatch):
 
     t1 = datetime(2020, 8, 3, 20, 15)
     t2 = datetime(2020, 8, 3, 22, 15)
-    t3 = datetime.utcfromtimestamp(0)
+    t3 = datetime.fromtimestamp(0, tz=timezone.utc).replace(tzinfo=None)
 
     condor_q = Mock(
         return_value=[

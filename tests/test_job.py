@@ -213,4 +213,4 @@ def test_size(state, monkeypatch):
     mock = Mock()
     monkeypatch.setattr("kong.model.job.get_size", mock)
     job.size()
-    assert mock.called_once_with(job.data["output_dir"], None)
+    mock.assert_called_once_with(job.data["output_dir"], ex=None)
