@@ -101,6 +101,14 @@ def test_condor_q(driver, monkeypatch, state):
   "JobCurrentStartDate": 1596724732,
   "CompletionDate": 1596724743
 }
+,
+{
+  "ClusterId": 5182666,
+  "JobStatus": 42,
+  "ProcId": 38,
+  "JobCurrentStartDate": 1596724732,
+  "CompletionDate": 1596724743
+}
 ]
     """.strip()
 
@@ -855,6 +863,44 @@ def test_bulk_sync_status(driver, state, monkeypatch):
     for job in jobs[6:]:
         assert job.status == Job.Status.FAILED
         assert job.updated_at == t2
+
+
+def test_bulk_sync_status_disagreement(driver, state, monkeypatch):
+    root = Folder.get_root()
+
+    jobs = [
+        driver.create_job(folder=root, command=f"sleep 0.1; echo 'JOB{i}'")
+        for i in range(15)
+    ]
+
+    condor_submit = Mock(side_effect=[i + 1 for i in range(len(jobs))])
+    monkeypatch.setattr(driver.htcondor, "condor_submit", condor_submit)
+    driver.bulk_submit(jobs)
+
+    HTAI = HTCondorAccountingItem
+    t1 = datetime(2020, 8, 3, 20, 15)
+    t2 = datetime(2020, 8, 3, 22, 15)
+
+    with monkeypatch.context() as m:
+        condor_history = Mock(
+            return_value=[
+                HTAI(i + 1, Job.Status.SUBMITTED, 0, t1, t2) for i in range(len(jobs))
+            ]
+        )
+
+        condor_q = Mock(
+            return_value=[
+                HTAI(i + 1, Job.Status.COMPLETED, 0, t1, t2) for i in range(len(jobs))
+            ]
+        )
+        m.setattr(driver.htcondor, "condor_history", condor_history)
+        m.setattr(driver.htcondor, "condor_q", condor_q)
+
+        _jobs = driver.bulk_sync_status(jobs)
+        condor_history.assert_called_once_with(ANY)
+        condor_q.assert_called_once()
+
+        assert all(j.status == Job.Status.COMPLETED for j in _jobs)
 
 
 def test_bulk_sync_status_invalid_id(driver, state, monkeypatch):
