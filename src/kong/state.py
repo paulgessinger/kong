@@ -167,19 +167,24 @@ class State:
             return jobs
 
         first_job: Job = jobs[0]
+
+        jobs_by_drivers = {}
+        driver_instances = {}
+
+        for job in jobs:
+            driver_cls = job.driver
+            if driver_cls not in driver_instances:
+                driver_instances[driver_cls] = driver_cls(self.config)
+            jobs_by_drivers.setdefault(driver_cls, [])
+            jobs_by_drivers[driver_cls].append(job)
+
+        res_jobs = []
+        for driver_cls, _jobs in jobs_by_drivers.items():
+            logger.debug("Refreshing %d jobs using driver '%s'", len(_jobs), driver_cls)
+            driver = driver_instances[driver_cls]
+            res_jobs += list(driver.bulk_sync_status(_jobs))
+
         # try bulk refresh first
-        first_job.ensure_driver_instance(self.config)
-        driver: DriverBase = first_job.driver_instance
-        try:
-            logger.debug("Attempting bulk mode sync using %s", driver.__class__)
-            jobs = list(driver.bulk_sync_status(jobs))
-        except DriverMismatch:
-            # fall back to slow mode
-            logger.debug("Bulk mode sync failed, falling back to slow loop mode")
-            for job in jobs:
-                job.ensure_driver_instance(self.config)
-                job.get_status()
-        return jobs
 
     def ls(
         self, path: str = ".", refresh: bool = False, recursive: bool = False
